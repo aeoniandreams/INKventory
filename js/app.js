@@ -98,8 +98,6 @@
   const idBtn = $('#idBtn');
   const modeTag = $('#modeTag');
   const authDialog = $('#authDialog');
-  const loginPanel = $('#loginPanel');
-  const logoutPanel = $('#logoutPanel');
   const authError = $('#authError');
   const googleBtn = $('#googleBtn');
   const logoutBtn = $('#logoutBtn');
@@ -116,7 +114,9 @@
   function applyMode() {
     document.documentElement.dataset.mode = isAdmin ? 'admin' : 'normal';
     modeTag.hidden = !isAdmin;
-    idBtn.title = isAdmin ? '일반 모드로 전환' : '관리자 모드로 전환';
+    logoutBtn.hidden = !isAdmin;
+    idBtn.disabled = isAdmin; // 관리자 모드에서는 아이디를 눌러도 아무 일도 일어나지 않음
+    idBtn.title = isAdmin ? '' : '관리자 모드로 전환';
   }
 
   // 일반 방문자는 SDK 를 받지 않도록, 로그인이 필요할 때만 불러온다.
@@ -146,12 +146,11 @@
 
   function setBusy(busy) {
     googleBtn.disabled = busy;
-    googleBtn.textContent = busy ? '로그인 중…' : 'Google로 로그인';
+    googleBtn.textContent = busy ? 'LOGGING IN…' : 'LOGIN';
   }
 
   function openAuth() {
-    loginPanel.hidden = isAdmin;
-    logoutPanel.hidden = !isAdmin;
+    if (isAdmin) return;
     authError.hidden = true;
     setBusy(false);
     authDialog.showModal();
@@ -202,14 +201,14 @@
     }
   }
 
+  // 안내 없이 즉시 일반 모드로 전환
   async function signOut() {
-    logoutBtn.disabled = true;
+    isAdmin = false;
+    session.del(HINT_KEY);
+    applyMode();
     try {
       if (fb) await fb.signOut(fb.auth);
-    } finally {
-      logoutBtn.disabled = false;
-      authDialog.close();
-    }
+    } catch (err) { /* 화면은 이미 일반 모드. 서버 세션은 탭을 닫으면 사라짐 */ }
   }
 
   idBtn.addEventListener('click', openAuth);

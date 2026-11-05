@@ -108,16 +108,26 @@ button { font: inherit; color: inherit; }
 }
 
 .sidebar__foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
   padding: 14px 24px; border-top: 1px solid var(--line);
   font-size: 13px; color: var(--muted);
 }
+.foot__logout {
+  width: 32px; height: 32px; margin: -6px -8px -6px 0;
+  display: grid; place-items: center;
+  background: none; border: 0; border-radius: 8px; cursor: pointer; color: inherit;
+  transition: color .15s, background-color .15s;
+}
+.foot__logout[hidden] { display: none; }
+.foot__logout:hover { color: var(--accent); background: var(--accent-soft); }
 .id-btn {
   padding: 2px 4px; margin: -2px -4px;
   background: none; border: 0; border-radius: 6px; cursor: pointer;
   font-size: inherit; color: inherit;
   transition: color .15s, background-color .15s;
 }
-.id-btn:hover { color: var(--accent); background: var(--accent-soft); }
+.id-btn:hover:not(:disabled) { color: var(--accent); background: var(--accent-soft); }
+.id-btn:disabled { cursor: default; color: inherit; }
 .mode-tag { color: var(--accent); font-weight: 600; }
 
 .sr-only {

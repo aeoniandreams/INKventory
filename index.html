@@ -33,7 +33,15 @@
     </div>
     <nav class="nav" id="nav" aria-label="카테고리"></nav>
     <div class="sidebar__foot">
-      <button class="id-btn" id="idBtn" type="button" aria-haspopup="dialog">@wishupona__</button><span class="mode-tag" id="modeTag" hidden> | 관리자 모드</span>
+      <div class="foot__id">
+        <button class="id-btn" id="idBtn" type="button" aria-haspopup="dialog">@wishupona__</button><span class="mode-tag" id="modeTag" hidden> | 관리자 모드</span>
+      </div>
+      <button class="foot__logout" id="logoutBtn" type="button" title="로그아웃" aria-label="로그아웃" hidden>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="m16 17 5-5-5-5"/><path d="M21 12H9"/><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+        </svg>
+      </button>
     </div>
   </aside>
 
@@ -54,23 +62,12 @@
 
   <dialog class="dialog" id="authDialog" aria-labelledby="authTitle">
     <div class="dialog__body">
-      <div id="loginPanel">
-        <h2 class="dialog__title" id="authTitle">관리자 모드</h2>
-        <p class="dialog__desc">관리자 구글 계정으로 로그인하면 관리자 모드로 전환됩니다.</p>
-        <p class="dialog__error" id="authError" role="alert" hidden></p>
-        <div class="dialog__actions">
-          <button class="btn" type="button" data-close>취소</button>
-          <button class="btn btn--primary" type="button" id="googleBtn">Google로 로그인</button>
-        </div>
-      </div>
-
-      <div id="logoutPanel" hidden>
-        <h2 class="dialog__title">관리자 모드 사용 중</h2>
-        <p class="dialog__desc">일반 모드로 돌아가면 수정 기능이 모두 잠깁니다.</p>
-        <div class="dialog__actions">
-          <button class="btn" type="button" data-close>닫기</button>
-          <button class="btn btn--primary" type="button" id="logoutBtn">일반 모드로 전환</button>
-        </div>
+      <h2 class="dialog__title" id="authTitle">관리자 모드</h2>
+      <p class="dialog__desc">관리자(@wishupona__) 외에는 접근이 불가능합니다.</p>
+      <p class="dialog__error" id="authError" role="alert" hidden></p>
+      <div class="dialog__actions">
+        <button class="btn" type="button" data-close>CANCEL</button>
+        <button class="btn btn--primary" type="button" id="googleBtn">LOGIN</button>
       </div>
     </div>
   </dialog>
