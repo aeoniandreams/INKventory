@@ -102,7 +102,11 @@ button { font: inherit; color: inherit; }
   border-radius: 8px; font-size: 15px; color: var(--ink);
   transition: background-color .15s, color .15s, transform .15s var(--ease);
 }
-.nav__link:hover { background: var(--accent-soft); transform: translateX(3px); }
+/* 터치 기기에서 hover 효과가 눌린 채 남는 것을 방지 */
+@media (hover: hover) {
+  .nav__link:hover { background: var(--accent-soft); transform: translateX(3px); }
+}
+.nav__link:active { background: var(--accent-soft); }
 .nav__link[aria-current="page"] {
   background: var(--accent-soft); color: var(--accent); font-weight: 600;
 }
@@ -113,7 +117,7 @@ button { font: inherit; color: inherit; }
   font-size: 13px; color: var(--muted);
 }
 .foot__logout {
-  width: 32px; height: 32px; margin: -6px -8px -6px 0;
+  width: 40px; height: 40px; margin: -10px -10px -10px 0; /* 터치 영역 40px, 레이아웃은 그대로 */
   display: grid; place-items: center;
   background: none; border: 0; border-radius: 8px; cursor: pointer; color: inherit;
   transition: color .15s, background-color .15s;
@@ -121,7 +125,7 @@ button { font: inherit; color: inherit; }
 .foot__logout[hidden] { display: none; }
 .foot__logout:hover { color: var(--accent); background: var(--accent-soft); }
 .id-btn {
-  padding: 2px 4px; margin: -2px -4px;
+  padding: 10px 8px; margin: -10px -8px; /* 터치하기 쉬운 크기(높이 약 40px), 레이아웃은 그대로 */
   background: none; border: 0; border-radius: 6px; cursor: pointer;
   font-size: inherit; color: inherit;
   transition: color .15s, background-color .15s;
