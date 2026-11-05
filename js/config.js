@@ -8,5 +8,5 @@ window.INKVENTORY_CONFIG = {
     appId: '1:566931324501:web:eb2829a2d9c752d6151edc',
   },
   // 관리자 구글 계정의 UID. 비워 둔 채 한 번 로그인하면 화면에 UID가 표시됩니다.
-  adminUid: '',
+  adminUid: 'oQMylq7c4jT92pEQleX3cl7sAaj2',
 };
