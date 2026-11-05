@@ -83,7 +83,7 @@ button { font: inherit; color: inherit; }
   display: flex; align-items: center; justify-content: space-between;
   padding: 8px 10px;
   background: none; border: 0; border-radius: 8px; cursor: pointer;
-  font-size: 12px; font-weight: 700; letter-spacing: .14em; color: var(--muted);
+  font-size: 13px; font-weight: 700; letter-spacing: .14em; color: var(--muted);
 }
 .nav__group-btn:hover { color: var(--ink); }
 .nav__chevron { transition: transform var(--dur) var(--ease); }
@@ -99,7 +99,7 @@ button { font: inherit; color: inherit; }
 
 .nav__link {
   display: block; margin: 2px 0; padding: 9px 12px 9px 18px;
-  border-radius: 8px; font-size: 14px; color: var(--ink);
+  border-radius: 8px; font-size: 13px; color: var(--ink);
   transition: background-color .15s, color .15s, transform .15s var(--ease);
 }
 /* 터치 기기에서 hover 효과가 눌린 채 남는 것을 방지 */
