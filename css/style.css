@@ -109,7 +109,20 @@ button { font: inherit; color: inherit; }
 
 .sidebar__foot {
   padding: 14px 24px; border-top: 1px solid var(--line);
-  font-size: 12px; color: var(--muted);
+  font-size: 13px; color: var(--muted);
+}
+.id-btn {
+  padding: 2px 4px; margin: -2px -4px;
+  background: none; border: 0; border-radius: 6px; cursor: pointer;
+  font-size: inherit; color: inherit;
+  transition: color .15s, background-color .15s;
+}
+.id-btn:hover { color: var(--accent); background: var(--accent-soft); }
+.mode-tag { color: var(--accent); font-weight: 600; }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
 
 /* ── Shell ───────────────────────────────── */
@@ -156,6 +169,42 @@ button { font: inherit; color: inherit; }
 
 .view-enter { animation: view-in .35s var(--ease); }
 @keyframes view-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* ── Dialog (관리자 비밀번호) ───────────────── */
+.dialog {
+  width: min(380px, calc(100vw - 32px));
+  padding: 0; border: 1px solid var(--line); border-radius: 16px;
+  background: var(--surface); color: var(--ink);
+  box-shadow: 0 24px 60px rgba(20, 24, 36, .25);
+}
+.dialog[open] { animation: dialog-in .22s var(--ease); }
+.dialog::backdrop { background: rgba(20, 24, 36, .4); }
+@keyframes dialog-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+
+.dialog__body { padding: 24px; }
+.dialog__title { margin: 0 0 6px; font-size: 18px; font-weight: 700; }
+.dialog__desc { margin: 0 0 16px; font-size: 14px; color: var(--muted); }
+.dialog__error { margin: 8px 0 0; font-size: 13px; color: #b3261e; }
+.dialog__actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+
+.field {
+  width: 100%; padding: 10px 12px;
+  font: inherit; font-size: 16px; color: var(--ink);
+  background: #fff; border: 1px solid var(--line); border-radius: 10px;
+}
+.field:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
+.field.is-invalid { border-color: #b3261e; animation: shake .3s; }
+@keyframes shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+
+.btn {
+  padding: 9px 16px; border-radius: 10px; cursor: pointer;
+  background: none; border: 1px solid var(--line); font-size: 14px;
+  transition: background-color .15s, opacity .15s;
+}
+.btn:hover { background: var(--accent-soft); }
+.btn--primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.btn--primary:hover { background: var(--accent); opacity: .9; }
+.btn:disabled { opacity: .55; cursor: default; }
 
 /* ── Backdrop (사이드바 뒤 어두운 막) ──────── */
 .backdrop {

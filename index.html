@@ -32,7 +32,9 @@
       </button>
     </div>
     <nav class="nav" id="nav" aria-label="카테고리"></nav>
-    <div class="sidebar__foot">일반 모드</div>
+    <div class="sidebar__foot">
+      <button class="id-btn" id="idBtn" type="button" aria-haspopup="dialog">@wishupona__</button><span class="mode-tag" id="modeTag" hidden> | 관리자 모드</span>
+    </div>
   </aside>
 
   <div class="shell">
@@ -50,6 +52,33 @@
     <main class="main" id="main" tabindex="-1"></main>
   </div>
 
+  <dialog class="dialog" id="authDialog" aria-labelledby="authTitle">
+    <div class="dialog__body">
+      <form id="loginForm" autocomplete="off" novalidate>
+        <h2 class="dialog__title" id="authTitle">관리자 모드</h2>
+        <p class="dialog__desc">비밀번호를 입력하면 관리자 모드로 전환됩니다.</p>
+        <label class="sr-only" for="authPassword">비밀번호</label>
+        <input class="field" id="authPassword" type="password" placeholder="비밀번호"
+               autocomplete="current-password" required>
+        <p class="dialog__error" id="authError" role="alert" hidden></p>
+        <div class="dialog__actions">
+          <button class="btn" type="button" data-close>취소</button>
+          <button class="btn btn--primary" type="submit" id="authSubmit">확인</button>
+        </div>
+      </form>
+
+      <form id="logoutForm" hidden>
+        <h2 class="dialog__title">관리자 모드 사용 중</h2>
+        <p class="dialog__desc">일반 모드로 돌아가면 수정 기능이 모두 잠깁니다.</p>
+        <div class="dialog__actions">
+          <button class="btn" type="button" data-close>닫기</button>
+          <button class="btn btn--primary" type="submit">일반 모드로 전환</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <script src="js/config.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

@@ -84,8 +84,105 @@
   closeBtn.addEventListener('click', () => setSidebar(false));
   backdrop.addEventListener('click', () => setSidebar(false));
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && isOpen()) setSidebar(false);
+    if (e.key === 'Escape' && isOpen() && !authDialog.open) setSidebar(false);
   });
+
+  // ── 일반 / 관리자 모드 ──────────────────
+  // 주의: 정적 사이트라 이 비밀번호 확인은 화면(UI) 잠금일 뿐, 서버 보안이 아니다.
+  // 데이터 저장소(백엔드)를 붙일 때 서버 쪽 인증으로 반드시 다시 막아야 한다.
+  const MODE_KEY = 'inkventory.mode';
+  const cfg = (window.INKVENTORY_CONFIG || {}).admin || {};
+  const idBtn = $('#idBtn');
+  const modeTag = $('#modeTag');
+  const authDialog = $('#authDialog');
+  const loginForm = $('#loginForm');
+  const logoutForm = $('#logoutForm');
+  const pwInput = $('#authPassword');
+  const authError = $('#authError');
+  const authSubmit = $('#authSubmit');
+
+  const session = {
+    get(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { sessionStorage.setItem(k, v); } catch (e) {} },
+    del(k) { try { sessionStorage.removeItem(k); } catch (e) {} },
+  };
+
+  let isAdmin = session.get(MODE_KEY) === 'admin';
+
+  function applyMode() {
+    document.documentElement.dataset.mode = isAdmin ? 'admin' : 'normal';
+    modeTag.hidden = !isAdmin;
+    idBtn.title = isAdmin ? '일반 모드로 전환' : '관리자 모드로 전환';
+  }
+
+  function hexToBytes(hex) {
+    return Uint8Array.from(hex.match(/../g) || [], (h) => parseInt(h, 16));
+  }
+
+  async function deriveHash(password) {
+    const enc = new TextEncoder();
+    const key = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']);
+    const bits = await crypto.subtle.deriveBits(
+      { name: 'PBKDF2', hash: 'SHA-256', salt: hexToBytes(cfg.salt), iterations: cfg.iterations },
+      key, 256);
+    return Array.from(new Uint8Array(bits), (b) => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  function showError(msg) {
+    authError.textContent = msg;
+    authError.hidden = false;
+    pwInput.classList.remove('is-invalid');
+    void pwInput.offsetWidth; // 흔들림 애니메이션 재시작
+    pwInput.classList.add('is-invalid');
+  }
+
+  function openAuth() {
+    loginForm.hidden = isAdmin;
+    logoutForm.hidden = !isAdmin;
+    authError.hidden = true;
+    pwInput.value = '';
+    pwInput.classList.remove('is-invalid');
+    authDialog.showModal();
+    if (!isAdmin) pwInput.focus();
+  }
+
+  idBtn.addEventListener('click', openAuth);
+  authDialog.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => authDialog.close()));
+  authDialog.addEventListener('click', (e) => { if (e.target === authDialog) authDialog.close(); }); // 바깥(backdrop) 클릭
+  authDialog.addEventListener('close', () => { pwInput.value = ''; });
+  pwInput.addEventListener('input', () => { authError.hidden = true; pwInput.classList.remove('is-invalid'); });
+
+  loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (authSubmit.disabled) return;
+    if (!pwInput.value) { showError('비밀번호를 입력해 주세요.'); return; }
+    if (!cfg.hash || !cfg.salt) { showError('관리자 비밀번호가 아직 설정되지 않았습니다.'); return; }
+    if (!(window.crypto && crypto.subtle)) { showError('이 주소에서는 비밀번호 확인을 쓸 수 없습니다. (HTTPS 필요)'); return; }
+
+    authSubmit.disabled = true;
+    try {
+      const ok = (await deriveHash(pwInput.value)) === cfg.hash;
+      if (!ok) { showError('비밀번호가 올바르지 않습니다.'); pwInput.select(); return; }
+      isAdmin = true;
+      session.set(MODE_KEY, 'admin');
+      applyMode();
+      authDialog.close();
+    } catch (err) {
+      showError('확인 중 오류가 발생했습니다.');
+    } finally {
+      authSubmit.disabled = false;
+    }
+  });
+
+  logoutForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    isAdmin = false;
+    session.del(MODE_KEY);
+    applyMode();
+    authDialog.close();
+  });
+
+  applyMode();
 
   // ── 라우팅 (해시) ───────────────────────
   function findItem(id) {
