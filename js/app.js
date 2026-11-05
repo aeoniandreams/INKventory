@@ -21,14 +21,13 @@
   ];
 
   const $ = (sel) => document.querySelector(sel);
-  const root = document.documentElement;
   const sidebar = $('#sidebar');
   const nav = $('#nav');
   const main = $('#main');
   const pageTitle = $('#pageTitle');
   const toggleBtn = $('#sidebarToggle');
+  const closeBtn = $('#sidebarClose');
   const backdrop = $('#backdrop');
-  const mobileMQ = window.matchMedia('(max-width: 800px)');
 
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
@@ -64,39 +63,28 @@
         store.set('inkventory.group.' + group.dataset.id, open ? 'open' : 'closed');
         return;
       }
-      if (e.target.closest('.nav__link') && mobileMQ.matches) setSidebar(false);
+      if (e.target.closest('.nav__link')) setSidebar(false);
     });
   }
 
-  // ── 사이드바 열기/닫기 ──────────────────
+  // ── 사이드바 열기/닫기 (본문 위에 덮이는 오버레이) ──
   function isOpen() {
-    return mobileMQ.matches ? sidebar.classList.contains('is-open') : !root.classList.contains('sidebar-closed');
+    return sidebar.classList.contains('is-open');
   }
 
   function setSidebar(open) {
-    if (mobileMQ.matches) {
-      sidebar.classList.toggle('is-open', open);
-      backdrop.hidden = false;
-      // hidden 해제 후 다음 프레임에 클래스 부여해야 페이드가 동작
-      requestAnimationFrame(() => backdrop.classList.toggle('is-visible', open));
-      if (!open) setTimeout(() => { if (!sidebar.classList.contains('is-open')) backdrop.hidden = true; }, 280);
-    } else {
-      root.classList.toggle('sidebar-closed', !open);
-      store.set('inkventory.sidebar', open ? 'open' : 'closed');
-    }
+    sidebar.classList.toggle('is-open', open);
+    backdrop.classList.toggle('is-visible', open);
     toggleBtn.setAttribute('aria-expanded', open);
+    if (open) closeBtn.focus({ preventScroll: true });
+    else if (sidebar.contains(document.activeElement)) toggleBtn.focus({ preventScroll: true });
   }
 
   toggleBtn.addEventListener('click', () => setSidebar(!isOpen()));
+  closeBtn.addEventListener('click', () => setSidebar(false));
   backdrop.addEventListener('click', () => setSidebar(false));
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && mobileMQ.matches && isOpen()) setSidebar(false);
-  });
-  mobileMQ.addEventListener('change', () => {
-    sidebar.classList.remove('is-open');
-    backdrop.classList.remove('is-visible');
-    backdrop.hidden = true;
-    toggleBtn.setAttribute('aria-expanded', isOpen());
+    if (e.key === 'Escape' && isOpen()) setSidebar(false);
   });
 
   // ── 라우팅 (해시) ───────────────────────
@@ -146,6 +134,5 @@
   window.addEventListener('hashchange', render);
 
   renderNav();
-  toggleBtn.setAttribute('aria-expanded', isOpen());
   render();
 })();

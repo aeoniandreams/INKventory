@@ -46,20 +46,27 @@ button { font: inherit; color: inherit; }
 /* ── Sidebar ─────────────────────────────── */
 .sidebar {
   position: fixed; inset: 0 auto 0 0; z-index: 30;
-  width: var(--sidebar-w);
+  width: min(var(--sidebar-w), 86vw);
   display: flex; flex-direction: column;
   background: var(--surface);
   border-right: 1px solid var(--line);
-  transform: translateX(0);
-  transition: transform var(--dur) var(--ease);
+  /* 기본은 화면 밖에 숨김. 닫히는 애니메이션이 끝난 뒤 visibility로 포커스/스크린리더에서도 제외 */
+  transform: translateX(-100%);
+  visibility: hidden;
+  transition: transform var(--dur) var(--ease), visibility 0s linear var(--dur);
   will-change: transform;
 }
-.sidebar-closed .sidebar { transform: translateX(-100%); }
+.sidebar.is-open {
+  transform: translateX(0);
+  visibility: visible;
+  box-shadow: 0 0 40px rgba(0, 0, 0, .15);
+  transition: transform var(--dur) var(--ease), visibility 0s linear 0s;
+}
 
 .sidebar__head {
   height: var(--topbar-h);
-  display: flex; align-items: center;
-  padding: 0 24px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 12px 0 24px;
   border-bottom: 1px solid var(--line);
 }
 .brand {
@@ -106,12 +113,7 @@ button { font: inherit; color: inherit; }
 }
 
 /* ── Shell ───────────────────────────────── */
-.shell {
-  margin-left: var(--sidebar-w);
-  min-height: 100vh;
-  transition: margin-left var(--dur) var(--ease);
-}
-.sidebar-closed .shell { margin-left: 0; }
+.shell { min-height: 100vh; }
 
 .topbar {
   position: sticky; top: 0; z-index: 10;
@@ -155,21 +157,19 @@ button { font: inherit; color: inherit; }
 .view-enter { animation: view-in .35s var(--ease); }
 @keyframes view-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
-/* ── Mobile: drawer ──────────────────────── */
+/* ── Backdrop (사이드바 뒤 어두운 막) ──────── */
 .backdrop {
   position: fixed; inset: 0; z-index: 20;
   background: rgba(20, 24, 36, .35);
-  opacity: 0; transition: opacity var(--dur) var(--ease);
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity var(--dur) var(--ease), visibility 0s linear var(--dur);
 }
-.backdrop.is-visible { opacity: 1; }
+.backdrop.is-visible {
+  opacity: 1; visibility: visible; pointer-events: auto;
+  transition: opacity var(--dur) var(--ease), visibility 0s linear 0s;
+}
 
 @media (max-width: 800px) {
-  .shell, .sidebar-closed .shell { margin-left: 0; }
-  .sidebar { transform: translateX(-100%); box-shadow: none; }
-  .sidebar.is-open { transform: translateX(0); box-shadow: 0 0 40px rgba(0,0,0,.15); }
-  /* 모바일에서는 데스크톱용 sidebar-closed 클래스를 무시 */
-  .sidebar-closed .sidebar { transform: translateX(-100%); }
-  .sidebar-closed .sidebar.is-open { transform: translateX(0); }
   .main { padding-top: 32px; }
 }
 
