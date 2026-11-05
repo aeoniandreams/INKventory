@@ -87,19 +87,22 @@
     if (e.key === 'Escape' && isOpen() && !authDialog.open) setSidebar(false);
   });
 
-  // ── 일반 / 관리자 모드 ──────────────────
-  // 주의: 정적 사이트라 이 비밀번호 확인은 화면(UI) 잠금일 뿐, 서버 보안이 아니다.
-  // 데이터 저장소(백엔드)를 붙일 때 서버 쪽 인증으로 반드시 다시 막아야 한다.
-  const MODE_KEY = 'inkventory.mode';
-  const cfg = (window.INKVENTORY_CONFIG || {}).admin || {};
+  // ── 일반 / 관리자 모드 (Firebase Authentication · Google 로그인) ──
+  // 관리자 = config.js 의 adminUid 와 UID 가 같은 구글 계정 한 개.
+  // 화면 표시는 편의일 뿐이고, 실제 수정 권한은 Firestore 보안 규칙(서버)에서 같은 UID 로 막는다.
+  const FIREBASE_VER = '10.14.1';
+  const HINT_KEY = 'inkventory.signedin';   // 이 탭에서 로그인한 적이 있음 → 시작할 때 SDK 미리 로드
+  const REDIRECT_KEY = 'inkventory.redirect';
+  const cfg = window.INKVENTORY_CONFIG || {};
+
   const idBtn = $('#idBtn');
   const modeTag = $('#modeTag');
   const authDialog = $('#authDialog');
-  const loginForm = $('#loginForm');
-  const logoutForm = $('#logoutForm');
-  const pwInput = $('#authPassword');
+  const loginPanel = $('#loginPanel');
+  const logoutPanel = $('#logoutPanel');
   const authError = $('#authError');
-  const authSubmit = $('#authSubmit');
+  const googleBtn = $('#googleBtn');
+  const logoutBtn = $('#logoutBtn');
 
   const session = {
     get(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } },
@@ -107,7 +110,8 @@
     del(k) { try { sessionStorage.removeItem(k); } catch (e) {} },
   };
 
-  let isAdmin = session.get(MODE_KEY) === 'admin';
+  let isAdmin = false;
+  let fb = null; // 로드된 Firebase SDK
 
   function applyMode() {
     document.documentElement.dataset.mode = isAdmin ? 'admin' : 'normal';
@@ -115,74 +119,119 @@
     idBtn.title = isAdmin ? '일반 모드로 전환' : '관리자 모드로 전환';
   }
 
-  function hexToBytes(hex) {
-    return Uint8Array.from(hex.match(/../g) || [], (h) => parseInt(h, 16));
-  }
-
-  async function deriveHash(password) {
-    const enc = new TextEncoder();
-    const key = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']);
-    const bits = await crypto.subtle.deriveBits(
-      { name: 'PBKDF2', hash: 'SHA-256', salt: hexToBytes(cfg.salt), iterations: cfg.iterations },
-      key, 256);
-    return Array.from(new Uint8Array(bits), (b) => b.toString(16).padStart(2, '0')).join('');
+  // 일반 방문자는 SDK 를 받지 않도록, 로그인이 필요할 때만 불러온다.
+  async function loadFirebase() {
+    if (fb) return fb;
+    if (!cfg.firebase || !cfg.firebase.apiKey) throw new Error('not-configured');
+    const base = `https://www.gstatic.com/firebasejs/${FIREBASE_VER}/`;
+    const [appMod, authMod] = await Promise.all([
+      import(base + 'firebase-app.js'),
+      import(base + 'firebase-auth.js'),
+    ]);
+    const auth = authMod.getAuth(appMod.initializeApp(cfg.firebase));
+    await authMod.setPersistence(auth, authMod.browserSessionPersistence); // 탭을 닫으면 로그아웃
+    fb = { auth, ...authMod };
+    fb.onAuthStateChanged(auth, (user) => {
+      isAdmin = !!user && !!cfg.adminUid && user.uid === cfg.adminUid;
+      if (isAdmin) session.set(HINT_KEY, '1'); else session.del(HINT_KEY);
+      applyMode();
+    });
+    return fb;
   }
 
   function showError(msg) {
     authError.textContent = msg;
     authError.hidden = false;
-    pwInput.classList.remove('is-invalid');
-    void pwInput.offsetWidth; // 흔들림 애니메이션 재시작
-    pwInput.classList.add('is-invalid');
+  }
+
+  function setBusy(busy) {
+    googleBtn.disabled = busy;
+    googleBtn.textContent = busy ? '로그인 중…' : 'Google로 로그인';
   }
 
   function openAuth() {
-    loginForm.hidden = isAdmin;
-    logoutForm.hidden = !isAdmin;
+    loginPanel.hidden = isAdmin;
+    logoutPanel.hidden = !isAdmin;
     authError.hidden = true;
-    pwInput.value = '';
-    pwInput.classList.remove('is-invalid');
+    setBusy(false);
     authDialog.showModal();
-    if (!isAdmin) pwInput.focus();
+  }
+
+  // 로그인 직후 확인: 관리자 계정이 아니면 즉시 로그아웃
+  async function checkSignedIn(user) {
+    if (!user) return;
+    if (!cfg.adminUid) {
+      showError(`관리자 UID가 아직 설정되지 않았습니다. 이 계정의 UID: ${user.uid}  (js/config.js 의 adminUid 와 Firestore 규칙에 넣어 주세요)`);
+      await fb.signOut(fb.auth);
+      return;
+    }
+    if (user.uid !== cfg.adminUid) {
+      showError('관리자 계정이 아닙니다.');
+      await fb.signOut(fb.auth);
+      return;
+    }
+    authDialog.close();
+  }
+
+  async function signIn() {
+    if (googleBtn.disabled) return;
+    authError.hidden = true;
+    setBusy(true);
+    try {
+      await loadFirebase();
+      const provider = new fb.GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      try {
+        const res = await fb.signInWithPopup(fb.auth, provider);
+        await checkSignedIn(res.user);
+      } catch (err) {
+        if (err.code === 'auth/popup-blocked') {
+          session.set(REDIRECT_KEY, '1');
+          await fb.signInWithRedirect(fb.auth, provider); // 팝업이 막히면 페이지 이동 방식으로
+          return;
+        }
+        throw err;
+      }
+    } catch (err) {
+      if (err.message === 'not-configured') showError('Firebase 설정이 아직 입력되지 않았습니다. (js/config.js)');
+      else if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') { /* 사용자가 창을 닫음 */ }
+      else if (err.code === 'auth/unauthorized-domain') showError('이 주소가 Firebase 승인된 도메인에 등록되지 않았습니다.');
+      else showError('로그인 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function signOut() {
+    logoutBtn.disabled = true;
+    try {
+      if (fb) await fb.signOut(fb.auth);
+    } finally {
+      logoutBtn.disabled = false;
+      authDialog.close();
+    }
   }
 
   idBtn.addEventListener('click', openAuth);
+  googleBtn.addEventListener('click', signIn);
+  logoutBtn.addEventListener('click', signOut);
   authDialog.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => authDialog.close()));
   authDialog.addEventListener('click', (e) => { if (e.target === authDialog) authDialog.close(); }); // 바깥(backdrop) 클릭
-  authDialog.addEventListener('close', () => { pwInput.value = ''; });
-  pwInput.addEventListener('input', () => { authError.hidden = true; pwInput.classList.remove('is-invalid'); });
-
-  loginForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    if (authSubmit.disabled) return;
-    if (!pwInput.value) { showError('비밀번호를 입력해 주세요.'); return; }
-    if (!cfg.hash || !cfg.salt) { showError('관리자 비밀번호가 아직 설정되지 않았습니다.'); return; }
-    if (!(window.crypto && crypto.subtle)) { showError('이 주소에서는 비밀번호 확인을 쓸 수 없습니다. (HTTPS 필요)'); return; }
-
-    authSubmit.disabled = true;
-    try {
-      const ok = (await deriveHash(pwInput.value)) === cfg.hash;
-      if (!ok) { showError('비밀번호가 올바르지 않습니다.'); pwInput.select(); return; }
-      isAdmin = true;
-      session.set(MODE_KEY, 'admin');
-      applyMode();
-      authDialog.close();
-    } catch (err) {
-      showError('확인 중 오류가 발생했습니다.');
-    } finally {
-      authSubmit.disabled = false;
-    }
-  });
-
-  logoutForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    isAdmin = false;
-    session.del(MODE_KEY);
-    applyMode();
-    authDialog.close();
-  });
 
   applyMode();
+
+  // 이 탭에서 로그인한 적이 있거나 리다이렉트로 돌아온 경우에만 시작할 때 SDK 로드
+  if (session.get(HINT_KEY) || session.get(REDIRECT_KEY)) {
+    const fromRedirect = !!session.get(REDIRECT_KEY);
+    loadFirebase().then(async () => {
+      if (!fromRedirect) return;
+      session.del(REDIRECT_KEY);
+      try {
+        const res = await fb.getRedirectResult(fb.auth);
+        if (res && res.user) { openAuth(); await checkSignedIn(res.user); if (authError.hidden) return; }
+      } catch (e) { /* 무시: 일반 모드 유지 */ }
+    }).catch(() => {});
+  }
 
   // ── 라우팅 (해시) ───────────────────────
   function findItem(id) {

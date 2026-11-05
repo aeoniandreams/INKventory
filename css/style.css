@@ -184,17 +184,8 @@ button { font: inherit; color: inherit; }
 .dialog__body { padding: 24px; }
 .dialog__title { margin: 0 0 6px; font-size: 18px; font-weight: 700; }
 .dialog__desc { margin: 0 0 16px; font-size: 14px; color: var(--muted); }
-.dialog__error { margin: 8px 0 0; font-size: 13px; color: #b3261e; }
+.dialog__error { margin: 0; font-size: 13px; color: #b3261e; overflow-wrap: anywhere; user-select: text; }
 .dialog__actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
-
-.field {
-  width: 100%; padding: 10px 12px;
-  font: inherit; font-size: 16px; color: var(--ink);
-  background: #fff; border: 1px solid var(--line); border-radius: 10px;
-}
-.field:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
-.field.is-invalid { border-color: #b3261e; animation: shake .3s; }
-@keyframes shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
 
 .btn {
   padding: 9px 16px; border-radius: 10px; cursor: pointer;

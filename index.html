@@ -54,27 +54,24 @@
 
   <dialog class="dialog" id="authDialog" aria-labelledby="authTitle">
     <div class="dialog__body">
-      <form id="loginForm" autocomplete="off" novalidate>
+      <div id="loginPanel">
         <h2 class="dialog__title" id="authTitle">관리자 모드</h2>
-        <p class="dialog__desc">비밀번호를 입력하면 관리자 모드로 전환됩니다.</p>
-        <label class="sr-only" for="authPassword">비밀번호</label>
-        <input class="field" id="authPassword" type="password" placeholder="비밀번호"
-               autocomplete="current-password" required>
+        <p class="dialog__desc">관리자 구글 계정으로 로그인하면 관리자 모드로 전환됩니다.</p>
         <p class="dialog__error" id="authError" role="alert" hidden></p>
         <div class="dialog__actions">
           <button class="btn" type="button" data-close>취소</button>
-          <button class="btn btn--primary" type="submit" id="authSubmit">확인</button>
+          <button class="btn btn--primary" type="button" id="googleBtn">Google로 로그인</button>
         </div>
-      </form>
+      </div>
 
-      <form id="logoutForm" hidden>
+      <div id="logoutPanel" hidden>
         <h2 class="dialog__title">관리자 모드 사용 중</h2>
         <p class="dialog__desc">일반 모드로 돌아가면 수정 기능이 모두 잠깁니다.</p>
         <div class="dialog__actions">
           <button class="btn" type="button" data-close>닫기</button>
-          <button class="btn btn--primary" type="submit">일반 모드로 전환</button>
+          <button class="btn btn--primary" type="button" id="logoutBtn">일반 모드로 전환</button>
         </div>
-      </form>
+      </div>
     </div>
   </dialog>
 
