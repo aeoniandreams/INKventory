@@ -26,7 +26,7 @@
     for (let i = 1; i <= STEPS; i++) {
       segs += `<button class="seg" type="button" data-i="${i}" aria-label="잔량 ${i}/${STEPS}"></button>`;
     }
-    return `<div class="bar" role="group" aria-label="잔량">${segs}</div>`;
+    return `<div class="bar" role="group" aria-label="잔량"><div class="track" aria-hidden="true"><i class="pv"></i><i class="fill"></i></div>${segs}</div>`;
   }
 
   function rowsHtml() {
@@ -38,8 +38,9 @@
   }
 
   function paint(row, level) {
-    row.querySelectorAll('.seg').forEach((seg, idx) => seg.classList.toggle('on', idx < level));
-    row.querySelector('.bar').dataset.level = level;
+    const bar = row.querySelector('.bar');
+    bar.style.setProperty('--lv', level);
+    bar.dataset.level = level;
   }
 
   function setEditable(root, admin) {
@@ -59,6 +60,16 @@
     const tbody = container.querySelector('tbody');
     tbody.querySelectorAll('tr').forEach((row) => { if (levels[row.dataset.row]) paint(row, levels[row.dataset.row]); });
     setEditable(container, isAdminMode());
+
+    // 마우스를 올린 칸까지 미리보기 (관리자 모드에서만 bar 가 inert 가 아니라서 동작)
+    tbody.addEventListener('mouseover', (e) => {
+      const seg = e.target.closest('.seg');
+      if (seg && !seg.closest('.bar').inert) seg.closest('.bar').style.setProperty('--pv', seg.dataset.i);
+    });
+    tbody.addEventListener('mouseout', (e) => {
+      const bar = e.target.closest('.bar');
+      if (bar && !bar.contains(e.relatedTarget)) bar.style.removeProperty('--pv');
+    });
 
     tbody.addEventListener('click', (e) => {
       const seg = e.target.closest('.seg');

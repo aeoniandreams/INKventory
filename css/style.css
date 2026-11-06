@@ -213,25 +213,38 @@ button { font: inherit; color: inherit; }
   .grid tbody tr:hover td { background: #f7f5ef; }
 }
 
-/* 잔량 막대: 10칸, 양 끝이 둥근 가로 막대 */
+/* 잔량 막대: 하나의 막대 + 같은 굵기(2px)의 옅은 회색 선으로 10등분.
+   너비를 200px(칸당 정확히 20px)로 고정해서 선 간격과 굵기가 항상 똑같게 한다. */
 .c-level { padding: 0 14px; }
-.bar { display: flex; width: 100%; max-width: 220px; }
+.bar {
+  --track: #eeece6;
+  --divider: #d9d6cd;
+  position: relative; display: flex;
+  width: 200px; height: 28px;
+}
+.track {
+  position: absolute; inset: 9px 0;
+  border-radius: 5px; overflow: hidden;
+  background: var(--track);
+}
+.track .pv, .track .fill {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  transition: width .15s var(--ease);
+}
+.track .pv   { width: calc(var(--pv, 0) * 10%); background: #aab3cf; } /* 마우스를 올렸을 때 미리보기 */
+.track .fill { width: calc(var(--lv, 0) * 10%); background: var(--accent); }
+
+/* 클릭 영역 10칸(눈에 안 보임) + 칸 사이 구분선 */
 .seg {
   position: relative; flex: 1; height: 28px; padding: 0;
   background: none; border: 0; cursor: default;
 }
-.seg::before {
-  content: ''; position: absolute; inset: 9px 1px;
-  background: #e3e1da;
-  transition: background-color .12s;
+.seg:not(:last-child)::after {
+  content: ''; position: absolute; top: 9px; bottom: 9px; right: -1px;
+  width: 2px; background: var(--divider);
+  pointer-events: none;
 }
-.seg:first-child::before { left: 0; border-radius: 5px 0 0 5px; }
-.seg:last-child::before { right: 0; border-radius: 0 5px 5px 0; }
-.seg.on::before { background: var(--accent); }
 .bar:not([inert]) .seg { cursor: pointer; }
-@media (hover: hover) {
-  .bar:not([inert]) .seg:not(.on):hover::before { background: #aab3cf; }
-}
 
 .view-enter { animation: view-in .35s var(--ease); }
 @keyframes view-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
