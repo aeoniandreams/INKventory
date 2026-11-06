@@ -25,7 +25,7 @@
   // width 는 기본 너비. 잔량 열만 화면이 넓으면 늘어난다(width 는 그때의 최소값).
   const COLUMNS = [
     { key: 'brand',    label: '브랜드',          width: 180, max: 100 },
-    { key: 'name',     label: '잉크명',          width: 180, max: 100, pearlToggle: true },   // 펄 잉크는 셀을 샌드 베이지로 칠함
+    { key: 'name',     label: '잉크명',          width: 180, max: 100, pearlToggle: true },   // 펄 잉크는 셀을 연한 파랑으로 칠함
     { key: 'kind',     label: '본병/소분',       width: 128, pick: true },   // 클릭하면 드롭다운
     { key: 'level',    label: '잔량',            width: 205 },               // 막대 180px + 좌우 여백 12px씩 + 오른쪽 선 1px
     { key: 'note',     label: '비고',            width: 260, max: 300 },
@@ -301,7 +301,7 @@
     tr.querySelectorAll('td.c-lockable .cell').forEach((input) => { input.disabled = sample; });
   }
 
-  // 펄 잉크 행: 잉크명 칸을 샌드 베이지로 칠함 (CSS .is-pearl)
+  // 펄 잉크 행: 잉크명 칸을 연한 파랑으로 칠함 (CSS .is-pearl)
   function syncPearl(tr) {
     const pearl = !!(data[tr.dataset.id] && data[tr.dataset.id].pearl);
     tr.classList.toggle('is-pearl', pearl);
