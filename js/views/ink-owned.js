@@ -244,8 +244,7 @@
 
   // ── 행 추가 버튼 위치 (행과 행 사이 선에 말풍선 꼬리 끝을 맞춤) ──
   // Lucide "message-square-plus" 를 좌우반전. 반전하면 꼬리가 오른쪽 아래로 가서 표를 향한다.
-  // 꼬리를 Lucide 원본보다 길게, 정확히 45°(가로 6 : 세로 6)로 뻗도록 외곽선만 다시 그림 (안의 + 는 동일 모양).
-  const ROW_ADD_ICON = '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 14a2 2 0 0 1-2 2H8l-6 6V4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"/><path d="M12 6v6"/><path d="M9 9h6"/></svg>';
+  const ROW_ADD_ICON = '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"/><path d="M12 8v6"/><path d="M9 11h6"/></svg>';
   const ROW_ADD_SIZE = 19;
   const TAIL_Y = (23 / 24) * ROW_ADD_SIZE; // 아이콘 맨 아래(꼬리 끝)의 높이
   const NEAR = 12;                         // 선에서 이 거리(px) 안이면 "행과 행 사이"로 본다
