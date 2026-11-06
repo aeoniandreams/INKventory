@@ -172,6 +172,7 @@
     if (!root) return;
     const edit = canEdit();
     root.querySelectorAll('.bar').forEach((bar) => { bar.inert = !edit; });
+    if (!edit) root.querySelector('.row-add').classList.remove('is-on');
     root.querySelectorAll('.cell').forEach((input) => {
       input.readOnly = !edit;
       input.tabIndex = edit ? 0 : -1;
@@ -179,19 +180,73 @@
     showStatus();
   }
 
+  // ── 행 추가 버튼 위치 (행과 행 사이 선에 말풍선 꼬리 끝을 맞춤) ──
+  // Lucide "message-square-plus" 를 좌우반전. 반전하면 꼬리가 오른쪽 아래로 가서 표를 향한다.
+  const ROW_ADD_ICON = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"/><path d="M12 8v6"/><path d="M9 11h6"/></svg>';
+  const ROW_ADD_SIZE = 22;
+  const TAIL_Y = (23 / 24) * ROW_ADD_SIZE; // 아이콘 맨 아래(꼬리 끝)의 높이
+  const NEAR = 12;                         // 선에서 이 거리(px) 안이면 "행과 행 사이"로 본다
+
+  function setupRowAdd(container) {
+    const area = container.querySelector('.table-area');
+    const wrap = container.querySelector('.table-wrap');
+    const thead = container.querySelector('thead');
+    const tbody = container.querySelector('tbody');
+    const btn = container.querySelector('.row-add');
+
+    const hide = () => btn.classList.remove('is-on');
+
+    // 포인터 높이(clientY)가 가리키는 "행 사이 경계 번호"(1 ~ ROWS-1). 없으면 null.
+    function boundaryAt(clientY) {
+      const top = wrap.getBoundingClientRect().top + wrap.clientTop;
+      const headH = thead.offsetHeight;
+      const rowH = tbody.rows[0].offsetHeight;
+      const rel = clientY - top - headH + wrap.scrollTop;
+      if (clientY < top + headH || clientY > top + wrap.clientHeight || rel < 0) return null;
+      const r = Math.floor(rel / rowH);
+      const within = rel - r * rowH;
+      const b = within <= NEAR ? r : (within >= rowH - NEAR ? r + 1 : null);
+      return b !== null && b >= 1 && b <= ROWS - 1 ? b : null;
+    }
+
+    function update(e) {
+      if (!canEdit() || e.target.closest('.row-add')) return; // 버튼 위에 있으면 그대로 유지
+      const b = boundaryAt(e.clientY);
+      if (b === null) { hide(); return; }
+      const top = wrap.getBoundingClientRect().top + wrap.clientTop;
+      const headH = thead.offsetHeight;
+      const rowH = tbody.rows[0].offsetHeight;
+      const lineY = top + headH + b * rowH - wrap.scrollTop - 0.5; // 경계선(1px)의 중앙
+      if (lineY < top + headH || lineY > top + wrap.clientHeight) { hide(); return; }
+      btn.style.top = (lineY - area.getBoundingClientRect().top - TAIL_Y) + 'px';
+      btn.dataset.before = b; // b번째 행(0부터) 앞에 추가
+      btn.classList.add('is-on');
+    }
+
+    area.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse') update(e); });
+    area.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'mouse') update(e); }); // 터치: 선 근처를 누르면 표시
+    area.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') hide(); });
+    wrap.addEventListener('scroll', hide, { passive: true });
+    // 행 추가 동작은 아직 연결하지 않음 (아이콘만)
+  }
+
   function mount(container) {
     root = container;
     container.innerHTML = `
       <p class="notice" role="alert" hidden></p>
-      <div class="table-wrap view-enter">
-        <table class="grid">
-          <colgroup>${COLUMNS.map((c) => `<col style="width:${c.width}px">`).join('')}</colgroup>
-          <thead><tr>${COLUMNS.map((c) => `<th scope="col">${c.label}</th>`).join('')}</tr></thead>
-          <tbody>${rowsHtml()}</tbody>
-        </table>
+      <div class="table-area view-enter">
+        <button class="row-add" type="button" title="행 추가" aria-label="이 위치에 행 추가">${ROW_ADD_ICON}</button>
+        <div class="table-wrap">
+          <table class="grid">
+            <colgroup>${COLUMNS.map((c) => `<col style="width:${c.width}px">`).join('')}</colgroup>
+            <thead><tr>${COLUMNS.map((c) => `<th scope="col">${c.label}</th>`).join('')}</tr></thead>
+            <tbody>${rowsHtml()}</tbody>
+          </table>
+        </div>
       </div>`;
 
     const tbody = container.querySelector('tbody');
+    setupRowAdd(container);
     fillAll();
     applyEditable();
     if (loadState === 'error') loadState = 'idle'; // 오류였다면 화면에 다시 들어올 때 재시도

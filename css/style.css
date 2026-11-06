@@ -182,7 +182,23 @@ button { font: inherit; color: inherit; }
 .placeholder p { margin: 0; color: var(--muted); }
 
 /* ── 표 화면 (보유 잉크) ─────────────────── */
-.main--table { padding: 20px clamp(12px, 3vw, 32px) 24px; }
+.main--table { padding: 20px clamp(12px, 3vw, 32px) 24px clamp(4px, 1vw, 12px); }
+
+/* 표 왼쪽 여백(28px)은 행 추가 아이콘 자리 */
+.table-area { position: relative; padding-left: 28px; }
+
+/* 행 추가 아이콘 (Lucide message-square-plus 좌우반전): 꼬리 끝이 행 사이 선에 닿음 */
+.row-add {
+  position: absolute; left: 5px; top: 0; z-index: 3;
+  width: 22px; height: 22px; padding: 0;
+  background: none; border: 0; color: var(--accent); cursor: pointer;
+  opacity: 0; visibility: hidden;
+  transition: opacity .12s, color .12s;
+}
+.row-add.is-on { opacity: 1; visibility: visible; }
+.row-add svg { display: block; transform: scaleX(-1); }
+.row-add::before { content: ''; position: absolute; inset: -6px; } /* 누르기 쉽게 터치 영역 확장 */
+.row-add:hover { color: #1b274d; }
 
 .table-wrap {
   overflow: auto;
