@@ -189,7 +189,7 @@ button { font: inherit; color: inherit; }
 
 /* 행 추가 아이콘 (Lucide message-square-plus 좌우반전): 꼬리 끝이 행 사이 선에 닿음 */
 .row-add {
-  position: absolute; left: 8px; top: 0; z-index: 3;
+  position: absolute; left: 4px; top: 0; z-index: 3;
   width: 19px; height: 19px; padding: 0;
   background: none; border: 0; color: var(--accent); cursor: pointer;
   opacity: 0; visibility: hidden;
