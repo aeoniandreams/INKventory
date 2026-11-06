@@ -24,7 +24,7 @@
 
   // width 는 기본 너비. 잔량 열만 화면이 넓으면 늘어난다(width 는 그때의 최소값).
   const COLUMNS = [
-    { key: 'brand',    label: '브랜드',          width: 140, max: 100 },
+    { key: 'brand',    label: '브랜드',          width: 160, max: 100 },
     { key: 'name',     label: '잉크명',          width: 180, max: 100 },
     { key: 'kind',     label: '본병/소분',       width: 128, pick: true },   // 클릭하면 드롭다운
     { key: 'level',    label: '잔량',            width: 225 },               // 막대 200px + 좌우 여백 12px씩 + 오른쪽 선 1px
@@ -83,6 +83,7 @@
     pending.set(id + '|' + field, { id, field, value });
     setStatus('saving');
     updateImportBar();
+    if (field === 'kind') emitStats();   // 사이드바의 본병/소분 개수 갱신
     scheduleFlush(field === 'level' ? 0 : SAVE_DELAY);
   }
 
@@ -150,6 +151,7 @@
 
       Object.keys(rows).forEach((id) => { data[id] = Object.assign(rows[id], data[id]); }); // 불러오는 동안 입력한 값 우선
       loadState = 'ready';
+      emitStats();
       if (root) { rebuildRows(); applyEditable(); }
     } catch (err) {
       loadState = 'error';
@@ -490,6 +492,18 @@
     handle.addEventListener('lostpointercapture', () => endDrag(false));
   }
 
+  // 아무 곳에도 커서가 없을 때(빈 곳을 눌렀거나 처음 들어왔을 때) ↑ ↓ 로 표를 스크롤.
+  // 표(또는 표 안)에 커서가 있으면 브라우저 기본 스크롤/위의 칸 이동이 처리한다.
+  document.addEventListener('keydown', (e) => {
+    if (!root || e.defaultPrevented || (e.key !== 'ArrowDown' && e.key !== 'ArrowUp')) return;
+    if (e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (document.activeElement && document.activeElement !== document.body) return;
+    const wrap = root.querySelector('.table-wrap');
+    if (!wrap) return;
+    e.preventDefault();
+    wrap.scrollBy({ top: (e.key === 'ArrowDown' ? 1 : -1) * 40 });
+  });
+
   // 표 바깥을 누르면 선택 해제 (끄는 중에는 유지)
   document.addEventListener('pointerdown', (e) => {
     if (!root || drag || !sel) return;
@@ -639,7 +653,7 @@
       <div class="table-area view-enter">
         <button class="row-add" type="button" title="행 추가" aria-label="이 위치에 행 추가">${ROW_ADD_ICON}</button>
         <ul class="menu" role="listbox" aria-label="본병/소분" hidden></ul>
-        <div class="table-wrap">
+        <div class="table-wrap" tabindex="0" role="region" aria-label="보유 잉크 표">
           <table class="grid" style="min-width:${BASE_WIDTH}px">
             <colgroup>${COLUMNS.map((c, i) => (i === LEVEL_COL ? '<col>' : `<col style="width:${c.width}px">`)).join('')}</colgroup>
             <thead><tr>${COLUMNS.map((c) => `<th scope="col">${c.label}</th>`).join('')}</tr></thead>
@@ -676,16 +690,28 @@
       positionSelection(); // 내용이 생기거나 사라지면 핸들 표시도 바뀜
     });
 
-    // Enter: 아래 칸으로 (Shift+Enter: 위 칸). 한글 조합 중에는 무시. 잠긴(대각선) 칸은 건너뜀.
+    // 칸 안에서 ↓ / Enter: 아래 칸으로, ↑ / Shift+Enter: 위 칸으로 (표가 따라 스크롤됨).
+    // 한글 조합 중에는 무시. 잠긴(대각선) 칸은 건너뜀. 본병/소분 칸은 ↑↓로 이동, Alt+↑↓ / Enter / Space 로 목록 열기.
     tbody.addEventListener('keydown', (e) => {
-      const input = e.target.closest('.cell');
-      if (!input || e.key !== 'Enter' || e.isComposing || e.keyCode === 229) return;
+      const el = e.target.closest('.cell, .pick');
+      if (!el || e.isComposing || e.keyCode === 229) return;
+      const isPick = el.classList.contains('pick');
+      let dir = 0;
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        if (e.shiftKey || e.ctrlKey || e.metaKey) return;
+        if (isPick && e.altKey) { if (canEdit()) { e.preventDefault(); openMenu(el); } return; }
+        if (e.altKey) return;
+        dir = e.key === 'ArrowDown' ? 1 : -1;
+      } else if (e.key === 'Enter' && !isPick) {
+        dir = e.shiftKey ? -1 : 1;
+      }
+      if (!dir) return;
       e.preventDefault();
-      let tr = input.closest('tr');
+      let tr = el.closest('tr');
       for (;;) {
-        tr = e.shiftKey ? tr.previousElementSibling : tr.nextElementSibling;
+        tr = dir > 0 ? tr.nextElementSibling : tr.previousElementSibling;
         if (!tr) return;
-        const next = tr.querySelector(`.cell[data-f="${input.dataset.f}"]`);
+        const next = tr.querySelector(`[data-f="${el.dataset.f}"]`);
         if (next && !next.disabled) { next.focus(); return; }
       }
     });
@@ -706,10 +732,6 @@
       if (!pick || !canEdit()) return;
       selectCell(pick.closest('td'));
       if (menuFor === pick) closeMenu(true); else openMenu(pick);
-    });
-    tbody.addEventListener('keydown', (e) => {
-      const pick = e.target.closest('.pick');
-      if (pick && canEdit() && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); openMenu(pick); }
     });
     menuEl.addEventListener('click', (e) => {
       const li = e.target.closest('[role="option"]');
@@ -753,6 +775,33 @@
     root = null;
     showStatus();
   }
+
+  // ── 사이드바용 개수 (본병 / 소분) ────────
+  // 표 데이터에서 바로 세기 때문에 표를 고치면 사이드바 숫자도 같이 바뀐다.
+  // 화면(app.js)은 subscribe 로 숫자를 받고, 처음 사이드바를 열 때 init 으로 데이터를 불러온다.
+  const statsSubs = [];
+
+  function computeStats() {
+    let bottle = 0;
+    let sample = 0;
+    order.forEach((id) => {
+      const kind = (data[id] && data[id].kind) || '';
+      if (kind.startsWith('본병')) bottle++;
+      else if (kind.startsWith('소분')) sample++;
+    });
+    return { bottle, sample };
+  }
+
+  function emitStats() {
+    if (loadState !== 'ready') return;
+    const s = computeStats();
+    statsSubs.forEach((fn) => fn(s));
+  }
+
+  window.INKVENTORY_STATS = {
+    subscribe(fn) { statsSubs.push(fn); emitStats(); },
+    init() { load(); },
+  };
 
   window.INKVENTORY_VIEWS = window.INKVENTORY_VIEWS || {};
   window.INKVENTORY_VIEWS['ink-owned'] = {

@@ -76,7 +76,24 @@
     return sidebar.classList.contains('is-open');
   }
 
+  // 사이드바의 본병/소분 개수: 처음 사이드바를 열 때 데이터를 불러오고(표 화면이면 이미 불러온 것을 씀), 바뀌면 숫자 갱신
+  let statsStarted = false;
+  function startStats() {
+    const api = window.INKVENTORY_STATS;
+    if (!api) return;
+    if (!statsStarted) {
+      statsStarted = true;
+      api.subscribe((s) => {
+        document.querySelectorAll('#inkStats .stat__num').forEach((el) => {
+          el.textContent = String(s[el.dataset.k]);
+        });
+      });
+    }
+    api.init();
+  }
+
   function setSidebar(open) {
+    if (open) startStats();
     sidebar.classList.toggle('is-open', open);
     backdrop.classList.toggle('is-visible', open);
     toggleBtn.setAttribute('aria-expanded', open);
