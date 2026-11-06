@@ -19,6 +19,21 @@
         href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-jp-dynamic-subset.css">
 
   <link rel="stylesheet" href="css/style.css">
+
+  <!-- 데이터 로딩 최적화: 보유 잉크 화면으로 바로 들어오면(새로고침 등) 다른 스크립트가 준비되기 전에 데이터 요청부터 시작 -->
+  <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+  <script src="js/config.js"></script>
+  <script>
+    try {
+      var fbc = window.INKVENTORY_CONFIG && window.INKVENTORY_CONFIG.firebase;
+      if (fbc && fbc.apiKey && location.hash === '#/ink-owned') {
+        window.__inkDoc = fetch('https://firestore.googleapis.com/v1/projects/' + fbc.projectId +
+          '/databases/(default)/documents/inventory/inkOwned?key=' + fbc.apiKey)
+          .then(function (r) { return r.status === 404 ? null : (r.ok ? r.json() : Promise.reject(new Error('http ' + r.status))); });
+        window.__inkDoc.catch(function () {});
+      }
+    } catch (e) {}
+  </script>
 </head>
 <body>
   <a class="skip-link" href="#main">본문으로 건너뛰기</a>
@@ -84,7 +99,6 @@
     </div>
   </dialog>
 
-  <script src="js/config.js"></script>
   <script src="js/fb.js"></script>
   <script src="js/views/ink-owned.js"></script>
   <script src="js/app.js"></script>

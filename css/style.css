@@ -122,7 +122,7 @@ button { font: inherit; color: inherit; }
 .stat__dot--bottle { background: #2b3a67; }
 .stat__dot--sample { background: #aab6e0; }
 .stat--total { grid-column: 1 / -1; }
-.stat__dot--pearl { background: #d6c9a8; }
+.stat__dot--pearl { background: #e3d6b3; }
 .stat__dot--standard { background: #cfcabb; }
 .stat__num { display: block; margin-top: 2px; font-size: 20px; font-weight: 700; line-height: 1.2; color: var(--accent); font-variant-numeric: tabular-nums; }
 
@@ -373,10 +373,10 @@ button { font: inherit; color: inherit; }
 .seg.in:not(:last-child)::after { background: var(--divider-in); }
 .bar:not([inert]) .seg { cursor: pointer; }
 
-/* 펄 잉크: 잉크명 칸을 사이트의 크림/베이지 톤에 맞는 샌드 베이지로 */
-.grid tbody tr.is-pearl td.c-name { background-color: #ece3d0; }
+/* 펄 잉크: 잉크명 칸을 연한 베이지로. 열 제목 셀(#f1eee6)보다 밝고 본문 바탕(#fbfaf7)보다는 어두운 따뜻한 크림색 */
+.grid tbody tr.is-pearl td.c-name { background-color: #f7f0df; }
 @media (hover: hover) {
-  .grid tbody tr.is-pearl:hover td.c-name { background-color: #e5dac3; }
+  .grid tbody tr.is-pearl:hover td.c-name { background-color: #f5edda; }
 }
 /* 펄 표시 버튼(✦): 관리자 모드에서 잉크명 칸에 마우스를 올리면 나타남. 눌러서 켜고 끔 */
 .pearl-btn {

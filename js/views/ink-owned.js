@@ -114,6 +114,7 @@
       await setDoc(doc(db, ...DOC_PATH), payload, { merge: true });
       batch.forEach(([k, e]) => { if (pending.get(k) === e) pending.delete(k); });
       saving = false;
+      saveCache();   // 다음에 들어올 때 바로 보여 줄 최신 내용을 보관
       if (pending.size) { scheduleFlush(0); } else { setStatus('saved'); }
     } catch (err) {
       saving = false;
@@ -131,30 +132,100 @@
     if (document.visibilityState === 'hidden' && pending.size) flush();
   });
 
-  // ── 불러오기 ────────────────────────────
+  // ── 불러오기 (빠르게) ────────────────────
+  // 1) 읽기에는 무거운 Firebase SDK 를 쓰지 않고, 공개 읽기 주소(REST)로 한 번 요청한다.
+  //    index.html 이 보유 잉크 화면으로 들어오는 경우 자바스크립트가 준비되기도 전에 이 요청을 먼저 시작해 둔다(window.__inkDoc).
+  // 2) 가장 최근에 받은 내용을 브라우저에 보관해 두었다가, 다시 들어오면 그 내용을 즉시 보여 주고
+  //    서버의 최신 내용이 오면 바뀐 경우에만 다시 그린다. (최신 내용이 오기 전에는 수정할 수 없다)
+  // SDK 는 저장(쓰기)할 때만 쓴다.
+  const CACHE_KEY = 'inkventory.cache.v1';
+  let hydrated = false;     // 보관해 둔 내용으로 화면을 채운 적이 있음
+  let shownSnapshot = '';   // 지금 화면에 반영된 내용의 요약(바뀌었는지 비교용)
+
+  function restUrl() {
+    const c = (window.INKVENTORY_CONFIG || {}).firebase || {};
+    return `https://firestore.googleapis.com/v1/projects/${c.projectId}/databases/(default)/documents/${DOC_PATH.join('/')}?key=${c.apiKey}`;
+  }
+
+  // Firestore REST 의 값 형식({stringValue: ..} 등)을 일반 값으로
+  function decodeValue(v) {
+    if (!v) return undefined;
+    if ('stringValue' in v) return v.stringValue;
+    if ('integerValue' in v) return Number(v.integerValue);
+    if ('doubleValue' in v) return v.doubleValue;
+    if ('booleanValue' in v) return v.booleanValue;
+    if ('nullValue' in v) return null;
+    if ('arrayValue' in v) return (v.arrayValue.values || []).map(decodeValue);
+    if ('mapValue' in v) return decodeMap(v.mapValue.fields || {});
+    return undefined;
+  }
+  function decodeMap(fields) {
+    const out = {};
+    Object.keys(fields).forEach((k) => { out[k] = decodeValue(fields[k]); });
+    return out;
+  }
+
+  async function fetchDoc() {
+    const request = () => fetch(restUrl()).then((r) => (r.status === 404 ? null : r.ok ? r.json() : Promise.reject(new Error('http ' + r.status))));
+    const early = window.__inkDoc;
+    window.__inkDoc = null;
+    let json;
+    try { json = await (early || request()); } catch (err) { json = await request(); } // 먼저 보낸 요청이 실패하면 한 번 더
+    return json ? decodeMap(json.fields || {}) : {};
+  }
+
+  // 문서 내용(순서 + 행 데이터)을 상태에 반영
+  function applyDoc(d) {
+    const rows = d.rows || {};
+    let loaded = Array.isArray(d.order) ? [...new Set(d.order.filter((x) => typeof x === 'string' && x))] : [];
+    if (!loaded.length) loaded = defaultOrder();
+    const known = new Set(loaded);
+    Object.keys(rows).forEach((id) => { if (!known.has(id)) loaded.push(id); }); // 안전장치: 데이터가 있는데 순서에 없는 행
+    order = loaded;
+    Object.keys(data).forEach((id) => { delete data[id]; });
+    Object.keys(rows).forEach((id) => { data[id] = rows[id]; });
+  }
+
+  const snapshot = () => JSON.stringify({ order, rows: data });
+
+  function saveCache() {
+    shownSnapshot = snapshot();
+    try { localStorage.setItem(CACHE_KEY, shownSnapshot); } catch (err) { /* 보관 못 해도 괜찮음 */ }
+  }
+
+  function hydrateFromCache() {
+    if (hydrated || loadState === 'ready') return;
+    try {
+      const d = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+      if (!d || !Array.isArray(d.order) || !d.rows || typeof d.rows !== 'object') return;
+      applyDoc(d);
+      hydrated = true;
+      shownSnapshot = snapshot();
+    } catch (err) { /* 깨진 보관본은 무시 */ }
+  }
+
   async function load() {
     if (loadState === 'loading' || loadState === 'ready') return;
     loadState = 'loading';
     showNotice('');
     try {
-      const { db, doc, getDoc } = await INKFB.db();
-      const snap = await getDoc(doc(db, ...DOC_PATH));
-      const d = snap.exists() ? snap.data() : {};
-      const rows = d.rows || {};
-
-      let loaded = Array.isArray(d.order) ? [...new Set(d.order.filter((x) => typeof x === 'string' && x))] : [];
-      if (!loaded.length) loaded = defaultOrder();
-      const known = new Set(loaded);
-      Object.keys(rows).forEach((id) => { if (!known.has(id)) loaded.push(id); }); // 안전장치: 데이터가 있는데 순서에 없는 행
-      order = loaded;
-
-      Object.keys(rows).forEach((id) => { data[id] = Object.assign(rows[id], data[id]); }); // 불러오는 동안 입력한 값 우선
+      const d = await fetchDoc();
+      applyDoc(d);
       loadState = 'ready';
+      const fresh = snapshot();
+      const changed = fresh !== shownSnapshot;
+      shownSnapshot = fresh;
+      saveCache();
       emitStats();
-      if (root) { rebuildRows(); applyEditable(); }
+      if (root) {
+        if (changed) rebuildRows();       // 처음이거나 보관본과 달라졌을 때만 다시 그림
+        applyEditable();
+      }
     } catch (err) {
       loadState = 'error';
-      showNotice('데이터를 불러오지 못했습니다. 새로고침해 주세요.');
+      showNotice(hydrated
+        ? '최신 내용을 불러오지 못해 이전에 받아 둔 내용을 보여 드리고 있습니다. 새로고침해 주세요.'
+        : '데이터를 불러오지 못했습니다. 새로고침해 주세요.');
       if (root) applyEditable();
     }
   }
@@ -270,6 +341,7 @@
     root.querySelectorAll('.pick').forEach((p) => { p.tabIndex = edit ? 0 : -1; });
     root.classList.toggle('is-editable', edit);
     if (!edit) { closeMenu(false); clearSelection(); }
+    if (isAdminMode()) INKFB.db().catch(() => {});   // 관리자 모드가 되면 저장용 SDK 를 미리 받아 둠 (첫 저장이 빠르게)
     showStatus();
   }
 
@@ -606,6 +678,7 @@
 
   function mount(container) {
     root = container;
+    hydrateFromCache();   // 전에 받아 둔 내용이 있으면 처음부터 채워서 그림
     container.innerHTML = `
       <p class="notice" role="alert" hidden></p>
       <div class="table-area view-enter">
@@ -765,14 +838,14 @@
   }
 
   function emitStats() {
-    if (loadState !== 'ready') return;
+    if (loadState !== 'ready' && !hydrated) return;   // 보관해 둔 내용도 일단 보여 주고, 최신 내용이 오면 갱신
     const s = computeStats();
     statsSubs.forEach((fn) => fn(s));
   }
 
   window.INKVENTORY_STATS = {
     subscribe(fn) { statsSubs.push(fn); emitStats(); },
-    init() { load(); },
+    init() { hydrateFromCache(); emitStats(); load(); },
   };
 
   window.INKVENTORY_VIEWS = window.INKVENTORY_VIEWS || {};
