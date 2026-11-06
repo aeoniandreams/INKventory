@@ -1,12 +1,15 @@
-// 보유 잉크 표: 브랜드 / 잉크명 / 본병·소분 / 잔량 / 비고 / 가격 (처음 270행, 행 사이에 추가 가능)
+// 보유 잉크 표: 브랜드 / 잉크명 / 본병·소분 / 잔량 / 비고 / 소분 가능 / 가격 (처음 270행, 행 사이에 추가 가능)
 //  - 잔량 막대: 10칸. 칸을 누르면 그 칸과 왼쪽 칸이 모두 채워진다. 같은 칸을 다시 누르면 0.
+//    화면이 넓어지면 잔량 열만 늘어나고 막대도 같이 길어진다(칸 폭은 항상 정수 px).
 //  - 글자 칸: 관리자 모드에서 바로 입력.
+//  - 본병/소분 칸: 클릭하면 드롭다운. "소분"을 고른 행의 소분 가능·가격 칸은 대각선이 그어지고 입력할 수 없다.
 //  - 행과 행 사이에 마우스를 두면 나타나는 아이콘으로 그 자리에 빈 행을 추가.
+//  - 칸을 선택하면 오른쪽 아래 꼭짓점에 작은 원(채우기 핸들)이 나타나고, 아래로 끌면 같은 내용이 채워진다.
 //  - 모든 변경은 자동 저장(Firestore 문서 하나: inventory/inkOwned). 수정은 관리자 모드에서만 가능.
 //    (화면에서 막는 것은 편의일 뿐, 실제 쓰기 권한은 Firestore 보안 규칙이 서버에서 막는다.)
 //
 // 저장 구조:  { order: ["0","1",...,"n8x2k1ab",...],            ← 행 순서 (행 id 목록)
-//               rows:  { "<행 id>": { brand, name, kind, level, note, price } } }
+//               rows:  { "<행 id>": { brand, name, kind, level, note, portions, price } } }
 //   - 행마다 바뀌지 않는 id 를 가진다. 중간에 행을 끼워 넣어도 다른 행의 데이터는 건드리지 않고 order 만 바뀐다.
 //   - order 가 없는 예전 데이터는 id "0"~"269" 순서로 본다.
 (() => {
@@ -19,16 +22,19 @@
   const SAVE_DELAY = 600;                        // 입력을 멈추고 이 시간(ms)이 지나면 저장
   const RETRY_DELAY = 5000;
 
+  // width 는 기본 너비. 잔량 열만 화면이 넓으면 늘어난다(width 는 그때의 최소값).
   const COLUMNS = [
-    { key: 'brand', label: '브랜드',    width: 140, max: 100 },
-    { key: 'name',  label: '잉크명',    width: 180, max: 100 },
-    { key: 'kind',  label: '본병/소분', width: 128, pick: true },   // 클릭하면 드롭다운
-    { key: 'level', label: '잔량',      width: 225 },               // 막대 200px + 좌우 여백 12px씩 + 오른쪽 선 1px
-    { key: 'note',  label: '비고',      width: 260, max: 300 },
-    { key: 'price', label: '가격',      width: 110, max: 50 },
-    { key: 'portions', label: '소분 가능 (5ml)', width: 130, max: 20 },
+    { key: 'brand',    label: '브랜드',          width: 140, max: 100 },
+    { key: 'name',     label: '잉크명',          width: 180, max: 100 },
+    { key: 'kind',     label: '본병/소분',       width: 128, pick: true },   // 클릭하면 드롭다운
+    { key: 'level',    label: '잔량',            width: 225 },               // 막대 200px + 좌우 여백 12px씩 + 오른쪽 선 1px
+    { key: 'note',     label: '비고',            width: 260, max: 300 },
+    { key: 'portions', label: '소분 가능 (5ml)', width: 130, max: 20, lockable: true },
+    { key: 'price',    label: '가격',            width: 110, max: 50, lockable: true },
   ];
-  const TABLE_WIDTH = COLUMNS.reduce((sum, c) => sum + c.width, 0);  // 표 너비 = 열 너비의 합 (남는 너비를 열이 나눠 갖지 않게)
+  const BASE_WIDTH = COLUMNS.reduce((sum, c) => sum + c.width, 0);
+  const LEVEL_COL = COLUMNS.findIndex((c) => c.key === 'level');
+  const BAR_MIN = 200;        // 막대 최소 길이(px). 항상 10의 배수
 
   // 본병/소분 드롭다운 선택지 (저장되는 값은 보이는 글자 그대로)
   const KIND_OPTIONS = [
@@ -76,6 +82,7 @@
     (data[id] = data[id] || {})[field] = value;
     pending.set(id + '|' + field, { id, field, value });
     setStatus('saving');
+    updateImportBar();
     scheduleFlush(field === 'level' ? 0 : SAVE_DELAY);
   }
 
@@ -168,12 +175,13 @@
   }
 
   function rowHtml(id, n) {
-    const cells = COLUMNS.map((c) => (c.key === 'level'
-      ? `<td class="c-level">${barHtml()}</td>`
-      : c.pick
-      ? `<td class="c-text"><button class="pick" type="button" data-f="${c.key}" data-label="${c.label}" aria-label="${c.label} ${n}행" aria-haspopup="listbox" aria-expanded="false" tabindex="-1"><span class="pick-text"></span></button></td>`
-      : `<td class="c-text"><input class="cell" type="text" data-f="${c.key}" data-label="${c.label}" maxlength="${c.max}" aria-label="${c.label} ${n}행" autocomplete="off" spellcheck="false" readonly tabindex="-1"></td>`
-    )).join('');
+    const cells = COLUMNS.map((c) => {
+      if (c.key === 'level') return `<td class="c-level">${barHtml()}</td>`;
+      if (c.pick) {
+        return `<td class="c-text"><button class="pick" type="button" data-f="${c.key}" data-label="${c.label}" aria-label="${c.label} ${n}행" aria-haspopup="listbox" aria-expanded="false" tabindex="-1"><span class="pick-text"></span></button></td>`;
+      }
+      return `<td class="c-text${c.lockable ? ' c-lockable' : ''}"><input class="cell" type="text" data-f="${c.key}" data-label="${c.label}" maxlength="${c.max}" aria-label="${c.label} ${n}행" autocomplete="off" spellcheck="false" readonly tabindex="-1"></td>`;
+    }).join('');
     return `<tr data-id="${esc(id)}">${cells}</tr>`;
   }
 
@@ -183,6 +191,7 @@
 
   function rebuildRows() {
     closeMenu(false);
+    clearSelection();
     root.querySelector('tbody').innerHTML = rowsHtml();
     fillAll();
   }
@@ -205,6 +214,14 @@
     bar.querySelectorAll('.seg').forEach((seg, idx) => seg.classList.toggle('in', idx + 1 <= level));
   }
 
+  // "소분"인 행: 소분 가능·가격 칸에 대각선, 입력 불가
+  function syncLock(tr) {
+    const id = tr.dataset.id;
+    const sample = ((data[id] && data[id].kind) || '').startsWith('소분');
+    tr.classList.toggle('is-sample', sample);
+    tr.querySelectorAll('td.c-lockable .cell').forEach((input) => { input.disabled = sample; });
+  }
+
   function fillRow(row) {
     const d = data[row.dataset.id];
     if (!d) return;
@@ -217,6 +234,7 @@
       setPick(p, typeof v === 'string' ? v : '');
     });
     if (d.level) paintLevel(row, d.level);
+    syncLock(row);
   }
 
   function fillAll() {
@@ -234,8 +252,30 @@
     });
     root.querySelectorAll('.pick').forEach((p) => { p.tabIndex = edit ? 0 : -1; });
     root.classList.toggle('is-editable', edit);
-    if (!edit) closeMenu(false);
+    if (!edit) { closeMenu(false); clearSelection(); }
+    updateImportBar();
     showStatus();
+  }
+
+  // ── 잔량 열만 늘어나고 막대도 같이 길어지게 ──
+  // 막대 길이는 10의 배수(칸 폭이 정수 px)로 맞추고, 남는 몇 px 는 좌우로 나눠서 가운데에 둔다.
+  let resizeObs = null;
+
+  function setupBarFit(container) {
+    const table = container.querySelector('table.grid');
+    const th = table.querySelectorAll('thead th')[LEVEL_COL];
+    const fit = () => {
+      const inner = th.getBoundingClientRect().width - 24 - 1;   // 좌우 여백 12px씩 + 오른쪽 선 1px
+      const bar = Math.max(BAR_MIN, Math.floor(inner / STEPS) * STEPS);
+      const ml = Math.max(0, Math.floor((inner - bar) / 2));
+      table.style.setProperty('--bar-w', bar + 'px');
+      table.style.setProperty('--bar-ml', ml + 'px');
+      positionSelection();
+    };
+    if (resizeObs) resizeObs.disconnect();
+    resizeObs = new ResizeObserver(fit);
+    resizeObs.observe(th);
+    fit();
   }
 
   // ── 본병/소분 드롭다운 ──────────────────
@@ -300,12 +340,15 @@
   function choose(value) {
     const btn = menuFor;
     if (!btn) return;
-    const id = btn.closest('tr').dataset.id;
+    const tr = btn.closest('tr');
+    const id = tr.dataset.id;
     const current = (data[id] && data[id].kind) || '';
     closeMenu(true);
     if (!canEdit() || value === current) return;
     setPick(btn, value);
     queueSave(id, 'kind', value);
+    syncLock(tr);          // 소분이면 소분 가능·가격 칸에 대각선 + 입력 잠금
+    positionSelection();
   }
 
   // 메뉴 바깥을 누르면 닫기 (한 번만 등록)
@@ -313,6 +356,197 @@
     if (menuFor && !menuEl.contains(e.target) && !menuFor.contains(e.target)) closeMenu(false);
   });
   window.addEventListener('resize', () => closeMenu(false));
+
+  // ── 칸 선택 + 채우기 핸들 (스프레드시트처럼) ──
+  // 내용이 있는 칸을 선택하면 테두리 오른쪽 아래 꼭짓점에 작은 원이 나타난다.
+  // 그 원을 누른 채 아래로 끌면, 지나간 칸에 선택한 칸과 같은 내용이 채워진다.
+  // (끌어서 지나간 칸의 기존 내용은 덮어쓴다. 소분 행의 대각선 칸은 건너뛴다.)
+  let sel = null;       // { c: 열 번호, r0: 원본 행, r1: 마지막 행 }
+  let drag = null;      // 끄는 중: { c, s, t, y }
+  let selBox = null;
+  let handle = null;
+  let dragRaf = 0;
+
+  const tbodyEl = () => root.querySelector('tbody');
+
+  function valueAt(r, c) {
+    const tr = tbodyEl().rows[r];
+    if (!tr) return '';
+    const d = data[tr.dataset.id] || {};
+    const key = COLUMNS[c].key;
+    return key === 'level' ? (d.level || 0) : (typeof d[key] === 'string' ? d[key] : '');
+  }
+
+  function clearSelection() {
+    sel = null;
+    if (selBox) { selBox.hidden = true; handle.hidden = true; }
+  }
+
+  function positionSelection() {
+    if (!root || !selBox) return;
+    if (!sel || !canEdit()) { selBox.hidden = true; handle.hidden = true; return; }
+    const tbody = tbodyEl();
+    const top = tbody.rows[sel.r0] && tbody.rows[sel.r0].cells[sel.c];
+    const bottom = tbody.rows[sel.r1] && tbody.rows[sel.r1].cells[sel.c];
+    if (!top || !bottom) { selBox.hidden = true; handle.hidden = true; return; }
+
+    const wrap = root.querySelector('.table-wrap');
+    const table = root.querySelector('table.grid');
+    const w = wrap.getBoundingClientRect();
+    const a = top.getBoundingClientRect();
+    const b = bottom.getBoundingClientRect();
+    const left = a.left - w.left - wrap.clientLeft + wrap.scrollLeft;
+    const y = a.top - w.top - wrap.clientTop + wrap.scrollTop;
+    const width = a.width;
+    const height = b.bottom - a.top;
+
+    selBox.style.cssText = `left:${left}px;top:${y}px;width:${width}px;height:${height}px`;
+    selBox.hidden = false;
+
+    // 핸들은 원본 칸에 내용이 있을 때만. (표 가장자리 밖으로 삐져나가 스크롤이 생기지 않게 안쪽으로 맞춤)
+    const hasValue = !!valueAt(sel.r0, sel.c);
+    handle.hidden = !hasValue;
+    handle.style.left = Math.min(left + width, table.offsetWidth - 5) + 'px';
+    handle.style.top = Math.min(y + height, table.offsetHeight - 5) + 'px';
+  }
+
+  function selectCell(td) {
+    if (!canEdit() || !td || !td.parentElement) return;
+    sel = { c: td.cellIndex, r0: td.parentElement.sectionRowIndex, r1: td.parentElement.sectionRowIndex };
+    positionSelection();
+  }
+
+  function applyFill(c, s, t) {
+    const key = COLUMNS[c].key;
+    const val = valueAt(s, c);
+    const tbody = tbodyEl();
+    for (let i = s + 1; i <= t; i++) {
+      const tr = tbody.rows[i];
+      if (!tr) break;
+      if (COLUMNS[c].lockable && tr.classList.contains('is-sample')) continue; // 대각선 칸은 건너뜀
+      if (valueAt(i, c) === val) continue;
+      if (key === 'level') paintLevel(tr, val);
+      else if (key === 'kind') setPick(tr.querySelector('.pick'), val);
+      else tr.querySelector(`.cell[data-f="${key}"]`).value = val;
+      queueSave(tr.dataset.id, key, val);
+      if (key === 'kind') syncLock(tr);
+    }
+  }
+
+  function setupFill(container) {
+    const wrap = container.querySelector('.table-wrap');
+    const thead = container.querySelector('thead');
+    selBox = container.querySelector('.sel-box');
+    handle = container.querySelector('.fill-handle');
+    sel = null;
+    drag = null;
+
+    function updateDragTarget() {
+      const tbody = tbodyEl();
+      const rowH = tbody.rows[0].offsetHeight;
+      const rel = drag.y - wrap.getBoundingClientRect().top - wrap.clientTop - thead.offsetHeight + wrap.scrollTop;
+      const t = Math.max(drag.s, Math.min(tbody.rows.length - 1, Math.floor(rel / rowH)));
+      if (t !== drag.t) { drag.t = t; sel = { c: drag.c, r0: drag.s, r1: t }; positionSelection(); }
+    }
+
+    function autoScroll() {
+      if (!drag) return;
+      const wr = wrap.getBoundingClientRect();
+      const edge = 40;
+      if (drag.y > wr.bottom - edge) {
+        wrap.scrollTop += Math.min(28, (drag.y - (wr.bottom - edge)) / 2 + 4); // 아래쪽 가장자리에서는 표가 따라 내려감
+        updateDragTarget();
+        positionSelection();
+      }
+      dragRaf = requestAnimationFrame(autoScroll);
+    }
+
+    function endDrag(commit) {
+      if (!drag) return;
+      const d = drag;
+      drag = null;
+      cancelAnimationFrame(dragRaf);
+      root.classList.remove('is-filling');
+      if (commit && d.t > d.s) applyFill(d.c, d.s, d.t);
+      positionSelection();
+    }
+
+    handle.addEventListener('pointerdown', (e) => {
+      if (!sel || !canEdit() || e.button > 0) return;
+      e.preventDefault();
+      try { handle.setPointerCapture(e.pointerId); } catch (err) { /* 포인터를 못 잡아도 동작은 계속 */ }
+      drag = { c: sel.c, s: sel.r0, t: sel.r1, y: e.clientY };
+      root.classList.add('is-filling');
+      closeMenu(false);
+      dragRaf = requestAnimationFrame(autoScroll);
+    });
+    handle.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      drag.y = e.clientY;
+      updateDragTarget();
+    });
+    handle.addEventListener('pointerup', () => endDrag(true));
+    handle.addEventListener('pointercancel', () => endDrag(false));
+    handle.addEventListener('lostpointercapture', () => endDrag(false));
+  }
+
+  // 표 바깥을 누르면 선택 해제 (끄는 중에는 유지)
+  document.addEventListener('pointerdown', (e) => {
+    if (!root || drag || !sel) return;
+    if (!e.target.closest('.table-wrap') && !e.target.closest('.menu')) clearSelection();
+  });
+
+  // ── 스프레드시트 값 채우기: 소분 가능(5ml)·가격 (한 번만 쓰는 기능) ──
+  // data/ink-extra.json 의 값을 (브랜드, 잉크명)이 같은 행에 입력한다. 소분 가능·가격이 모두 비어 있을 때만 가능.
+  const rowKey = (id) => ((data[id] && data[id].brand) || '') + '\u0000' + ((data[id] && data[id].name) || '');
+
+  function isExtraEmpty() {
+    return order.every((id) => !data[id] || (!data[id].portions && !data[id].price));
+  }
+
+  function updateImportBar() {
+    const bar = root && root.querySelector('.import-bar');
+    if (bar) bar.hidden = !(canEdit() && isExtraEmpty());
+  }
+
+  async function runImport() {
+    if (!root || !canEdit() || !isExtraEmpty()) return;
+    const btn = root.querySelector('#importBtn');
+    btn.disabled = true;
+    try {
+      const list = await (await fetch('data/ink-extra.json', { cache: 'no-store' })).json();
+      if (!Array.isArray(list) || !list.length) throw new Error('bad-data');
+      const byKey = new Map(order.map((id) => [rowKey(id), id]));
+      const rows = {};
+      const missing = [];
+      list.forEach((it) => {
+        const id = byKey.get(it.brand + '\u0000' + it.name);
+        if (!id) { missing.push(`${it.brand} ${it.name}`); return; }
+        const row = {};
+        if (it.portions) row.portions = it.portions;
+        if (it.price) row.price = it.price;
+        rows[id] = row;
+      });
+      const n = Object.keys(rows).length;
+      if (!n) throw new Error('no-match');
+      const note = missing.length ? `\n(표에서 찾지 못한 ${missing.length}개는 건너뜁니다)` : '';
+      if (!window.confirm(`소분 가능·가격을 ${n}개 행에 입력합니다.${note}\n계속할까요?`)) return;
+
+      setStatus('saving');
+      const { db, doc, setDoc } = await INKFB.db();
+      await setDoc(doc(db, ...DOC_PATH), { rows }, { merge: true });
+
+      Object.keys(rows).forEach((id) => { data[id] = Object.assign(data[id] || {}, rows[id]); });
+      setStatus('saved');
+      if (root) { fillAll(); applyEditable(); }
+    } catch (err) {
+      setStatus(err && err.code === 'permission-denied' ? 'denied' : 'error');
+      showNotice('가져오기에 실패했습니다. 다시 시도해 주세요.');
+    } finally {
+      btn.disabled = false;
+      updateImportBar();
+    }
+  }
 
   // ── 행 추가 ─────────────────────────────
   // b: 새 행이 들어갈 자리(0부터). b번째 행 "앞"에 빈 행을 끼워 넣는다.
@@ -327,11 +561,12 @@
     order.splice(b, 0, id);
     queueOrder();
 
-    const tbody = root.querySelector('tbody');
+    const tbody = tbodyEl();
     tbody.rows[b].insertAdjacentHTML('beforebegin', rowHtml(id, b + 1));
     const tr = tbody.rows[b];
     tr.classList.add('row-new');
     relabel(b + 1);
+    clearSelection();
     applyEditable();
     tr.querySelector('.cell').focus(); // 바로 입력할 수 있게 첫 칸에 커서
   }
@@ -368,7 +603,7 @@
     }
 
     function update(e) {
-      if (!canEdit() || e.target.closest('.row-add')) return; // 버튼 위에 있으면 그대로 유지
+      if (drag || !canEdit() || e.target.closest('.row-add')) return; // 버튼 위에 있으면 그대로 유지
       const b = boundaryAt(e.clientY);
       if (b === null) { hide(); return; }
       const top = wrap.getBoundingClientRect().top + wrap.clientTop;
@@ -397,43 +632,62 @@
     root = container;
     container.innerHTML = `
       <p class="notice" role="alert" hidden></p>
+      <div class="import-bar" hidden>
+        <span>스프레드시트의 소분 가능·가격 값을 표에 입력할 수 있습니다. (두 열이 모두 비어 있을 때만 표시됩니다)</span>
+        <button class="btn btn--primary" type="button" id="importBtn">가져오기</button>
+      </div>
       <div class="table-area view-enter">
         <button class="row-add" type="button" title="행 추가" aria-label="이 위치에 행 추가">${ROW_ADD_ICON}</button>
         <ul class="menu" role="listbox" aria-label="본병/소분" hidden></ul>
         <div class="table-wrap">
-          <table class="grid" style="width:${TABLE_WIDTH}px">
-            <colgroup>${COLUMNS.map((c) => `<col style="width:${c.width}px">`).join('')}</colgroup>
+          <table class="grid" style="min-width:${BASE_WIDTH}px">
+            <colgroup>${COLUMNS.map((c, i) => (i === LEVEL_COL ? '<col>' : `<col style="width:${c.width}px">`)).join('')}</colgroup>
             <thead><tr>${COLUMNS.map((c) => `<th scope="col">${c.label}</th>`).join('')}</tr></thead>
             <tbody>${rowsHtml()}</tbody>
           </table>
+          <div class="sel-box" hidden></div>
+          <button class="fill-handle" type="button" tabindex="-1" aria-label="아래로 끌어서 채우기" hidden></button>
         </div>
       </div>`;
 
     const tbody = container.querySelector('tbody');
     menuEl = container.querySelector('.menu');
     menuFor = null;
+    container.querySelector('#importBtn').addEventListener('click', runImport);
     setupRowAdd(container);
+    setupFill(container);
+    setupBarFit(container);
     fillAll();
     applyEditable();
     if (loadState === 'error') loadState = 'idle'; // 오류였다면 화면에 다시 들어올 때 재시도
     load();
+
+    // 칸에 커서가 들어가면 그 칸을 선택
+    tbody.addEventListener('focusin', (e) => {
+      const td = e.target.closest('td');
+      if (td && canEdit() && !drag) selectCell(td);
+    });
 
     // 글자 입력 → 자동 저장
     tbody.addEventListener('input', (e) => {
       const input = e.target.closest('.cell');
       if (!input || !canEdit()) return;
       queueSave(input.closest('tr').dataset.id, input.dataset.f, input.value);
+      positionSelection(); // 내용이 생기거나 사라지면 핸들 표시도 바뀜
     });
 
-    // Enter: 아래 칸으로 (Shift+Enter: 위 칸). 한글 조합 중에는 무시.
+    // Enter: 아래 칸으로 (Shift+Enter: 위 칸). 한글 조합 중에는 무시. 잠긴(대각선) 칸은 건너뜀.
     tbody.addEventListener('keydown', (e) => {
       const input = e.target.closest('.cell');
       if (!input || e.key !== 'Enter' || e.isComposing || e.keyCode === 229) return;
       e.preventDefault();
-      const tr = input.closest('tr');
-      const target = e.shiftKey ? tr.previousElementSibling : tr.nextElementSibling;
-      const next = target && target.querySelector(`.cell[data-f="${input.dataset.f}"]`);
-      if (next) next.focus();
+      let tr = input.closest('tr');
+      for (;;) {
+        tr = e.shiftKey ? tr.previousElementSibling : tr.nextElementSibling;
+        if (!tr) return;
+        const next = tr.querySelector(`.cell[data-f="${input.dataset.f}"]`);
+        if (next && !next.disabled) { next.focus(); return; }
+      }
     });
 
     // 잔량 막대: 마우스를 올린 칸까지 미리보기 (관리자 모드에서만 bar 가 inert 가 아니라서 동작)
@@ -450,6 +704,7 @@
     tbody.addEventListener('click', (e) => {
       const pick = e.target.closest('.pick');
       if (!pick || !canEdit()) return;
+      selectCell(pick.closest('td'));
       if (menuFor === pick) closeMenu(true); else openMenu(pick);
     });
     tbody.addEventListener('keydown', (e) => {
@@ -471,6 +726,7 @@
     });
     container.querySelector('.table-wrap').addEventListener('scroll', () => closeMenu(false), { passive: true });
 
+    // 잔량 막대 클릭
     tbody.addEventListener('click', (e) => {
       const seg = e.target.closest('.seg');
       if (!seg || !canEdit()) return;
@@ -481,11 +737,18 @@
       const next = current === i ? 0 : i;
       paintLevel(row, next);
       queueSave(id, 'level', next);
+      selectCell(seg.closest('td'));
     });
   }
 
   function unmount() {
     closeMenu(false);
+    if (resizeObs) { resizeObs.disconnect(); resizeObs = null; }
+    cancelAnimationFrame(dragRaf);
+    drag = null;
+    sel = null;
+    selBox = null;
+    handle = null;
     menuEl = null;
     root = null;
     showStatus();

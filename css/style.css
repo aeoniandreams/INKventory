@@ -182,7 +182,7 @@ button { font: inherit; color: inherit; }
 .placeholder p { margin: 0; color: var(--muted); }
 
 /* ── 표 화면 (보유 잉크) ─────────────────── */
-.main--table { padding: 20px clamp(12px, 3vw, 32px) 24px clamp(4px, 1vw, 12px); }
+.main--table { padding: 20px clamp(12px, 3vw, 32px) 24px 6px; }  /* 왼쪽은 정수 px (선이 흐릿해지지 않게) */
 
 /* 표 왼쪽 여백(28px)은 행 추가 아이콘 자리 */
 .table-area { position: relative; padding-left: 28px; }
@@ -202,10 +202,10 @@ button { font: inherit; color: inherit; }
 
 /* 방금 추가한 행: 잠깐 강조 */
 .grid tbody tr.row-new td { animation: row-flash 1.4s ease-out; }
-@keyframes row-flash { from { background: #dfe4f2; } to { background: transparent; } }
+@keyframes row-flash { from { background-color: #dfe4f2; } to { background-color: transparent; } }
 
 .table-wrap {
-  width: fit-content; max-width: 100%;   /* 표 테두리가 표 너비에 딱 맞게 */
+  position: relative; width: 100%;       /* 화면 너비를 다 쓰고, 남는 너비는 잔량 열이 가져간다 */
   overflow: auto;
   max-height: calc(100vh - var(--topbar-h) - 44px);
   max-height: calc(100dvh - var(--topbar-h) - 44px);
@@ -213,7 +213,8 @@ button { font: inherit; color: inherit; }
   border: 1px solid var(--line); border-radius: 12px;
 }
 .grid {
-  /* 너비는 JS가 열 너비의 합으로 지정(인라인). 화면이 더 넓어도 열이 늘어나지 않는다. */
+  /* 최소 너비는 JS가 열 너비의 합으로 지정(인라인). 잔량 열(<col> 너비 없음)만 남는 너비를 가져간다. */
+  width: 100%;
   table-layout: fixed; border-collapse: separate; border-spacing: 0;
   font-size: 14px;
 }
@@ -225,16 +226,16 @@ button { font: inherit; color: inherit; }
 .grid tbody tr:last-child td { border-bottom: 0; }
 .grid thead th {
   position: sticky; top: 0; z-index: 2;
-  height: 44px;
+  height: 40px;
   background: #f1eee6;
   font-size: 13px; font-weight: 700; color: var(--muted);
 }
-.grid td { height: 44px; }
+.grid td { height: 40px; }
 .grid td.c-text { padding: 0; }
 
 /* 글자 입력 칸: 평소엔 일반 글자처럼 보이고, 관리자 모드에서 누르면 입력 가능 */
 .cell {
-  display: block; width: 100%; height: 44px; padding: 0 12px;
+  display: block; width: 100%; height: 40px; padding: 0 12px;
   font: inherit; color: var(--ink);
   background: transparent; border: 0; border-radius: 0; outline: none;
   text-overflow: ellipsis;
@@ -244,7 +245,7 @@ button { font: inherit; color: inherit; }
 /* 본병/소분 칸 (클릭하면 드롭다운) */
 .grid td.c-text { position: relative; }
 .pick {
-  display: flex; align-items: center; width: 100%; height: 44px; padding: 0 8px;
+  display: flex; align-items: center; width: 100%; height: 40px; padding: 0 8px;
   font: inherit; color: var(--ink); text-align: left;
   background: transparent; border: 0; border-radius: 0; outline: none;
   cursor: default;
@@ -316,18 +317,18 @@ button { font: inherit; color: inherit; }
 .save-status[hidden] { display: none; }
 .save-status[data-state="error"], .save-status[data-state="denied"] { color: #b3261e; }
 @media (hover: hover) {
-  .grid tbody tr:hover td { background: #f7f5ef; }
+  .grid tbody tr:hover td { background-color: #f7f5ef; }
 }
 
 /* 잔량 막대: 하나의 막대 + 같은 굵기(1px)의 옅은 회색 선으로 10등분.
-   너비를 200px(칸당 정확히 20px)로 고정해서 선 간격과 굵기가 항상 똑같게 한다. */
+   막대 길이는 JS가 10의 배수(칸 폭이 정수 px)로 맞춰서 --bar-w 에 넣는다. 화면이 넓어지면 같이 길어진다. */
 .grid td.c-level { padding: 0 12px; }  /* 열 너비 = 막대 200 + 좌우 12 + 오른쪽 선 1 */
 .bar {
   --track: #eeece6;
   --divider: #d3d0c6;      /* 빈 막대 위의 선: 옅은 회색 */
   --divider-in: #243059;   /* 채워진 막대 위의 선: 남색보다 아주 약간 어두워 거의 안 보임 */
   position: relative; display: flex;
-  width: 200px; height: 28px;
+  width: var(--bar-w, 200px); margin-left: var(--bar-ml, 0px); height: 28px;
 }
 .track {
   position: absolute; inset: 9px 0;
@@ -354,6 +355,37 @@ button { font: inherit; color: inherit; }
 }
 .seg.in:not(:last-child)::after { background: var(--divider-in); }
 .bar:not([inert]) .seg { cursor: pointer; }
+
+/* 소분인 행의 소분 가능·가격 칸: 우측이 높은 대각선, 입력 불가 */
+.grid tr.is-sample td.c-lockable {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cline x1='0' y1='100' x2='100' y2='0' stroke='%23c2bdb0' stroke-width='1' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E");
+  background-size: 100% 100%; background-repeat: no-repeat;
+}
+.cell:disabled { color: var(--muted); cursor: default; opacity: 1; -webkit-text-fill-color: currentColor; }
+
+/* 칸 선택 + 채우기 핸들 (스프레드시트처럼) */
+.sel-box {
+  position: absolute; z-index: 1; box-sizing: border-box; pointer-events: none;
+  border: 1px solid var(--accent);
+}
+.sel-box[hidden], .fill-handle[hidden] { display: none; }
+.is-filling .sel-box { border-style: dashed; background: rgba(43, 58, 103, .07); }
+.is-filling { cursor: crosshair; user-select: none; }
+.fill-handle {
+  position: absolute; z-index: 1; width: 9px; height: 9px; margin: -5px 0 0 -5px; padding: 0;
+  border-radius: 50%; background: var(--accent); border: 1.5px solid #fff;
+  cursor: crosshair; touch-action: none;
+}
+.fill-handle::before { content: ''; position: absolute; inset: -8px; } /* 누르기 쉽게 영역 확장 */
+
+/* 스프레드시트 값 채우기(한 번만 쓰는 기능) 안내 바 */
+.import-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin: 0 0 12px; padding: 10px 14px;
+  border-radius: 10px; background: var(--accent-soft); color: var(--accent); font-size: 14px;
+}
+.import-bar[hidden] { display: none; }
+.import-bar .btn { flex: none; }
 
 .view-enter { animation: view-in .35s var(--ease); }
 @keyframes view-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
