@@ -22,10 +22,16 @@
   const COLUMNS = [
     { key: 'brand', label: '브랜드',    width: 140, max: 100 },
     { key: 'name',  label: '잉크명',    width: 200, max: 100 },
-    { key: 'kind',  label: '본병/소분', width: 96,  max: 50 },
+    { key: 'kind',  label: '본병/소분', width: 120, pick: true },   // 클릭하면 드롭다운
     { key: 'level', label: '잔량',      width: 230 },
     { key: 'note',  label: '비고',      width: 260, max: 300 },
     { key: 'price', label: '가격',      width: 110, max: 50 },
+  ];
+
+  // 본병/소분 드롭다운 선택지 (저장되는 값은 보이는 글자 그대로)
+  const KIND_OPTIONS = [
+    '소분 (5ml)', '소분 (10ml)', '소분 (15ml)', '소분 (20ml)',
+    '본병 (15ml)', '본병 (20ml)', '본병 (25ml)', '본병 (30ml)', '본병 (38ml)', '본병 (50ml)', '본병 (65ml)', '본병 (80ml)',
   ];
 
   // ── 상태 ────────────────────────────────
@@ -162,6 +168,8 @@
   function rowHtml(id, n) {
     const cells = COLUMNS.map((c) => (c.key === 'level'
       ? `<td class="c-level">${barHtml()}</td>`
+      : c.pick
+      ? `<td class="c-text"><button class="pick" type="button" data-f="${c.key}" data-label="${c.label}" aria-label="${c.label} ${n}행" aria-haspopup="listbox" aria-expanded="false" tabindex="-1"><span class="pick-text"></span></button></td>`
       : `<td class="c-text"><input class="cell" type="text" data-f="${c.key}" data-label="${c.label}" maxlength="${c.max}" aria-label="${c.label} ${n}행" autocomplete="off" spellcheck="false" readonly tabindex="-1"></td>`
     )).join('');
     return `<tr data-id="${esc(id)}">${cells}</tr>`;
@@ -172,6 +180,7 @@
   }
 
   function rebuildRows() {
+    closeMenu(false);
     root.querySelector('tbody').innerHTML = rowsHtml();
     fillAll();
   }
@@ -180,8 +189,8 @@
   function relabel(from) {
     const rows = root.querySelectorAll('tbody tr');
     for (let i = from; i < rows.length; i++) {
-      rows[i].querySelectorAll('.cell').forEach((input) => {
-        input.setAttribute('aria-label', `${input.dataset.label} ${i + 1}행`);
+      rows[i].querySelectorAll('.cell, .pick').forEach((el) => {
+        el.setAttribute('aria-label', `${el.dataset.label} ${i + 1}행`);
       });
     }
   }
@@ -201,6 +210,10 @@
       const v = d[input.dataset.f];
       if (typeof v === 'string' && input.value !== v && document.activeElement !== input) input.value = v;
     });
+    row.querySelectorAll('.pick').forEach((p) => {
+      const v = d[p.dataset.f];
+      p.querySelector('.pick-text').textContent = typeof v === 'string' ? v : '';
+    });
     if (d.level) paintLevel(row, d.level);
   }
 
@@ -217,8 +230,79 @@
       input.readOnly = !edit;
       input.tabIndex = edit ? 0 : -1;
     });
+    root.querySelectorAll('.pick').forEach((p) => { p.tabIndex = edit ? 0 : -1; });
+    root.classList.toggle('is-editable', edit);
+    if (!edit) closeMenu(false);
     showStatus();
   }
+
+  // ── 본병/소분 드롭다운 ──────────────────
+  let menuEl = null;    // <ul class="menu"> (표 바깥에 둬서 스크롤 영역에 잘리지 않음)
+  let menuFor = null;   // 지금 메뉴가 열려 있는 칸의 버튼(.pick)
+
+  function openMenu(btn) {
+    if (!root || !menuEl) return;
+    const id = btn.closest('tr').dataset.id;
+    const current = (data[id] && data[id].kind) || '';
+    const firstBottle = KIND_OPTIONS.findIndex((v) => v.startsWith('본병'));
+
+    let html = '';
+    KIND_OPTIONS.forEach((v, i) => {
+      if (i === firstBottle) html += '<li class="menu-sep" role="separator"></li>'; // 소분 / 본병 구분선
+      html += `<li role="option" tabindex="-1" data-v="${esc(v)}" aria-selected="${v === current}">${esc(v)}</li>`;
+    });
+    if (current) html += '<li class="menu-sep" role="separator"></li><li class="menu-clear" role="option" tabindex="-1" data-v="" aria-selected="false">비우기</li>';
+    menuEl.innerHTML = html;
+    menuEl.hidden = false;
+
+    // 칸 바로 아래에 띄우되, 화면 아래로 넘치면 위로
+    const area = root.querySelector('.table-area').getBoundingClientRect();
+    const cell = btn.closest('td').getBoundingClientRect();
+    menuEl.style.minWidth = cell.width + 'px';
+    menuEl.style.maxHeight = '';
+    const mw = menuEl.offsetWidth;
+    const fullH = menuEl.offsetHeight;
+    const spaceBelow = window.innerHeight - cell.bottom - 8;
+    const spaceAbove = cell.top - 8;
+    const below = spaceBelow >= fullH || spaceBelow >= spaceAbove;   // 공간이 더 넓은 쪽으로
+    const mh = Math.min(fullH, below ? spaceBelow : spaceAbove);     // 그래도 모자라면 메뉴 안에서 스크롤
+    menuEl.style.maxHeight = mh + 'px';
+    const left = Math.max(0, Math.min(cell.left, window.innerWidth - mw - 8));
+    menuEl.style.left = (left - area.left) + 'px';
+    menuEl.style.top = ((below ? cell.bottom : cell.top - mh) - area.top) + 'px';
+
+    menuFor = btn;
+    btn.setAttribute('aria-expanded', 'true');
+    btn.classList.add('is-open');
+    (menuEl.querySelector('[aria-selected="true"]') || menuEl.querySelector('[role="option"]')).focus();
+  }
+
+  function closeMenu(focusBtn) {
+    if (menuEl) menuEl.hidden = true;
+    if (!menuFor) return;
+    const btn = menuFor;
+    menuFor = null;
+    btn.setAttribute('aria-expanded', 'false');
+    btn.classList.remove('is-open');
+    if (focusBtn) btn.focus();
+  }
+
+  function choose(value) {
+    const btn = menuFor;
+    if (!btn) return;
+    const id = btn.closest('tr').dataset.id;
+    const current = (data[id] && data[id].kind) || '';
+    closeMenu(true);
+    if (!canEdit() || value === current) return;
+    btn.querySelector('.pick-text').textContent = value;
+    queueSave(id, 'kind', value);
+  }
+
+  // 메뉴 바깥을 누르면 닫기 (한 번만 등록)
+  document.addEventListener('pointerdown', (e) => {
+    if (menuFor && !menuEl.contains(e.target) && !menuFor.contains(e.target)) closeMenu(false);
+  });
+  window.addEventListener('resize', () => closeMenu(false));
 
   // ── 행 추가 ─────────────────────────────
   // b: 새 행이 들어갈 자리(0부터). b번째 행 "앞"에 빈 행을 끼워 넣는다.
@@ -305,6 +389,7 @@
       <p class="notice" role="alert" hidden></p>
       <div class="table-area view-enter">
         <button class="row-add" type="button" title="행 추가" aria-label="이 위치에 행 추가">${ROW_ADD_ICON}</button>
+        <ul class="menu" role="listbox" aria-label="본병/소분" hidden></ul>
         <div class="table-wrap">
           <table class="grid">
             <colgroup>${COLUMNS.map((c) => `<col style="width:${c.width}px">`).join('')}</colgroup>
@@ -315,6 +400,8 @@
       </div>`;
 
     const tbody = container.querySelector('tbody');
+    menuEl = container.querySelector('.menu');
+    menuFor = null;
     setupRowAdd(container);
     fillAll();
     applyEditable();
@@ -349,6 +436,31 @@
       if (bar && !bar.contains(e.relatedTarget)) bar.style.removeProperty('--pv');
     });
 
+    // 본병/소분 칸: 누르면 드롭다운
+    tbody.addEventListener('click', (e) => {
+      const pick = e.target.closest('.pick');
+      if (!pick || !canEdit()) return;
+      if (menuFor === pick) closeMenu(true); else openMenu(pick);
+    });
+    tbody.addEventListener('keydown', (e) => {
+      const pick = e.target.closest('.pick');
+      if (pick && canEdit() && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); openMenu(pick); }
+    });
+    menuEl.addEventListener('click', (e) => {
+      const li = e.target.closest('[role="option"]');
+      if (li) choose(li.dataset.v);
+    });
+    menuEl.addEventListener('keydown', (e) => {
+      const items = [...menuEl.querySelectorAll('[role="option"]')];
+      const i = items.indexOf(document.activeElement);
+      if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+      else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (i >= 0) choose(items[i].dataset.v); }
+      else if (e.key === 'Escape') { e.preventDefault(); closeMenu(true); }
+      else if (e.key === 'Tab') { closeMenu(false); }
+    });
+    container.querySelector('.table-wrap').addEventListener('scroll', () => closeMenu(false), { passive: true });
+
     tbody.addEventListener('click', (e) => {
       const seg = e.target.closest('.seg');
       if (!seg || !canEdit()) return;
@@ -363,6 +475,8 @@
   }
 
   function unmount() {
+    closeMenu(false);
+    menuEl = null;
     root = null;
     showStatus();
   }
