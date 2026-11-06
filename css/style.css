@@ -112,15 +112,17 @@ button { font: inherit; color: inherit; }
 }
 
 /* 사이드바: 본병/소분 개수 */
-.stats { display: flex; gap: 8px; padding: 0 14px 14px; }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 14px 14px; }
 .stat {
-  flex: 1; min-width: 0; padding: 8px 12px 9px;
+  min-width: 0; padding: 8px 12px 9px;
   background: var(--accent-soft); border-radius: 10px;
 }
 .stat__label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
 .stat__dot { width: 8px; height: 8px; border-radius: 50%; }
 .stat__dot--bottle { background: #2b3a67; }
 .stat__dot--sample { background: #aab6e0; }
+.stat__dot--pearl { background: #b9b9f5; }
+.stat__dot--standard { background: #cfcabb; }
 .stat__num { display: block; margin-top: 2px; font-size: 20px; font-weight: 700; line-height: 1.2; color: var(--accent); font-variant-numeric: tabular-nums; }
 
 .sidebar__foot {
@@ -336,13 +338,13 @@ button { font: inherit; color: inherit; }
 
 /* 잔량 막대: 하나의 막대 + 같은 굵기(1px)의 옅은 회색 선으로 10등분.
    막대 길이는 JS가 10의 배수(칸 폭이 정수 px)로 맞춰서 --bar-w 에 넣는다. 화면이 넓어지면 같이 길어진다. */
-.grid td.c-level { padding: 0 12px; }  /* 열 너비 = 막대 200 + 좌우 12 + 오른쪽 선 1 */
+.grid td.c-level { padding: 0 12px; }  /* 기본 열 너비 = 막대 180 + 좌우 12 + 오른쪽 선 1 */
 .bar {
   --track: #eeece6;
   --divider: #d3d0c6;      /* 빈 막대 위의 선: 옅은 회색 */
   --divider-in: #243059;   /* 채워진 막대 위의 선: 남색보다 아주 약간 어두워 거의 안 보임 */
   position: relative; display: flex;
-  width: var(--bar-w, 200px); margin-left: var(--bar-ml, 0px); height: 28px;
+  width: var(--bar-w, 180px); margin-left: var(--bar-ml, 0px); height: 28px;
 }
 .track {
   position: absolute; inset: 9px 0;
@@ -369,6 +371,26 @@ button { font: inherit; color: inherit; }
 }
 .seg.in:not(:last-child)::after { background: var(--divider-in); }
 .bar:not([inert]) .seg { cursor: pointer; }
+
+/* 펄 잉크: 잉크명 칸을 연보라로 (스프레드시트의 보라색 칸과 같은 색 #e6e6ff) */
+.grid tbody tr.is-pearl td.c-name { background-color: #e6e6ff; }
+@media (hover: hover) {
+  .grid tbody tr.is-pearl:hover td.c-name { background-color: #dcdcfb; }
+}
+/* 펄 표시 버튼(✦): 관리자 모드에서 잉크명 칸에 마우스를 올리면 나타남. 눌러서 켜고 끔 */
+.pearl-btn {
+  position: absolute; right: 6px; top: 50%; width: 24px; height: 24px; margin-top: -12px; padding: 0;
+  display: none; place-items: center;
+  background: none; border: 0; border-radius: 6px; color: var(--muted); cursor: pointer;
+  opacity: 0; transition: opacity .12s, color .12s, background-color .12s;
+}
+.is-editable .pearl-btn { display: grid; }
+.is-editable td.c-name:hover .pearl-btn, .is-editable td.c-name:focus-within .pearl-btn,
+.pearl-btn:focus-visible { opacity: 1; }
+@media (pointer: coarse) { .is-editable .pearl-btn { opacity: .5; } }
+.pearl-btn[aria-pressed="true"] { color: #5a55c8; }
+.pearl-btn:hover { background: rgba(255, 255, 255, .6); color: var(--accent); }
+.is-editable td.c-name .cell { padding-right: 32px; }
 
 /* 소분인 행의 소분 가능·가격 칸: 우측이 높은 대각선, 입력 불가 */
 .grid tr.is-sample td.c-lockable {

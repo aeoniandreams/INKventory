@@ -24,17 +24,17 @@
 
   // width 는 기본 너비. 잔량 열만 화면이 넓으면 늘어난다(width 는 그때의 최소값).
   const COLUMNS = [
-    { key: 'brand',    label: '브랜드',          width: 160, max: 100 },
-    { key: 'name',     label: '잉크명',          width: 180, max: 100 },
+    { key: 'brand',    label: '브랜드',          width: 180, max: 100 },
+    { key: 'name',     label: '잉크명',          width: 180, max: 100, pearlToggle: true },   // 펄 잉크는 셀을 연보라로 칠함
     { key: 'kind',     label: '본병/소분',       width: 128, pick: true },   // 클릭하면 드롭다운
-    { key: 'level',    label: '잔량',            width: 225 },               // 막대 200px + 좌우 여백 12px씩 + 오른쪽 선 1px
+    { key: 'level',    label: '잔량',            width: 205 },               // 막대 180px + 좌우 여백 12px씩 + 오른쪽 선 1px
     { key: 'note',     label: '비고',            width: 260, max: 300 },
     { key: 'portions', label: '소분 가능 (5ml)', width: 130, max: 20, lockable: true },
     { key: 'price',    label: '가격',            width: 110, max: 50, lockable: true },
   ];
   const BASE_WIDTH = COLUMNS.reduce((sum, c) => sum + c.width, 0);
   const LEVEL_COL = COLUMNS.findIndex((c) => c.key === 'level');
-  const BAR_MIN = 200;        // 막대 최소 길이(px). 항상 10의 배수
+  const BAR_MIN = 180;        // 막대 최소 길이(px). 항상 10의 배수
 
   // 본병/소분 드롭다운 선택지 (저장되는 값은 보이는 글자 그대로)
   const KIND_OPTIONS = [
@@ -83,7 +83,7 @@
     pending.set(id + '|' + field, { id, field, value });
     setStatus('saving');
     updateImportBar();
-    if (field === 'kind') emitStats();   // 사이드바의 본병/소분 개수 갱신
+    if (field === 'kind' || field === 'name' || field === 'pearl') emitStats();   // 사이드바 개수 갱신
     scheduleFlush(field === 'level' ? 0 : SAVE_DELAY);
   }
 
@@ -168,6 +168,9 @@
   }
 
   // ── 화면 ────────────────────────────────
+  // Lucide "sparkles" (펄 표시 버튼)
+  const SPARKLES_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/><path d="M20 2v4"/><path d="M22 4h-4"/></svg>';
+
   function barHtml() {
     let segs = '';
     for (let i = 1; i <= STEPS; i++) {
@@ -182,7 +185,11 @@
       if (c.pick) {
         return `<td class="c-text"><button class="pick" type="button" data-f="${c.key}" data-label="${c.label}" aria-label="${c.label} ${n}행" aria-haspopup="listbox" aria-expanded="false" tabindex="-1"><span class="pick-text"></span></button></td>`;
       }
-      return `<td class="c-text${c.lockable ? ' c-lockable' : ''}"><input class="cell" type="text" data-f="${c.key}" data-label="${c.label}" maxlength="${c.max}" aria-label="${c.label} ${n}행" autocomplete="off" spellcheck="false" readonly tabindex="-1"></td>`;
+      const input = `<input class="cell" type="text" data-f="${c.key}" data-label="${c.label}" maxlength="${c.max}" aria-label="${c.label} ${n}행" autocomplete="off" spellcheck="false" readonly tabindex="-1">`;
+      if (c.pearlToggle) {
+        return `<td class="c-text c-name">${input}<button class="pearl-btn" type="button" tabindex="-1" aria-pressed="false" title="펄 잉크로 표시" aria-label="펄 잉크로 표시">${SPARKLES_ICON}</button></td>`;
+      }
+      return `<td class="c-text${c.lockable ? ' c-lockable' : ''}">${input}</td>`;
     }).join('');
     return `<tr data-id="${esc(id)}">${cells}</tr>`;
   }
@@ -224,9 +231,18 @@
     tr.querySelectorAll('td.c-lockable .cell').forEach((input) => { input.disabled = sample; });
   }
 
+  // 펄 잉크 행: 잉크명 칸을 연보라로 칠함
+  function syncPearl(tr) {
+    const pearl = !!(data[tr.dataset.id] && data[tr.dataset.id].pearl);
+    tr.classList.toggle('is-pearl', pearl);
+    const btn = tr.querySelector('.pearl-btn');
+    if (btn) btn.setAttribute('aria-pressed', String(pearl));
+  }
+
   function fillRow(row) {
     const d = data[row.dataset.id];
     if (!d) return;
+    syncPearl(row);
     row.querySelectorAll('.cell').forEach((input) => {
       const v = d[input.dataset.f];
       if (typeof v === 'string' && input.value !== v && document.activeElement !== input) input.value = v;
@@ -510,12 +526,12 @@
     if (!e.target.closest('.table-wrap') && !e.target.closest('.menu')) clearSelection();
   });
 
-  // ── 스프레드시트 값 채우기: 소분 가능(5ml)·가격 (한 번만 쓰는 기능) ──
-  // data/ink-extra.json 의 값을 (브랜드, 잉크명)이 같은 행에 입력한다. 소분 가능·가격이 모두 비어 있을 때만 가능.
+  // ── 스프레드시트의 펄 잉크 표시(보라색 칸) 가져오기 (한 번만 쓰는 기능) ──
+  // data/ink-pearl.json 의 (브랜드, 잉크명)과 같은 행을 펄 잉크로 표시한다. 펄로 표시된 행이 하나도 없을 때만 가능.
   const rowKey = (id) => ((data[id] && data[id].brand) || '') + '\u0000' + ((data[id] && data[id].name) || '');
 
   function isExtraEmpty() {
-    return order.every((id) => !data[id] || (!data[id].portions && !data[id].price));
+    return order.every((id) => !data[id] || !data[id].pearl);
   }
 
   function updateImportBar() {
@@ -528,7 +544,7 @@
     const btn = root.querySelector('#importBtn');
     btn.disabled = true;
     try {
-      const list = await (await fetch('data/ink-extra.json', { cache: 'no-store' })).json();
+      const list = await (await fetch('data/ink-pearl.json', { cache: 'no-store' })).json();
       if (!Array.isArray(list) || !list.length) throw new Error('bad-data');
       const byKey = new Map(order.map((id) => [rowKey(id), id]));
       const rows = {};
@@ -536,15 +552,12 @@
       list.forEach((it) => {
         const id = byKey.get(it.brand + '\u0000' + it.name);
         if (!id) { missing.push(`${it.brand} ${it.name}`); return; }
-        const row = {};
-        if (it.portions) row.portions = it.portions;
-        if (it.price) row.price = it.price;
-        rows[id] = row;
+        rows[id] = { pearl: true };
       });
       const n = Object.keys(rows).length;
       if (!n) throw new Error('no-match');
       const note = missing.length ? `\n(표에서 찾지 못한 ${missing.length}개는 건너뜁니다)` : '';
-      if (!window.confirm(`소분 가능·가격을 ${n}개 행에 입력합니다.${note}\n계속할까요?`)) return;
+      if (!window.confirm(`펄 잉크 ${n}개를 표시합니다.${note}\n계속할까요?`)) return;
 
       setStatus('saving');
       const { db, doc, setDoc } = await INKFB.db();
@@ -552,6 +565,7 @@
 
       Object.keys(rows).forEach((id) => { data[id] = Object.assign(data[id] || {}, rows[id]); });
       setStatus('saved');
+      emitStats();
       if (root) { fillAll(); applyEditable(); }
     } catch (err) {
       setStatus(err && err.code === 'permission-denied' ? 'denied' : 'error');
@@ -647,7 +661,7 @@
     container.innerHTML = `
       <p class="notice" role="alert" hidden></p>
       <div class="import-bar" hidden>
-        <span>스프레드시트의 소분 가능·가격 값을 표에 입력할 수 있습니다. (두 열이 모두 비어 있을 때만 표시됩니다)</span>
+        <span>스프레드시트에서 보라색으로 칠해 둔 펄 잉크 표시를 가져올 수 있습니다. (펄로 표시된 행이 없을 때만 보입니다)</span>
         <button class="btn btn--primary" type="button" id="importBtn">가져오기</button>
       </div>
       <div class="table-area view-enter">
@@ -748,6 +762,16 @@
     });
     container.querySelector('.table-wrap').addEventListener('scroll', () => closeMenu(false), { passive: true });
 
+    // 잉크명 칸의 ✦ 버튼: 펄 잉크 표시 켜기/끄기
+    tbody.addEventListener('click', (e) => {
+      const btn = e.target.closest('.pearl-btn');
+      if (!btn || !canEdit()) return;
+      const tr = btn.closest('tr');
+      const id = tr.dataset.id;
+      queueSave(id, 'pearl', !(data[id] && data[id].pearl));
+      syncPearl(tr);
+    });
+
     // 잔량 막대 클릭
     tbody.addEventListener('click', (e) => {
       const seg = e.target.closest('.seg');
@@ -781,15 +805,20 @@
   // 화면(app.js)은 subscribe 로 숫자를 받고, 처음 사이드바를 열 때 init 으로 데이터를 불러온다.
   const statsSubs = [];
 
+  // 본병/소분: 종류 칸 기준. 펄/스탠다드: 잉크명이 있는 행 중 펄 표시가 된 것 / 아닌 것.
   function computeStats() {
     let bottle = 0;
     let sample = 0;
+    let pearl = 0;
+    let standard = 0;
     order.forEach((id) => {
-      const kind = (data[id] && data[id].kind) || '';
+      const d = data[id] || {};
+      const kind = d.kind || '';
       if (kind.startsWith('본병')) bottle++;
       else if (kind.startsWith('소분')) sample++;
+      if (d.name) { if (d.pearl) pearl++; else standard++; }
     });
-    return { bottle, sample };
+    return { bottle, sample, pearl, standard };
   }
 
   function emitStats() {
