@@ -22,7 +22,7 @@
   const COLUMNS = [
     { key: 'brand', label: '브랜드',    width: 140, max: 100 },
     { key: 'name',  label: '잉크명',    width: 200, max: 100 },
-    { key: 'kind',  label: '본병/소분', width: 120, pick: true },   // 클릭하면 드롭다운
+    { key: 'kind',  label: '본병/소분', width: 128, pick: true },   // 클릭하면 드롭다운
     { key: 'level', label: '잔량',      width: 230 },
     { key: 'note',  label: '비고',      width: 260, max: 300 },
     { key: 'price', label: '가격',      width: 110, max: 50 },
@@ -212,7 +212,7 @@
     });
     row.querySelectorAll('.pick').forEach((p) => {
       const v = d[p.dataset.f];
-      p.querySelector('.pick-text').textContent = typeof v === 'string' ? v : '';
+      setPick(p, typeof v === 'string' ? v : '');
     });
     if (d.level) paintLevel(row, d.level);
   }
@@ -237,6 +237,14 @@
   }
 
   // ── 본병/소분 드롭다운 ──────────────────
+  // 칸에 값을 표시: 본병/소분은 색이 다른 알약(칩). 목록에 없는 예전 글자는 회색 칩.
+  function setPick(btn, value) {
+    const text = btn.querySelector('.pick-text');
+    text.textContent = value;
+    text.dataset.kind = value.startsWith('본병') ? 'bottle' : value.startsWith('소분') ? 'sample' : (value ? 'other' : '');
+    btn.classList.toggle('has-value', !!value);
+  }
+
   let menuEl = null;    // <ul class="menu"> (표 바깥에 둬서 스크롤 영역에 잘리지 않음)
   let menuFor = null;   // 지금 메뉴가 열려 있는 칸의 버튼(.pick)
 
@@ -294,7 +302,7 @@
     const current = (data[id] && data[id].kind) || '';
     closeMenu(true);
     if (!canEdit() || value === current) return;
-    btn.querySelector('.pick-text').textContent = value;
+    setPick(btn, value);
     queueSave(id, 'kind', value);
   }
 
