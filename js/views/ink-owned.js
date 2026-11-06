@@ -74,7 +74,6 @@
     (data[id] = data[id] || {})[field] = value;
     pending.set(id + '|' + field, { id, field, value });
     setStatus('saving');
-    updateImportBar();
     scheduleFlush(field === 'level' ? 0 : SAVE_DELAY);
   }
 
@@ -234,7 +233,6 @@
     root.querySelectorAll('.pick').forEach((p) => { p.tabIndex = edit ? 0 : -1; });
     root.classList.toggle('is-editable', edit);
     if (!edit) closeMenu(false);
-    updateImportBar();
     showStatus();
   }
 
@@ -313,51 +311,6 @@
     if (menuFor && !menuEl.contains(e.target) && !menuFor.contains(e.target)) closeMenu(false);
   });
   window.addEventListener('resize', () => closeMenu(false));
-
-  // ── 스프레드시트 가져오기 (한 번만 쓰는 기능) ──
-  // data/ink-owned.json (브랜드·잉크명·본병/소분·비고) 을 표 맨 위부터 입력한다. 표가 완전히 비어 있을 때만 가능.
-  function isTableEmpty() {
-    return order.every((id) => !data[id] || !Object.values(data[id]).some(Boolean));
-  }
-
-  function updateImportBar() {
-    const bar = root && root.querySelector('.import-bar');
-    if (bar) bar.hidden = !(canEdit() && isTableEmpty());
-  }
-
-  async function runImport() {
-    if (!root || !canEdit() || !isTableEmpty()) return;
-    const btn = root.querySelector('#importBtn');
-    btn.disabled = true;
-    try {
-      const list = await (await fetch('data/ink-owned.json', { cache: 'no-store' })).json();
-      if (!Array.isArray(list) || !list.length || list.length > MAX_ROWS) throw new Error('bad-data');
-      if (!window.confirm(`스프레드시트의 ${list.length}개 항목을 표에 입력합니다. 계속할까요?`)) return;
-
-      const newOrder = list.map((_, i) => String(i));
-      const rows = {};
-      list.forEach((it, i) => {
-        const row = { brand: it.brand, name: it.name, kind: it.kind };
-        if (it.note) row.note = it.note;
-        rows[i] = row;
-      });
-
-      setStatus('saving');
-      const { db, doc, setDoc } = await INKFB.db();
-      await setDoc(doc(db, ...DOC_PATH), { order: newOrder, rows }, { merge: true });
-
-      order = newOrder;
-      Object.keys(rows).forEach((id) => { data[id] = Object.assign(data[id] || {}, rows[id]); });
-      setStatus('saved');
-      if (root) { rebuildRows(); applyEditable(); }
-    } catch (err) {
-      setStatus(err && err.code === 'permission-denied' ? 'denied' : 'error');
-      showNotice('가져오기에 실패했습니다. 다시 시도해 주세요.');
-    } finally {
-      btn.disabled = false;
-      updateImportBar();
-    }
-  }
 
   // ── 행 추가 ─────────────────────────────
   // b: 새 행이 들어갈 자리(0부터). b번째 행 "앞"에 빈 행을 끼워 넣는다.
@@ -442,10 +395,6 @@
     root = container;
     container.innerHTML = `
       <p class="notice" role="alert" hidden></p>
-      <div class="import-bar" hidden>
-        <span>스프레드시트에서 정리해 둔 잉크 목록을 표에 입력할 수 있습니다. (표가 비어 있을 때만 표시됩니다)</span>
-        <button class="btn btn--primary" type="button" id="importBtn">가져오기</button>
-      </div>
       <div class="table-area view-enter">
         <button class="row-add" type="button" title="행 추가" aria-label="이 위치에 행 추가">${ROW_ADD_ICON}</button>
         <ul class="menu" role="listbox" aria-label="본병/소분" hidden></ul>
@@ -461,7 +410,6 @@
     const tbody = container.querySelector('tbody');
     menuEl = container.querySelector('.menu');
     menuFor = null;
-    container.querySelector('#importBtn').addEventListener('click', runImport);
     setupRowAdd(container);
     fillAll();
     applyEditable();
