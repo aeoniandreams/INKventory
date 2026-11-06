@@ -310,6 +310,14 @@ button { font: inherit; color: inherit; }
 }
 .notice[hidden] { display: none; }
 
+.import-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin: 0 0 12px; padding: 10px 14px;
+  border-radius: 10px; background: var(--accent-soft); color: var(--accent); font-size: 14px;
+}
+.import-bar[hidden] { display: none; }
+.import-bar .btn { flex: none; }
+
 /* 상단 바: 저장 상태 */
 .save-status { margin-left: auto; font-size: 12px; color: var(--muted); }
 .save-status[hidden] { display: none; }
