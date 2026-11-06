@@ -94,7 +94,6 @@
   // ── 일반 / 관리자 모드 (Firebase Authentication · Google 로그인) ──
   // 관리자 = config.js 의 adminUid 와 UID 가 같은 구글 계정 한 개.
   // 화면 표시는 편의일 뿐이고, 실제 수정 권한은 Firestore 보안 규칙(서버)에서 같은 UID 로 막는다.
-  const FIREBASE_VER = '10.14.1';
   const HINT_KEY = 'inkventory.signedin';   // 이 탭에서 로그인한 적이 있음 → 시작할 때 SDK 미리 로드
   const REDIRECT_KEY = 'inkventory.redirect';
   const cfg = window.INKVENTORY_CONFIG || {};
@@ -124,24 +123,22 @@
     if (currentView && currentView.onMode) currentView.onMode(isAdmin);
   }
 
-  // 일반 방문자는 SDK 를 받지 않도록, 로그인이 필요할 때만 불러온다.
-  async function loadFirebase() {
-    if (fb) return fb;
-    if (!cfg.firebase || !cfg.firebase.apiKey) throw new Error('not-configured');
-    const base = `https://www.gstatic.com/firebasejs/${FIREBASE_VER}/`;
-    const [appMod, authMod] = await Promise.all([
-      import(base + 'firebase-app.js'),
-      import(base + 'firebase-auth.js'),
-    ]);
-    const auth = authMod.getAuth(appMod.initializeApp(cfg.firebase));
-    await authMod.setPersistence(auth, authMod.browserSessionPersistence); // 탭을 닫으면 로그아웃
-    fb = { auth, ...authMod };
-    fb.onAuthStateChanged(auth, (user) => {
-      isAdmin = !!user && !!cfg.adminUid && user.uid === cfg.adminUid;
-      if (isAdmin) session.set(HINT_KEY, '1'); else session.del(HINT_KEY);
-      applyMode();
-    });
-    return fb;
+  // 일반 방문자는 로그인 SDK 를 받지 않도록, 로그인이 필요할 때만 불러온다. (js/fb.js)
+  let fbPromise = null;
+  function loadFirebase() {
+    if (!fbPromise) {
+      fbPromise = (async () => {
+        fb = await INKFB.auth();
+        fb.onAuthStateChanged(fb.auth, (user) => {
+          isAdmin = !!user && !!cfg.adminUid && user.uid === cfg.adminUid;
+          if (isAdmin) session.set(HINT_KEY, '1'); else session.del(HINT_KEY);
+          applyMode();
+        });
+        return fb;
+      })();
+      fbPromise.catch(() => { fbPromise = null; });
+    }
+    return fbPromise;
   }
 
   function showError(msg) {
@@ -255,6 +252,7 @@
       else a.removeAttribute('aria-current');
     });
 
+    if (currentView && currentView.unmount) currentView.unmount();
     currentView = null;
     main.className = 'main';
     const view = found && VIEWS[id];
