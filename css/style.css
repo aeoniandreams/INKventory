@@ -200,6 +200,10 @@ button { font: inherit; color: inherit; }
 .row-add::before { content: ''; position: absolute; inset: -6px; } /* 누르기 쉽게 터치 영역 확장 */
 .row-add:hover { color: #1b274d; }
 
+/* 방금 추가한 행: 잠깐 강조 */
+.grid tbody tr.row-new td { animation: row-flash 1.4s ease-out; }
+@keyframes row-flash { from { background: #dfe4f2; } to { background: transparent; } }
+
 .table-wrap {
   overflow: auto;
   max-height: calc(100vh - var(--topbar-h) - 44px);

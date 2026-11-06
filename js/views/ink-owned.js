@@ -1,14 +1,21 @@
-// 보유 잉크 표: 브랜드 / 잉크명 / 본병·소분 / 잔량 / 비고 / 가격 (270행)
+// 보유 잉크 표: 브랜드 / 잉크명 / 본병·소분 / 잔량 / 비고 / 가격 (처음 270행, 행 사이에 추가 가능)
 //  - 잔량 막대: 10칸. 칸을 누르면 그 칸과 왼쪽 칸이 모두 채워진다. 같은 칸을 다시 누르면 0.
 //  - 글자 칸: 관리자 모드에서 바로 입력.
+//  - 행과 행 사이에 마우스를 두면 나타나는 아이콘으로 그 자리에 빈 행을 추가.
 //  - 모든 변경은 자동 저장(Firestore 문서 하나: inventory/inkOwned). 수정은 관리자 모드에서만 가능.
 //    (화면에서 막는 것은 편의일 뿐, 실제 쓰기 권한은 Firestore 보안 규칙이 서버에서 막는다.)
+//
+// 저장 구조:  { order: ["0","1",...,"n8x2k1ab",...],            ← 행 순서 (행 id 목록)
+//               rows:  { "<행 id>": { brand, name, kind, level, note, price } } }
+//   - 행마다 바뀌지 않는 id 를 가진다. 중간에 행을 끼워 넣어도 다른 행의 데이터는 건드리지 않고 order 만 바뀐다.
+//   - order 가 없는 예전 데이터는 id "0"~"269" 순서로 본다.
 (() => {
   'use strict';
 
-  const ROWS = 270;
+  const DEFAULT_ROWS = 270;
+  const MAX_ROWS = 600;                          // 문서 하나(1MiB 제한)에 안전하게 담기 위한 상한
   const STEPS = 10;
-  const DOC_PATH = ['inventory', 'inkOwned'];   // 문서 구조: { rows: { "0": { brand, name, kind, level, note, price }, ... } }
+  const DOC_PATH = ['inventory', 'inkOwned'];
   const SAVE_DELAY = 600;                        // 입력을 멈추고 이 시간(ms)이 지나면 저장
   const RETRY_DELAY = 5000;
 
@@ -22,16 +29,20 @@
   ];
 
   // ── 상태 ────────────────────────────────
-  const data = {};              // 행 번호 → { 필드: 값 }
+  const defaultOrder = () => Array.from({ length: DEFAULT_ROWS }, (_, i) => String(i));
+  let order = defaultOrder();   // 화면에 보이는 행 순서 (행 id)
+  const data = {};              // 행 id → { 필드: 값 }
   let loadState = 'idle';       // idle | loading | ready | error
   let root = null;              // 현재 화면 컨테이너
-  const pending = new Map();    // "행|필드" → { idx, field, value }  (아직 저장 안 된 변경)
+  const pending = new Map();    // 아직 저장 안 된 변경. 키: "id|필드" 또는 "@order"
   let saveTimer = null;
   let saving = false;
   let saveStatus = '';          // '' | saving | saved | error | denied
 
   const isAdminMode = () => document.documentElement.dataset.mode === 'admin';
   const canEdit = () => isAdminMode() && loadState === 'ready';
+  const esc = (s) => String(s).replace(/[&"'<>]/g, (c) => `&#${c.charCodeAt(0)};`);
+  const newId = () => 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
   // ── 저장 상태 표시 (상단 바) ────────────
   const STATUS_TEXT = {
@@ -53,11 +64,17 @@
   function setStatus(s) { saveStatus = s; showStatus(); }
 
   // ── 저장 ────────────────────────────────
-  function queueSave(idx, field, value) {
-    (data[idx] = data[idx] || {})[field] = value;
-    pending.set(idx + '|' + field, { idx, field, value });
+  function queueSave(id, field, value) {
+    (data[id] = data[id] || {})[field] = value;
+    pending.set(id + '|' + field, { id, field, value });
     setStatus('saving');
     scheduleFlush(field === 'level' ? 0 : SAVE_DELAY);
+  }
+
+  function queueOrder() {
+    pending.set('@order', { order: order.slice() });
+    setStatus('saving');
+    scheduleFlush(0);
   }
 
   function scheduleFlush(delay) {
@@ -73,9 +90,13 @@
     const batch = [...pending.entries()];
     try {
       const { db, doc, setDoc } = await INKFB.db();
-      const rows = {};
-      batch.forEach(([, e]) => { (rows[e.idx] = rows[e.idx] || {})[e.field] = e.value; });
-      await setDoc(doc(db, ...DOC_PATH), { rows }, { merge: true });
+      const payload = {};
+      batch.forEach(([, e]) => {
+        if (e.order) { payload.order = e.order; return; }
+        payload.rows = payload.rows || {};
+        (payload.rows[e.id] = payload.rows[e.id] || {})[e.field] = e.value;
+      });
+      await setDoc(doc(db, ...DOC_PATH), payload, { merge: true });
       batch.forEach(([k, e]) => { if (pending.get(k) === e) pending.delete(k); });
       saving = false;
       if (pending.size) { scheduleFlush(0); } else { setStatus('saved'); }
@@ -103,13 +124,18 @@
     try {
       const { db, doc, getDoc } = await INKFB.db();
       const snap = await getDoc(doc(db, ...DOC_PATH));
-      const rows = (snap.exists() && snap.data().rows) || {};
-      Object.keys(rows).forEach((k) => {
-        const idx = Number(k);
-        if (idx >= 0 && idx < ROWS) data[idx] = Object.assign(rows[k], data[idx]); // 불러오는 동안 입력한 값 우선
-      });
+      const d = snap.exists() ? snap.data() : {};
+      const rows = d.rows || {};
+
+      let loaded = Array.isArray(d.order) ? [...new Set(d.order.filter((x) => typeof x === 'string' && x))] : [];
+      if (!loaded.length) loaded = defaultOrder();
+      const known = new Set(loaded);
+      Object.keys(rows).forEach((id) => { if (!known.has(id)) loaded.push(id); }); // 안전장치: 데이터가 있는데 순서에 없는 행
+      order = loaded;
+
+      Object.keys(rows).forEach((id) => { data[id] = Object.assign(rows[id], data[id]); }); // 불러오는 동안 입력한 값 우선
       loadState = 'ready';
-      if (root) { fillAll(); applyEditable(); }
+      if (root) { rebuildRows(); applyEditable(); }
     } catch (err) {
       loadState = 'error';
       showNotice('데이터를 불러오지 못했습니다. 새로고침해 주세요.');
@@ -133,17 +159,31 @@
     return `<div class="bar" role="group" aria-label="잔량"><div class="track" aria-hidden="true"><i class="pv"></i><i class="fill"></i></div>${segs}</div>`;
   }
 
+  function rowHtml(id, n) {
+    const cells = COLUMNS.map((c) => (c.key === 'level'
+      ? `<td class="c-level">${barHtml()}</td>`
+      : `<td class="c-text"><input class="cell" type="text" data-f="${c.key}" data-label="${c.label}" maxlength="${c.max}" aria-label="${c.label} ${n}행" autocomplete="off" spellcheck="false" readonly tabindex="-1"></td>`
+    )).join('');
+    return `<tr data-id="${esc(id)}">${cells}</tr>`;
+  }
+
   function rowsHtml() {
-    const bar = barHtml();
-    let html = '';
-    for (let r = 0; r < ROWS; r++) {
-      const cells = COLUMNS.map((c) => (c.key === 'level'
-        ? `<td class="c-level">${bar}</td>`
-        : `<td class="c-text"><input class="cell" type="text" data-f="${c.key}" maxlength="${c.max}" aria-label="${c.label} ${r + 1}행" autocomplete="off" spellcheck="false" readonly tabindex="-1"></td>`
-      )).join('');
-      html += `<tr data-row="${r}">${cells}</tr>`;
+    return order.map((id, i) => rowHtml(id, i + 1)).join('');
+  }
+
+  function rebuildRows() {
+    root.querySelector('tbody').innerHTML = rowsHtml();
+    fillAll();
+  }
+
+  // 접근성 라벨의 "n행" 번호를 from(0부터) 이후로 다시 매김
+  function relabel(from) {
+    const rows = root.querySelectorAll('tbody tr');
+    for (let i = from; i < rows.length; i++) {
+      rows[i].querySelectorAll('.cell').forEach((input) => {
+        input.setAttribute('aria-label', `${input.dataset.label} ${i + 1}행`);
+      });
     }
-    return html;
   }
 
   function paintLevel(row, level) {
@@ -155,7 +195,7 @@
   }
 
   function fillRow(row) {
-    const d = data[row.dataset.row];
+    const d = data[row.dataset.id];
     if (!d) return;
     row.querySelectorAll('.cell').forEach((input) => {
       const v = d[input.dataset.f];
@@ -180,6 +220,28 @@
     showStatus();
   }
 
+  // ── 행 추가 ─────────────────────────────
+  // b: 새 행이 들어갈 자리(0부터). b번째 행 "앞"에 빈 행을 끼워 넣는다.
+  function insertRow(b) {
+    if (!root || !canEdit() || b < 1 || b > order.length) return;
+    if (order.length >= MAX_ROWS) {
+      showNotice(`행은 최대 ${MAX_ROWS}개까지 추가할 수 있습니다.`);
+      setTimeout(() => showNotice(''), 3500);
+      return;
+    }
+    const id = newId();
+    order.splice(b, 0, id);
+    queueOrder();
+
+    const tbody = root.querySelector('tbody');
+    tbody.rows[b].insertAdjacentHTML('beforebegin', rowHtml(id, b + 1));
+    const tr = tbody.rows[b];
+    tr.classList.add('row-new');
+    relabel(b + 1);
+    applyEditable();
+    tr.querySelector('.cell').focus(); // 바로 입력할 수 있게 첫 칸에 커서
+  }
+
   // ── 행 추가 버튼 위치 (행과 행 사이 선에 말풍선 꼬리 끝을 맞춤) ──
   // Lucide "message-square-plus" 를 좌우반전. 반전하면 꼬리가 오른쪽 아래로 가서 표를 향한다.
   const ROW_ADD_ICON = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"/><path d="M12 8v6"/><path d="M9 11h6"/></svg>';
@@ -196,8 +258,9 @@
 
     const hide = () => btn.classList.remove('is-on');
 
-    // 포인터 높이(clientY)가 가리키는 "행 사이 경계 번호"(1 ~ ROWS-1). 없으면 null.
+    // 포인터 높이(clientY)가 가리키는 "행 사이 경계 번호"(1 ~ 행 수-1). 없으면 null.
     function boundaryAt(clientY) {
+      if (!tbody.rows.length) return null;
       const top = wrap.getBoundingClientRect().top + wrap.clientTop;
       const headH = thead.offsetHeight;
       const rowH = tbody.rows[0].offsetHeight;
@@ -206,7 +269,7 @@
       const r = Math.floor(rel / rowH);
       const within = rel - r * rowH;
       const b = within <= NEAR ? r : (within >= rowH - NEAR ? r + 1 : null);
-      return b !== null && b >= 1 && b <= ROWS - 1 ? b : null;
+      return b !== null && b >= 1 && b <= tbody.rows.length - 1 ? b : null;
     }
 
     function update(e) {
@@ -227,7 +290,12 @@
     area.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'mouse') update(e); }); // 터치: 선 근처를 누르면 표시
     area.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') hide(); });
     wrap.addEventListener('scroll', hide, { passive: true });
-    // 행 추가 동작은 아직 연결하지 않음 (아이콘만)
+
+    btn.addEventListener('click', () => {
+      const b = Number(btn.dataset.before);
+      hide();
+      insertRow(b);
+    });
   }
 
   function mount(container) {
@@ -256,7 +324,7 @@
     tbody.addEventListener('input', (e) => {
       const input = e.target.closest('.cell');
       if (!input || !canEdit()) return;
-      queueSave(Number(input.closest('tr').dataset.row), input.dataset.f, input.value);
+      queueSave(input.closest('tr').dataset.id, input.dataset.f, input.value);
     });
 
     // Enter: 아래 칸으로 (Shift+Enter: 위 칸). 한글 조합 중에는 무시.
@@ -284,12 +352,12 @@
       const seg = e.target.closest('.seg');
       if (!seg || !canEdit()) return;
       const row = seg.closest('tr');
-      const idx = Number(row.dataset.row);
+      const id = row.dataset.id;
       const i = Number(seg.dataset.i);
-      const current = (data[idx] && data[idx].level) || 0;
+      const current = (data[id] && data[id].level) || 0;
       const next = current === i ? 0 : i;
       paintLevel(row, next);
-      queueSave(idx, 'level', next);
+      queueSave(id, 'level', next);
     });
   }
 
