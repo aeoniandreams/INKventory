@@ -113,7 +113,7 @@ button { font: inherit; color: inherit; }
 
 .sidebar__foot {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  padding: 14px 24px; border-top: 1px solid var(--line);
+  padding: 14px 24px;
   font-size: 13px; color: var(--muted);
 }
 .foot__logout {
