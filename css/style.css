@@ -205,6 +205,7 @@ button { font: inherit; color: inherit; }
 @keyframes row-flash { from { background: #dfe4f2; } to { background: transparent; } }
 
 .table-wrap {
+  width: fit-content; max-width: 100%;   /* 표 테두리가 표 너비에 딱 맞게 */
   overflow: auto;
   max-height: calc(100vh - var(--topbar-h) - 44px);
   max-height: calc(100dvh - var(--topbar-h) - 44px);
@@ -212,7 +213,7 @@ button { font: inherit; color: inherit; }
   border: 1px solid var(--line); border-radius: 12px;
 }
 .grid {
-  width: 100%; min-width: 1068px;
+  /* 너비는 JS가 열 너비의 합으로 지정(인라인). 화면이 더 넓어도 열이 늘어나지 않는다. */
   table-layout: fixed; border-collapse: separate; border-spacing: 0;
   font-size: 14px;
 }
@@ -320,7 +321,7 @@ button { font: inherit; color: inherit; }
 
 /* 잔량 막대: 하나의 막대 + 같은 굵기(1px)의 옅은 회색 선으로 10등분.
    너비를 200px(칸당 정확히 20px)로 고정해서 선 간격과 굵기가 항상 똑같게 한다. */
-.c-level { padding: 0 14px; }
+.grid td.c-level { padding: 0 12px; }  /* 열 너비 = 막대 200 + 좌우 12 + 오른쪽 선 1 */
 .bar {
   --track: #eeece6;
   --divider: #d3d0c6;      /* 빈 막대 위의 선: 옅은 회색 */

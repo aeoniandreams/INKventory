@@ -21,12 +21,14 @@
 
   const COLUMNS = [
     { key: 'brand', label: '브랜드',    width: 140, max: 100 },
-    { key: 'name',  label: '잉크명',    width: 200, max: 100 },
+    { key: 'name',  label: '잉크명',    width: 180, max: 100 },
     { key: 'kind',  label: '본병/소분', width: 128, pick: true },   // 클릭하면 드롭다운
-    { key: 'level', label: '잔량',      width: 230 },
+    { key: 'level', label: '잔량',      width: 225 },               // 막대 200px + 좌우 여백 12px씩 + 오른쪽 선 1px
     { key: 'note',  label: '비고',      width: 260, max: 300 },
     { key: 'price', label: '가격',      width: 110, max: 50 },
+    { key: 'portions', label: '소분 가능 (5ml)', width: 130, max: 20 },
   ];
+  const TABLE_WIDTH = COLUMNS.reduce((sum, c) => sum + c.width, 0);  // 표 너비 = 열 너비의 합 (남는 너비를 열이 나눠 갖지 않게)
 
   // 본병/소분 드롭다운 선택지 (저장되는 값은 보이는 글자 그대로)
   const KIND_OPTIONS = [
@@ -399,7 +401,7 @@
         <button class="row-add" type="button" title="행 추가" aria-label="이 위치에 행 추가">${ROW_ADD_ICON}</button>
         <ul class="menu" role="listbox" aria-label="본병/소분" hidden></ul>
         <div class="table-wrap">
-          <table class="grid">
+          <table class="grid" style="width:${TABLE_WIDTH}px">
             <colgroup>${COLUMNS.map((c) => `<col style="width:${c.width}px">`).join('')}</colgroup>
             <thead><tr>${COLUMNS.map((c) => `<th scope="col">${c.label}</th>`).join('')}</tr></thead>
             <tbody>${rowsHtml()}</tbody>
