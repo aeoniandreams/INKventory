@@ -243,10 +243,11 @@
   }
 
   // ── 행 추가 버튼 위치 (행과 행 사이 선에 말풍선 꼬리 끝을 맞춤) ──
-  // Lucide "message-square-plus" 를 좌우반전. 반전하면 꼬리가 오른쪽 아래로 가서 표를 향한다.
-  const ROW_ADD_ICON = '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"/><path d="M12 8v6"/><path d="M9 11h6"/></svg>';
+  // Lucide "message-square-plus" 를 바탕으로, 꼬리를 message-circle-plus 처럼 모서리의 대각선(45°) 위치에 둔 모양을 좌우반전.
+  // 반전하면 꼬리가 오른쪽 아래로 가서 표를 향한다.
+  const ROW_ADD_ICON = '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 17a2 2 0 0 1-2 2H7.2l-5.2 2L4 15.8V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M13 8v6"/><path d="M10 11h6"/></svg>';
   const ROW_ADD_SIZE = 19;
-  const TAIL_Y = (23 / 24) * ROW_ADD_SIZE; // 아이콘 맨 아래(꼬리 끝)의 높이
+  const TAIL_Y = (22 / 24) * ROW_ADD_SIZE; // 아이콘 맨 아래(꼬리 끝, 선 굵기 포함)의 높이
   const NEAR = 12;                         // 선에서 이 거리(px) 안이면 "행과 행 사이"로 본다
 
   function setupRowAdd(container) {
