@@ -121,7 +121,8 @@ button { font: inherit; color: inherit; }
 .stat__dot { width: 8px; height: 8px; border-radius: 50%; }
 .stat__dot--bottle { background: #2b3a67; }
 .stat__dot--sample { background: #aab6e0; }
-.stat__dot--pearl { background: #b9b9f5; }
+.stat--total { grid-column: 1 / -1; }
+.stat__dot--pearl { background: #d6c9a8; }
 .stat__dot--standard { background: #cfcabb; }
 .stat__num { display: block; margin-top: 2px; font-size: 20px; font-weight: 700; line-height: 1.2; color: var(--accent); font-variant-numeric: tabular-nums; }
 
@@ -372,10 +373,10 @@ button { font: inherit; color: inherit; }
 .seg.in:not(:last-child)::after { background: var(--divider-in); }
 .bar:not([inert]) .seg { cursor: pointer; }
 
-/* 펄 잉크: 잉크명 칸을 연보라로 (스프레드시트의 보라색 칸과 같은 색 #e6e6ff) */
-.grid tbody tr.is-pearl td.c-name { background-color: #e6e6ff; }
+/* 펄 잉크: 잉크명 칸을 사이트의 크림/베이지 톤에 맞는 샌드 베이지로 */
+.grid tbody tr.is-pearl td.c-name { background-color: #ece3d0; }
 @media (hover: hover) {
-  .grid tbody tr.is-pearl:hover td.c-name { background-color: #dcdcfb; }
+  .grid tbody tr.is-pearl:hover td.c-name { background-color: #e5dac3; }
 }
 /* 펄 표시 버튼(✦): 관리자 모드에서 잉크명 칸에 마우스를 올리면 나타남. 눌러서 켜고 끔 */
 .pearl-btn {
@@ -388,7 +389,7 @@ button { font: inherit; color: inherit; }
 .is-editable td.c-name:hover .pearl-btn, .is-editable td.c-name:focus-within .pearl-btn,
 .pearl-btn:focus-visible { opacity: 1; }
 @media (pointer: coarse) { .is-editable .pearl-btn { opacity: .5; } }
-.pearl-btn[aria-pressed="true"] { color: #5a55c8; }
+.pearl-btn[aria-pressed="true"] { color: #8a6a2f; }
 .pearl-btn:hover { background: rgba(255, 255, 255, .6); color: var(--accent); }
 .is-editable td.c-name .cell { padding-right: 32px; }
 
@@ -413,15 +414,6 @@ button { font: inherit; color: inherit; }
   cursor: crosshair; touch-action: none;
 }
 .fill-handle::before { content: ''; position: absolute; inset: -8px; } /* 누르기 쉽게 영역 확장 */
-
-/* 스프레드시트 값 채우기(한 번만 쓰는 기능) 안내 바 */
-.import-bar {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  margin: 0 0 12px; padding: 10px 14px;
-  border-radius: 10px; background: var(--accent-soft); color: var(--accent); font-size: 14px;
-}
-.import-bar[hidden] { display: none; }
-.import-bar .btn { flex: none; }
 
 .view-enter { animation: view-in .35s var(--ease); }
 @keyframes view-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }

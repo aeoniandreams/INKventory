@@ -25,7 +25,7 @@
   // width 는 기본 너비. 잔량 열만 화면이 넓으면 늘어난다(width 는 그때의 최소값).
   const COLUMNS = [
     { key: 'brand',    label: '브랜드',          width: 180, max: 100 },
-    { key: 'name',     label: '잉크명',          width: 180, max: 100, pearlToggle: true },   // 펄 잉크는 셀을 연보라로 칠함
+    { key: 'name',     label: '잉크명',          width: 180, max: 100, pearlToggle: true },   // 펄 잉크는 셀을 샌드 베이지로 칠함
     { key: 'kind',     label: '본병/소분',       width: 128, pick: true },   // 클릭하면 드롭다운
     { key: 'level',    label: '잔량',            width: 205 },               // 막대 180px + 좌우 여백 12px씩 + 오른쪽 선 1px
     { key: 'note',     label: '비고',            width: 260, max: 300 },
@@ -82,7 +82,6 @@
     (data[id] = data[id] || {})[field] = value;
     pending.set(id + '|' + field, { id, field, value });
     setStatus('saving');
-    updateImportBar();
     if (field === 'kind' || field === 'name' || field === 'pearl') emitStats();   // 사이드바 개수 갱신
     scheduleFlush(field === 'level' ? 0 : SAVE_DELAY);
   }
@@ -231,7 +230,7 @@
     tr.querySelectorAll('td.c-lockable .cell').forEach((input) => { input.disabled = sample; });
   }
 
-  // 펄 잉크 행: 잉크명 칸을 연보라로 칠함
+  // 펄 잉크 행: 잉크명 칸을 샌드 베이지로 칠함 (CSS .is-pearl)
   function syncPearl(tr) {
     const pearl = !!(data[tr.dataset.id] && data[tr.dataset.id].pearl);
     tr.classList.toggle('is-pearl', pearl);
@@ -271,7 +270,6 @@
     root.querySelectorAll('.pick').forEach((p) => { p.tabIndex = edit ? 0 : -1; });
     root.classList.toggle('is-editable', edit);
     if (!edit) { closeMenu(false); clearSelection(); }
-    updateImportBar();
     showStatus();
   }
 
@@ -526,56 +524,6 @@
     if (!e.target.closest('.table-wrap') && !e.target.closest('.menu')) clearSelection();
   });
 
-  // ── 스프레드시트의 펄 잉크 표시(보라색 칸) 가져오기 (한 번만 쓰는 기능) ──
-  // data/ink-pearl.json 의 (브랜드, 잉크명)과 같은 행을 펄 잉크로 표시한다. 펄로 표시된 행이 하나도 없을 때만 가능.
-  const rowKey = (id) => ((data[id] && data[id].brand) || '') + '\u0000' + ((data[id] && data[id].name) || '');
-
-  function isExtraEmpty() {
-    return order.every((id) => !data[id] || !data[id].pearl);
-  }
-
-  function updateImportBar() {
-    const bar = root && root.querySelector('.import-bar');
-    if (bar) bar.hidden = !(canEdit() && isExtraEmpty());
-  }
-
-  async function runImport() {
-    if (!root || !canEdit() || !isExtraEmpty()) return;
-    const btn = root.querySelector('#importBtn');
-    btn.disabled = true;
-    try {
-      const list = await (await fetch('data/ink-pearl.json', { cache: 'no-store' })).json();
-      if (!Array.isArray(list) || !list.length) throw new Error('bad-data');
-      const byKey = new Map(order.map((id) => [rowKey(id), id]));
-      const rows = {};
-      const missing = [];
-      list.forEach((it) => {
-        const id = byKey.get(it.brand + '\u0000' + it.name);
-        if (!id) { missing.push(`${it.brand} ${it.name}`); return; }
-        rows[id] = { pearl: true };
-      });
-      const n = Object.keys(rows).length;
-      if (!n) throw new Error('no-match');
-      const note = missing.length ? `\n(표에서 찾지 못한 ${missing.length}개는 건너뜁니다)` : '';
-      if (!window.confirm(`펄 잉크 ${n}개를 표시합니다.${note}\n계속할까요?`)) return;
-
-      setStatus('saving');
-      const { db, doc, setDoc } = await INKFB.db();
-      await setDoc(doc(db, ...DOC_PATH), { rows }, { merge: true });
-
-      Object.keys(rows).forEach((id) => { data[id] = Object.assign(data[id] || {}, rows[id]); });
-      setStatus('saved');
-      emitStats();
-      if (root) { fillAll(); applyEditable(); }
-    } catch (err) {
-      setStatus(err && err.code === 'permission-denied' ? 'denied' : 'error');
-      showNotice('가져오기에 실패했습니다. 다시 시도해 주세요.');
-    } finally {
-      btn.disabled = false;
-      updateImportBar();
-    }
-  }
-
   // ── 행 추가 ─────────────────────────────
   // b: 새 행이 들어갈 자리(0부터). b번째 행 "앞"에 빈 행을 끼워 넣는다.
   function insertRow(b) {
@@ -660,10 +608,6 @@
     root = container;
     container.innerHTML = `
       <p class="notice" role="alert" hidden></p>
-      <div class="import-bar" hidden>
-        <span>스프레드시트에서 보라색으로 칠해 둔 펄 잉크 표시를 가져올 수 있습니다. (펄로 표시된 행이 없을 때만 보입니다)</span>
-        <button class="btn btn--primary" type="button" id="importBtn">가져오기</button>
-      </div>
       <div class="table-area view-enter">
         <button class="row-add" type="button" title="행 추가" aria-label="이 위치에 행 추가">${ROW_ADD_ICON}</button>
         <ul class="menu" role="listbox" aria-label="본병/소분" hidden></ul>
@@ -681,7 +625,6 @@
     const tbody = container.querySelector('tbody');
     menuEl = container.querySelector('.menu');
     menuFor = null;
-    container.querySelector('#importBtn').addEventListener('click', runImport);
     setupRowAdd(container);
     setupFill(container);
     setupBarFit(container);
@@ -818,7 +761,7 @@
       else if (kind.startsWith('소분')) sample++;
       if (d.name) { if (d.pearl) pearl++; else standard++; }
     });
-    return { bottle, sample, pearl, standard };
+    return { total: pearl + standard, bottle, sample, pearl, standard };   // 잉크 개수 = 잉크명이 있는 행
   }
 
   function emitStats() {
