@@ -181,6 +181,58 @@ button { font: inherit; color: inherit; }
 .placeholder .crumb { margin-bottom: 8px; font-size: 12px; letter-spacing: .14em; color: var(--muted); font-weight: 700; }
 .placeholder p { margin: 0; color: var(--muted); }
 
+/* ── 표 화면 (보유 잉크) ─────────────────── */
+.main--table { padding: 20px clamp(12px, 3vw, 32px) 24px; }
+
+.table-wrap {
+  overflow: auto;
+  max-height: calc(100vh - var(--topbar-h) - 44px);
+  max-height: calc(100dvh - var(--topbar-h) - 44px);
+  background: var(--surface);
+  border: 1px solid var(--line); border-radius: 12px;
+}
+.grid {
+  width: 100%; min-width: 1036px;
+  table-layout: fixed; border-collapse: separate; border-spacing: 0;
+  font-size: 14px;
+}
+.grid th, .grid td {
+  border-bottom: 1px solid var(--line); border-right: 1px solid var(--line);
+  padding: 0 12px; text-align: left;
+}
+.grid th:last-child, .grid td:last-child { border-right: 0; }
+.grid tbody tr:last-child td { border-bottom: 0; }
+.grid thead th {
+  position: sticky; top: 0; z-index: 2;
+  height: 44px;
+  background: #f1eee6;
+  font-size: 13px; font-weight: 700; color: var(--muted);
+}
+.grid td { height: 44px; }
+@media (hover: hover) {
+  .grid tbody tr:hover td { background: #f7f5ef; }
+}
+
+/* 잔량 막대: 10칸, 양 끝이 둥근 가로 막대 */
+.c-level { padding: 0 14px; }
+.bar { display: flex; width: 100%; max-width: 220px; }
+.seg {
+  position: relative; flex: 1; height: 28px; padding: 0;
+  background: none; border: 0; cursor: default;
+}
+.seg::before {
+  content: ''; position: absolute; inset: 9px 1px;
+  background: #e3e1da;
+  transition: background-color .12s;
+}
+.seg:first-child::before { left: 0; border-radius: 5px 0 0 5px; }
+.seg:last-child::before { right: 0; border-radius: 0 5px 5px 0; }
+.seg.on::before { background: var(--accent); }
+.bar:not([inert]) .seg { cursor: pointer; }
+@media (hover: hover) {
+  .bar:not([inert]) .seg:not(.on):hover::before { background: #aab3cf; }
+}
+
 .view-enter { animation: view-in .35s var(--ease); }
 @keyframes view-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 

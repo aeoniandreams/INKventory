@@ -29,6 +29,10 @@
   const closeBtn = $('#sidebarClose');
   const backdrop = $('#backdrop');
 
+  // 카테고리별 화면 모듈 (js/views/*.js 가 등록). 등록 안 된 항목은 "준비 중" 화면.
+  const VIEWS = window.INKVENTORY_VIEWS || {};
+  let currentView = null;
+
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
@@ -117,6 +121,7 @@
     logoutBtn.hidden = !isAdmin;
     idBtn.disabled = isAdmin; // 관리자 모드에서는 아이디를 눌러도 아무 일도 일어나지 않음
     idBtn.title = isAdmin ? '' : '관리자 모드로 전환';
+    if (currentView && currentView.onMode) currentView.onMode(isAdmin);
   }
 
   // 일반 방문자는 SDK 를 받지 않도록, 로그인이 필요할 때만 불러온다.
@@ -250,7 +255,18 @@
       else a.removeAttribute('aria-current');
     });
 
-    if (found) {
+    currentView = null;
+    main.className = 'main';
+    const view = found && VIEWS[id];
+
+    if (view) {
+      pageTitle.textContent = `${found.group.label} · ${found.item.label}`;
+      document.title = `${found.item.label} – INKventory`;
+      main.replaceChildren();
+      main.classList.add('main--table');
+      view.mount(main, { isAdmin });
+      currentView = view;
+    } else if (found) {
       pageTitle.textContent = `${found.group.label} · ${found.item.label}`;
       document.title = `${found.item.label} – INKventory`;
       main.innerHTML = `
