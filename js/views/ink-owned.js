@@ -41,6 +41,8 @@
     const bar = row.querySelector('.bar');
     bar.style.setProperty('--lv', level);
     bar.dataset.level = level;
+    // 채워진 영역 안에 놓인 구분선은 어두운 색으로 (CSS .seg.in)
+    bar.querySelectorAll('.seg').forEach((seg, idx) => seg.classList.toggle('in', idx + 1 <= level));
   }
 
   function setEditable(root, admin) {

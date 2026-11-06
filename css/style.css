@@ -213,12 +213,13 @@ button { font: inherit; color: inherit; }
   .grid tbody tr:hover td { background: #f7f5ef; }
 }
 
-/* 잔량 막대: 하나의 막대 + 같은 굵기(2px)의 옅은 회색 선으로 10등분.
+/* 잔량 막대: 하나의 막대 + 같은 굵기(1px)의 옅은 회색 선으로 10등분.
    너비를 200px(칸당 정확히 20px)로 고정해서 선 간격과 굵기가 항상 똑같게 한다. */
 .c-level { padding: 0 14px; }
 .bar {
   --track: #eeece6;
-  --divider: #d9d6cd;
+  --divider: #d3d0c6;      /* 빈 막대 위의 선: 옅은 회색 */
+  --divider-in: #243059;   /* 채워진 막대 위의 선: 남색보다 아주 약간 어두워 거의 안 보임 */
   position: relative; display: flex;
   width: 200px; height: 28px;
 }
@@ -240,10 +241,12 @@ button { font: inherit; color: inherit; }
   background: none; border: 0; cursor: default;
 }
 .seg:not(:last-child)::after {
-  content: ''; position: absolute; top: 9px; bottom: 9px; right: -1px;
-  width: 2px; background: var(--divider);
+  content: ''; position: absolute; top: 9px; bottom: 9px; right: 0;
+  width: 1px; background: var(--divider);
+  transition: background-color .15s var(--ease);
   pointer-events: none;
 }
+.seg.in:not(:last-child)::after { background: var(--divider-in); }
 .bar:not([inert]) .seg { cursor: pointer; }
 
 .view-enter { animation: view-in .35s var(--ease); }
