@@ -9,7 +9,8 @@
 //    (화면에서 막는 것은 편의일 뿐, 실제 쓰기 권한은 Firestore 보안 규칙이 서버에서 막는다.)
 //
 // 저장 구조:  { order: ["0","1",...,"n8x2k1ab",...],            ← 행 순서 (행 id 목록)
-//               rows:  { "<행 id>": { brand, name, kind, level, note, portions, price } } }
+//               rows:  { "<행 id>": { brand, name, kind, levels:[막대별 잔량], note, portions, price, pearl } } }
+//   (예전 데이터의 level 숫자 하나는 첫 번째 막대로 읽는다)
 //   - 행마다 바뀌지 않는 id 를 가진다. 중간에 행을 끼워 넣어도 다른 행의 데이터는 건드리지 않고 order 만 바뀐다.
 //   - order 가 없는 예전 데이터는 id "0"~"269" 순서로 본다.
 (() => {
@@ -35,6 +36,10 @@
   const BASE_WIDTH = COLUMNS.reduce((sum, c) => sum + c.width, 0);
   const LEVEL_COL = COLUMNS.findIndex((c) => c.key === 'level');
   const BAR_MIN = 180;        // 막대 최소 길이(px). 항상 10의 배수
+  const MAX_BARS = 6;         // 한 칸에 둘 수 있는 막대(병) 수의 안전 상한. 보통은 3개 이내
+  // 일반 모드 배치: 가격 열은 없애고, 잔량 열은 내용 없이 좁게 펄 칸 색으로 채운다. (CSS html[data-layout="normal"])
+  const NORMAL_LEVEL_W = 72;
+  const NORMAL_W = COLUMNS.reduce((sum, c) => sum + (c.key === 'price' ? 0 : c.key === 'level' ? NORMAL_LEVEL_W : c.width), 0);
 
   // 본병/소분 드롭다운 선택지 (저장되는 값은 보이는 글자 그대로)
   const KIND_OPTIONS = [
@@ -83,7 +88,7 @@
     pending.set(id + '|' + field, { id, field, value });
     setStatus('saving');
     if (field === 'kind' || field === 'name' || field === 'pearl') emitStats();   // 사이드바 개수 갱신
-    scheduleFlush(field === 'level' ? 0 : SAVE_DELAY);
+    scheduleFlush(field === 'level' || field === 'levels' ? 0 : SAVE_DELAY);
   }
 
   function queueOrder() {
@@ -249,17 +254,64 @@
     return `<div class="bar" role="group" aria-label="잔량"><div class="track" aria-hidden="true"><i class="pv"></i><i class="fill"></i></div>${segs}</div>`;
   }
 
+  // ── 잔량 막대 여러 개 ──
+  // 저장: rows[id].levels = [막대1 잔량, 막대2 잔량, ...] (0~10). 예전 데이터(level 숫자 하나)는 첫 번째 막대로 읽는다.
+  const clampLevel = (v) => Math.max(0, Math.min(STEPS, Number(v) || 0));
+
+  function getLevels(id) {
+    const d = data[id] || {};
+    if (Array.isArray(d.levels) && d.levels.length) return d.levels.slice(0, MAX_BARS).map(clampLevel);
+    return [clampLevel(d.level)];
+  }
+
+  function setLevels(id, levels) {
+    queueSave(id, 'levels', levels.slice());
+  }
+
+  const lineHtml = () => `<div class="bar-line">${barHtml()}</div>`;
+
+  function paintBar(bar, level) {
+    bar.style.setProperty('--lv', level);
+    bar.dataset.level = level;
+    // 채워진 영역 안에 놓인 구분선은 어두운 색으로 (CSS .seg.in)
+    bar.querySelectorAll('.seg').forEach((seg, idx) => seg.classList.toggle('in', idx + 1 <= level));
+  }
+
+  // 행의 막대 줄 수와 값을 데이터에 맞춘다 (2개 이상이면 칸에 .multi → 촘촘하게 쌓음)
+  function syncBars(tr) {
+    const levels = getLevels(tr.dataset.id);
+    const holder = tr.querySelector('.bars');
+    let lines = holder.querySelectorAll('.bar-line');
+    while (lines.length < levels.length) { holder.insertAdjacentHTML('beforeend', lineHtml()); lines = holder.querySelectorAll('.bar-line'); }
+    while (lines.length > levels.length) { lines[lines.length - 1].remove(); lines = holder.querySelectorAll('.bar-line'); }
+    const edit = canEdit();
+    lines.forEach((line, i) => {
+      const bar = line.querySelector('.bar');
+      paintBar(bar, levels[i]);
+      bar.inert = !edit;
+      bar.setAttribute('aria-label', levels.length > 1 ? `잔량 ${i + 1}번째 병` : '잔량');
+    });
+    tr.querySelector('td.c-level').classList.toggle('multi', levels.length > 1);
+  }
+
+  // 소분 가능 칸: 일반 모드에서는 숫자 대신 O 표시(내용이 있을 때만). CSS 가 .has-val 로 그린다.
+  function syncPortionsMark(tr) {
+    const v = String((data[tr.dataset.id] && data[tr.dataset.id].portions) || '').trim();
+    const td = tr.querySelector('td.col-portions');
+    if (td) td.classList.toggle('has-val', !!v && v !== '0');
+  }
+
   function rowHtml(id, n) {
     const cells = COLUMNS.map((c) => {
-      if (c.key === 'level') return `<td class="c-level">${barHtml()}</td>`;
+      if (c.key === 'level') return `<td class="c-level col-level"><div class="bars">${lineHtml()}</div></td>`;
       if (c.pick) {
-        return `<td class="c-text"><button class="pick" type="button" data-f="${c.key}" data-label="${c.label}" aria-label="${c.label} ${n}행" aria-haspopup="listbox" aria-expanded="false" tabindex="-1"><span class="pick-text"></span></button></td>`;
+        return `<td class="c-text col-${c.key}"><button class="pick" type="button" data-f="${c.key}" data-label="${c.label}" aria-label="${c.label} ${n}행" aria-haspopup="listbox" aria-expanded="false" tabindex="-1"><span class="pick-text"></span></button></td>`;
       }
       const input = `<input class="cell" type="text" data-f="${c.key}" data-label="${c.label}" maxlength="${c.max}" aria-label="${c.label} ${n}행" autocomplete="off" spellcheck="false" readonly tabindex="-1">`;
       if (c.pearlToggle) {
-        return `<td class="c-text c-name">${input}<button class="pearl-btn" type="button" tabindex="-1" aria-pressed="false" title="펄 잉크로 표시" aria-label="펄 잉크로 표시">${SPARKLES_ICON}</button></td>`;
+        return `<td class="c-text c-name col-${c.key}">${input}<button class="pearl-btn" type="button" tabindex="-1" aria-pressed="false" title="펄 잉크로 표시" aria-label="펄 잉크로 표시">${SPARKLES_ICON}</button></td>`;
       }
-      return `<td class="c-text${c.lockable ? ' c-lockable' : ''}">${input}</td>`;
+      return `<td class="c-text col-${c.key}${c.lockable ? ' c-lockable' : ''}">${input}</td>`;
     }).join('');
     return `<tr data-id="${esc(id)}">${cells}</tr>`;
   }
@@ -283,14 +335,6 @@
         el.setAttribute('aria-label', `${el.dataset.label} ${i + 1}행`);
       });
     }
-  }
-
-  function paintLevel(row, level) {
-    const bar = row.querySelector('.bar');
-    bar.style.setProperty('--lv', level);
-    bar.dataset.level = level;
-    // 채워진 영역 안에 놓인 구분선은 어두운 색으로 (CSS .seg.in)
-    bar.querySelectorAll('.seg').forEach((seg, idx) => seg.classList.toggle('in', idx + 1 <= level));
   }
 
   // "소분"인 행: 소분 가능·가격 칸에 대각선, 입력 불가
@@ -321,7 +365,8 @@
       const v = d[p.dataset.f];
       setPick(p, typeof v === 'string' ? v : '');
     });
-    if (d.level) paintLevel(row, d.level);
+    syncBars(row);
+    syncPortionsMark(row);
     syncLock(row);
   }
 
@@ -352,7 +397,9 @@
   function setupBarFit(container) {
     const table = container.querySelector('table.grid');
     const th = table.querySelectorAll('thead th')[LEVEL_COL];
+    table.style.setProperty('--normal-w', NORMAL_W + 'px');   // 일반 모드 배치의 표 너비
     const fit = () => {
+      if (document.documentElement.dataset.layout === 'normal') { positionSelection(); return; } // 일반 배치에는 막대가 없음
       const inner = th.getBoundingClientRect().width - 24 - 1;   // 좌우 여백 12px씩 + 오른쪽 선 1px
       const bar = Math.max(BAR_MIN, Math.floor(inner / STEPS) * STEPS);
       const ml = Math.max(0, Math.floor((inner - bar) / 2));
@@ -457,26 +504,74 @@
 
   const tbodyEl = () => root.querySelector('tbody');
 
+  // 칸의 값. 잔량 칸은 막대별 잔량의 배열.
   function valueAt(r, c) {
     const tr = tbodyEl().rows[r];
     if (!tr) return '';
     const d = data[tr.dataset.id] || {};
     const key = COLUMNS[c].key;
-    return key === 'level' ? (d.level || 0) : (typeof d[key] === 'string' ? d[key] : '');
+    return key === 'level' ? getLevels(tr.dataset.id) : (typeof d[key] === 'string' ? d[key] : '');
   }
+  const isEmptyValue = (v) => (Array.isArray(v) ? !v.some(Boolean) : !v);
+  const sameValue = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+  // 표 위쪽 기준 높이(rel)에 해당하는 행 번호 (행마다 높이가 달라도 됨)
+  function rowIndexAtRel(rel) {
+    const rows = tbodyEl().rows;
+    let lo = 0;
+    let hi = rows.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (rows[mid].offsetTop <= rel) lo = mid; else hi = mid - 1;
+    }
+    return lo;
+  }
+
+  let badgeLayer = null;   // 잔량 칸의 막대 추가(+)/삭제(−) 버튼 층
 
   function clearSelection() {
     sel = null;
     if (selBox) { selBox.hidden = true; handle.hidden = true; }
+    if (badgeLayer) badgeLayer.innerHTML = '';
+  }
+
+  // 선택한 잔량 칸에만 나타나는 버튼: 마지막 막대 → +, 나머지 막대 → −.
+  // (막대가 2개 이상이고 마지막 막대가 비어 있으면 + 대신 − 로 바뀌어 잘못 추가한 막대를 바로 지울 수 있음)
+  function renderBadges(left, width) {
+    badgeLayer.innerHTML = '';
+    if (!sel || sel.r0 !== sel.r1 || COLUMNS[sel.c].key !== 'level') return;
+    const tr = tbodyEl().rows[sel.r0];
+    if (!tr) return;
+    const wrap = root.querySelector('.table-wrap');
+    const w = wrap.getBoundingClientRect();
+    const levels = getLevels(tr.dataset.id);
+    const lines = tr.querySelectorAll('.bar-line');
+    levels.forEach((lv, i) => {
+      const last = i === levels.length - 1;
+      const kind = !last ? 'minus' : (levels.length > 1 && lv === 0 ? 'minus' : 'plus');
+      if (kind === 'plus' && levels.length >= MAX_BARS) return;
+      const r = lines[i].getBoundingClientRect();
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'bar-badge ' + kind;
+      b.dataset.i = String(i);
+      b.dataset.kind = kind;
+      b.textContent = kind === 'plus' ? '+' : '−';
+      b.title = kind === 'plus' ? '막대 추가' : '이 막대 삭제';
+      b.setAttribute('aria-label', b.title);
+      b.style.left = (left + width - 8) + 'px';
+      b.style.top = (r.top + r.height / 2 - w.top - wrap.clientTop + wrap.scrollTop - 8) + 'px';
+      badgeLayer.appendChild(b);
+    });
   }
 
   function positionSelection() {
     if (!root || !selBox) return;
-    if (!sel || !canEdit()) { selBox.hidden = true; handle.hidden = true; return; }
+    if (!sel || !canEdit()) { selBox.hidden = true; handle.hidden = true; badgeLayer.innerHTML = ''; return; }
     const tbody = tbodyEl();
     const top = tbody.rows[sel.r0] && tbody.rows[sel.r0].cells[sel.c];
     const bottom = tbody.rows[sel.r1] && tbody.rows[sel.r1].cells[sel.c];
-    if (!top || !bottom) { selBox.hidden = true; handle.hidden = true; return; }
+    if (!top || !bottom) { selBox.hidden = true; handle.hidden = true; badgeLayer.innerHTML = ''; return; }
 
     const wrap = root.querySelector('.table-wrap');
     const table = root.querySelector('table.grid');
@@ -492,10 +587,11 @@
     selBox.hidden = false;
 
     // 핸들은 원본 칸에 내용이 있을 때만. (표 가장자리 밖으로 삐져나가 스크롤이 생기지 않게 안쪽으로 맞춤)
-    const hasValue = !!valueAt(sel.r0, sel.c);
+    const hasValue = !isEmptyValue(valueAt(sel.r0, sel.c));
     handle.hidden = !hasValue;
     handle.style.left = Math.min(left + width, table.offsetWidth - 5) + 'px';
     handle.style.top = Math.min(y + height, table.offsetHeight - 5) + 'px';
+    renderBadges(left, width);
   }
 
   function selectCell(td) {
@@ -512,12 +608,17 @@
       const tr = tbody.rows[i];
       if (!tr) break;
       if (COLUMNS[c].lockable && tr.classList.contains('is-sample')) continue; // 대각선 칸은 건너뜀
-      if (valueAt(i, c) === val) continue;
-      if (key === 'level') paintLevel(tr, val);
-      else if (key === 'kind') setPick(tr.querySelector('.pick'), val);
-      else tr.querySelector(`.cell[data-f="${key}"]`).value = val;
-      queueSave(tr.dataset.id, key, val);
-      if (key === 'kind') syncLock(tr);
+      if (sameValue(valueAt(i, c), val)) continue;
+      if (key === 'level') {
+        setLevels(tr.dataset.id, val);   // 막대 개수와 값을 통째로 복사
+        syncBars(tr);
+      } else {
+        if (key === 'kind') setPick(tr.querySelector('.pick'), val);
+        else tr.querySelector(`.cell[data-f="${key}"]`).value = val;
+        queueSave(tr.dataset.id, key, val);
+        if (key === 'kind') syncLock(tr);
+        if (key === 'portions') syncPortionsMark(tr);
+      }
     }
   }
 
@@ -526,14 +627,36 @@
     const thead = container.querySelector('thead');
     selBox = container.querySelector('.sel-box');
     handle = container.querySelector('.fill-handle');
+    badgeLayer = container.querySelector('.badge-layer');
     sel = null;
     drag = null;
 
+    // 막대 추가/삭제 버튼
+    badgeLayer.addEventListener('click', (e) => {
+      const b = e.target.closest('.bar-badge');
+      if (!b || !sel || !canEdit()) return;
+      const tr = tbodyEl().rows[sel.r0];
+      if (!tr) return;
+      const id = tr.dataset.id;
+      const i = Number(b.dataset.i);
+      const levels = getLevels(id);
+      if (b.dataset.kind === 'plus') {
+        if (levels.length >= MAX_BARS) return;
+        levels.push(0);
+      } else {
+        if (levels[i] > 0 && !window.confirm('이 막대를 삭제할까요? 기록해 둔 잔량이 사라집니다.')) return;
+        levels.splice(i, 1);
+        if (!levels.length) levels.push(0);
+      }
+      setLevels(id, levels);
+      syncBars(tr);
+      positionSelection();   // 행 높이가 바뀌므로 선택 테두리와 버튼을 다시 맞춤
+    });
+
     function updateDragTarget() {
       const tbody = tbodyEl();
-      const rowH = tbody.rows[0].offsetHeight;
-      const rel = drag.y - wrap.getBoundingClientRect().top - wrap.clientTop - thead.offsetHeight + wrap.scrollTop;
-      const t = Math.max(drag.s, Math.min(tbody.rows.length - 1, Math.floor(rel / rowH)));
+      const rel = drag.y - wrap.getBoundingClientRect().top - wrap.clientTop + wrap.scrollTop;   // 표 위쪽 기준
+      const t = Math.max(drag.s, Math.min(tbody.rows.length - 1, rowIndexAtRel(rel)));
       if (t !== drag.t) { drag.t = t; sel = { c: drag.c, r0: drag.s, r1: t }; positionSelection(); }
     }
 
@@ -637,17 +760,20 @@
     const hide = () => btn.classList.remove('is-on');
 
     // 포인터 높이(clientY)가 가리키는 "행 사이 경계 번호"(1 ~ 행 수-1). 없으면 null.
+    // 행마다 높이가 달라도 되도록, 행의 실제 위치(offsetTop)로 찾는다.
     function boundaryAt(clientY) {
-      if (!tbody.rows.length) return null;
+      const rows = tbody.rows;
+      if (!rows.length) return null;
       const top = wrap.getBoundingClientRect().top + wrap.clientTop;
       const headH = thead.offsetHeight;
-      const rowH = tbody.rows[0].offsetHeight;
-      const rel = clientY - top - headH + wrap.scrollTop;
-      if (clientY < top + headH || clientY > top + wrap.clientHeight || rel < 0) return null;
-      const r = Math.floor(rel / rowH);
-      const within = rel - r * rowH;
-      const b = within <= NEAR ? r : (within >= rowH - NEAR ? r + 1 : null);
-      return b !== null && b >= 1 && b <= tbody.rows.length - 1 ? b : null;
+      if (clientY < top + headH || clientY > top + wrap.clientHeight) return null;
+      const rel = clientY - top + wrap.scrollTop;          // 표 위쪽 기준
+      const r = rowIndexAtRel(rel);
+      const rt = rows[r].offsetTop;
+      const rb = rt + rows[r].offsetHeight;
+      if (rel < rt || rel >= rb) return null;
+      const b = rel - rt <= NEAR ? r : (rb - rel <= NEAR ? r + 1 : null);
+      return b !== null && b >= 1 && b <= rows.length - 1 ? b : null;
     }
 
     function update(e) {
@@ -656,8 +782,7 @@
       if (b === null) { hide(); return; }
       const top = wrap.getBoundingClientRect().top + wrap.clientTop;
       const headH = thead.offsetHeight;
-      const rowH = tbody.rows[0].offsetHeight;
-      const lineY = top + headH + b * rowH - wrap.scrollTop - 0.5; // 경계선(1px)의 중앙
+      const lineY = top + tbody.rows[b].offsetTop - wrap.scrollTop - 0.5; // 경계선(1px)의 중앙
       if (lineY < top + headH || lineY > top + wrap.clientHeight) { hide(); return; }
       btn.style.top = (lineY - area.getBoundingClientRect().top - TAIL_Y) + 'px';
       btn.dataset.before = b; // b번째 행(0부터) 앞에 추가
@@ -686,11 +811,12 @@
         <ul class="menu" role="listbox" aria-label="본병/소분" hidden></ul>
         <div class="table-wrap" tabindex="0" role="region" aria-label="보유 잉크 표">
           <table class="grid" style="min-width:${BASE_WIDTH}px">
-            <colgroup>${COLUMNS.map((c, i) => (i === LEVEL_COL ? '<col>' : `<col style="width:${c.width}px">`)).join('')}</colgroup>
-            <thead><tr>${COLUMNS.map((c) => `<th scope="col">${c.label}</th>`).join('')}</tr></thead>
+            <colgroup>${COLUMNS.map((c, i) => (i === LEVEL_COL ? `<col class="col-${c.key}">` : `<col class="col-${c.key}" style="width:${c.width}px">`)).join('')}</colgroup>
+            <thead><tr>${COLUMNS.map((c) => `<th scope="col" class="col-${c.key}">${c.label}</th>`).join('')}</tr></thead>
             <tbody>${rowsHtml()}</tbody>
           </table>
           <div class="sel-box" hidden></div>
+          <div class="badge-layer"></div>
           <button class="fill-handle" type="button" tabindex="-1" aria-label="아래로 끌어서 채우기" hidden></button>
         </div>
       </div>`;
@@ -717,6 +843,7 @@
       const input = e.target.closest('.cell');
       if (!input || !canEdit()) return;
       queueSave(input.closest('tr').dataset.id, input.dataset.f, input.value);
+      if (input.dataset.f === 'portions') syncPortionsMark(input.closest('tr'));
       positionSelection(); // 내용이 생기거나 사라지면 핸들 표시도 바뀜
     });
 
@@ -795,11 +922,15 @@
       const row = seg.closest('tr');
       const id = row.dataset.id;
       const i = Number(seg.dataset.i);
-      const current = (data[id] && data[id].level) || 0;
-      const next = current === i ? 0 : i;
-      paintLevel(row, next);
-      queueSave(id, 'level', next);
-      selectCell(seg.closest('td'));
+      const lines = [...row.querySelectorAll('.bar-line')];
+      const bi = lines.indexOf(seg.closest('.bar-line'));          // 몇 번째 막대(병)인지
+      const levels = getLevels(id);
+      if (bi < 0 || bi >= levels.length) return;
+      levels[bi] = levels[bi] === i ? 0 : i;                       // 같은 칸을 다시 누르면 0
+      setLevels(id, levels);
+      paintBar(lines[bi].querySelector('.bar'), levels[bi]);
+      selectCell(seg.closest('td'));                               // 선택 → +/− 버튼 표시
+      positionSelection();                                         // 마지막 막대가 비었는지에 따라 +/− 가 바뀜
     });
   }
 

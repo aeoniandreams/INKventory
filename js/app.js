@@ -131,8 +131,14 @@
   let isAdmin = false;
   let fb = null; // 로드된 Firebase SDK
 
+  // 화면 배치(layout)는 일반/관리자 모드에 따라 다르다(표의 열 구성 등). 새로고침해도 관리자 배치가 깜빡이지 않도록,
+  // 이 탭에서 로그인한 적이 있으면(힌트) 로그인 확인이 끝날 때까지는 관리자 배치로 미리 보여 준다. (index.html 의 head 스크립트가 처음 값을 정함)
+  const hintAtStart = !!session.get(HINT_KEY);
+  let authResolved = false;
+
   function applyMode() {
     document.documentElement.dataset.mode = isAdmin ? 'admin' : 'normal';
+    document.documentElement.dataset.layout = (isAdmin || (hintAtStart && !authResolved)) ? 'admin' : 'normal';
     modeTag.hidden = !isAdmin;
     logoutBtn.hidden = !isAdmin;
     idBtn.disabled = isAdmin; // 관리자 모드에서는 아이디를 눌러도 아무 일도 일어나지 않음
@@ -147,6 +153,7 @@
       fbPromise = (async () => {
         fb = await INKFB.auth();
         fb.onAuthStateChanged(fb.auth, (user) => {
+          authResolved = true;
           isAdmin = !!user && !!cfg.adminUid && user.uid === cfg.adminUid;
           if (isAdmin) session.set(HINT_KEY, '1'); else session.del(HINT_KEY);
           applyMode();
@@ -248,7 +255,7 @@
         const res = await fb.getRedirectResult(fb.auth);
         if (res && res.user) { openAuth(); await checkSignedIn(res.user); if (authError.hidden) return; }
       } catch (e) { /* 무시: 일반 모드 유지 */ }
-    }).catch(() => {});
+    }).catch(() => { authResolved = true; applyMode(); }); // 로그인 확인에 실패하면 일반 배치로
   }
 
   // ── 라우팅 (해시) ───────────────────────

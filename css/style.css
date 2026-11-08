@@ -340,15 +340,22 @@ button { font: inherit; color: inherit; }
 /* 잔량 막대: 하나의 막대 + 같은 굵기(1px)의 옅은 회색 선으로 10등분.
    막대 길이는 JS가 10의 배수(칸 폭이 정수 px)로 맞춰서 --bar-w 에 넣는다. 화면이 넓어지면 같이 길어진다. */
 .grid td.c-level { padding: 0 12px; }  /* 기본 열 너비 = 막대 180 + 좌우 12 + 오른쪽 선 1 */
+
+/* 막대(병)가 여러 개면 세로로 쌓는다. 막대 1개는 28px 줄, 2개 이상(.multi)은 18px 줄로 촘촘하게. */
+.bars { --pitch: 28px; display: flex; flex-direction: column; }
+.grid td.c-level.multi { padding: 8px 12px; }
+.grid td.c-level.multi .bars { --pitch: 18px; }
+.bar-line { display: flex; align-items: center; }
+
 .bar {
   --track: #e6e8ee;
   --divider: #c6c9d3;      /* 빈 막대 위의 선: 옅은 회색 */
   --divider-in: #303643;   /* 채워진 막대 위의 선: 막대 색보다 아주 약간 어두워 거의 안 보임 */
   position: relative; display: flex;
-  width: var(--bar-w, 180px); margin-left: var(--bar-ml, 0px); height: 28px;
+  width: var(--bar-w, 180px); margin-left: var(--bar-ml, 0px); height: var(--pitch, 28px);
 }
 .track {
-  position: absolute; inset: 9px 0;
+  position: absolute; inset: calc((var(--pitch, 28px) - 10px) / 2) 0;
   border-radius: 5px; overflow: hidden;
   background: var(--track);
 }
@@ -361,11 +368,11 @@ button { font: inherit; color: inherit; }
 
 /* 클릭 영역 10칸(눈에 안 보임) + 칸 사이 구분선 */
 .seg {
-  position: relative; flex: 1; height: 28px; padding: 0;
+  position: relative; flex: 1; height: var(--pitch, 28px); padding: 0;
   background: none; border: 0; cursor: default;
 }
 .seg:not(:last-child)::after {
-  content: ''; position: absolute; top: 9px; bottom: 9px; right: 0;
+  content: ''; position: absolute; top: calc((var(--pitch, 28px) - 10px) / 2); bottom: calc((var(--pitch, 28px) - 10px) / 2); right: 0;
   width: 1px; background: var(--divider);
   transition: background-color .15s var(--ease);
   pointer-events: none;
@@ -400,6 +407,17 @@ button { font: inherit; color: inherit; }
 }
 .cell:disabled { color: var(--muted); cursor: default; opacity: 1; -webkit-text-fill-color: currentColor; }
 
+/* 선택한 잔량 칸의 막대 추가(+)/삭제(−) 버튼: 선택 테두리의 오른쪽 가장자리에 반쯤 걸쳐서 표시 */
+.badge-layer { position: absolute; left: 0; top: 0; z-index: 1; width: 0; height: 0; }
+.bar-badge {
+  position: absolute; width: 16px; height: 16px; padding: 0; box-sizing: border-box;
+  border-radius: 50%; background: #fff; border: 1.5px solid var(--accent); color: var(--accent);
+  font: 700 13px/12px var(--font); text-align: center; cursor: pointer;
+}
+.bar-badge::before { content: ''; position: absolute; inset: -6px; } /* 누르기 쉽게 영역 확장 */
+.bar-badge.minus { border-color: #a05555; color: #a05555; }
+.bar-badge:hover { background: var(--accent-soft); }
+
 /* 칸 선택 + 채우기 핸들 (스프레드시트처럼) */
 .sel-box {
   position: absolute; z-index: 1; box-sizing: border-box; pointer-events: none;
@@ -414,6 +432,29 @@ button { font: inherit; color: inherit; }
   cursor: crosshair; touch-action: none;
 }
 .fill-handle::before { content: ''; position: absolute; inset: -8px; } /* 누르기 쉽게 영역 확장 */
+
+/* ── 일반 모드 배치 (html[data-layout="normal"]) ─────────────────────────
+   관리자 모드(data-layout="admin")는 위의 기본 규칙 그대로.
+   - 가격 열은 없앤다.
+   - 잔량 열은 내용(막대)을 숨기고 좁게 줄인 뒤 펄 칸과 같은 색으로 채운다.
+   - 소분 가능 칸은 숫자 대신, 내용이 있는 칸에만 O 를 보여 준다.
+   - 표는 남는 너비를 늘려 채우지 않고 화면 가운데에 둔다. */
+html[data-layout="normal"] .col-price { display: none; }
+html[data-layout="normal"] .grid { width: var(--normal-w); min-width: 0 !important; }
+html[data-layout="normal"] col.col-level { width: 72px; }
+html[data-layout="normal"] .bars { display: none; }
+html[data-layout="normal"] .grid td.c-level { padding: 0; background-color: #e6e9f1; }
+@media (hover: hover) {
+  html[data-layout="normal"] .grid tbody tr:hover td.c-level { background-color: #e0e4ee; }
+}
+html[data-layout="normal"] .grid td.col-portions .cell { color: transparent; -webkit-text-fill-color: transparent; }
+html[data-layout="normal"] .grid td.col-portions.has-val::after {
+  content: 'O'; position: absolute; inset: 0; display: grid; place-items: center;
+  font-weight: 700; color: var(--accent); pointer-events: none;
+}
+html[data-layout="normal"] .main--table { padding-left: clamp(12px, 3vw, 32px); }  /* 좌우 여백을 같게 해서 정확히 가운데로 */
+html[data-layout="normal"] .table-area { padding-left: 0; display: flex; justify-content: center; }
+html[data-layout="normal"] .table-wrap { width: auto; max-width: 100%; }
 
 .view-enter { animation: view-in .35s var(--ease); }
 @keyframes view-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
