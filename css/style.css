@@ -407,16 +407,21 @@ button { font: inherit; color: inherit; }
 }
 .cell:disabled { color: var(--muted); cursor: default; opacity: 1; -webkit-text-fill-color: currentColor; }
 
-/* 선택한 잔량 칸의 막대 추가(+)/삭제(−) 버튼: 선택 테두리의 오른쪽 가장자리에 반쯤 걸쳐서 표시 */
-.badge-layer { position: absolute; left: 0; top: 0; z-index: 1; width: 0; height: 0; }
-.bar-badge {
-  position: absolute; width: 16px; height: 16px; padding: 0; box-sizing: border-box;
-  border-radius: 50%; background: #fff; border: 1.5px solid var(--accent); color: var(--accent);
-  font: 700 13px/12px var(--font); text-align: center; cursor: pointer;
+/* 잔량 막대 우클릭(폰은 길게 누르기) 메뉴: 막대 추가 / 이 막대 삭제 */
+.ctx-menu { position: fixed; z-index: 50; min-width: 150px; }
+.menu [role="menuitem"] { padding: 8px 10px; border-radius: 6px; cursor: pointer; outline: none; white-space: nowrap; }
+.menu [role="menuitem"]:hover, .menu [role="menuitem"]:focus { background: var(--accent-soft); }
+.menu [role="menuitem"][aria-disabled="true"] { color: var(--muted); opacity: .5; cursor: default; }
+.menu [role="menuitem"][aria-disabled="true"]:hover { background: none; }
+
+/* 한 번만 쓰는 기능(잔량·가격·소분 가능을 관리자 전용 문서로 옮기기) 안내 바 */
+.import-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin: 0 0 12px; padding: 10px 14px;
+  border-radius: 10px; background: var(--accent-soft); color: var(--accent); font-size: 14px;
 }
-.bar-badge::before { content: ''; position: absolute; inset: -6px; } /* 누르기 쉽게 영역 확장 */
-.bar-badge.minus { border-color: #a05555; color: #a05555; }
-.bar-badge:hover { background: var(--accent-soft); }
+.import-bar[hidden] { display: none; }
+.import-bar .btn { flex: none; }
 
 /* 칸 선택 + 채우기 핸들 (스프레드시트처럼) */
 .sel-box {

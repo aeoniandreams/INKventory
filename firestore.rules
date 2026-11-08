@@ -1,0 +1,27 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 관리자(내 구글 계정) 확인
+    function isAdmin() {
+      return request.auth != null
+          && request.auth.uid == 'oQMylq7c4jT92pEQleX3cl7sAaj2';
+    }
+
+    // 공개 문서: 누구나 읽을 수 있고, 쓰기는 관리자만 (브랜드·잉크명·종류·비고·펄 표시·행 순서 등)
+    match /inventory/inkOwned {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 관리자 전용 문서: 읽기도 쓰기도 관리자만 (잔량·가격·소분 가능 개수)
+    match /inventory/inkPrivate {
+      allow read, write: if isAdmin();
+    }
+
+    // 그 밖의 모든 문서는 접근 불가 (규칙이 없으면 자동으로 막힘)
+  }
+}
+
+// 이 파일은 참고·보관용입니다. 실제로 적용하려면 Firebase 콘솔 → Firestore Database → 규칙 탭에
+// 위 내용을 붙여 넣고 "게시"를 눌러야 합니다.

@@ -4,13 +4,20 @@
 //  - 글자 칸: 관리자 모드에서 바로 입력.
 //  - 본병/소분 칸: 클릭하면 드롭다운. "소분"을 고른 행의 소분 가능·가격 칸은 대각선이 그어지고 입력할 수 없다.
 //  - 행과 행 사이에 마우스를 두면 나타나는 아이콘으로 그 자리에 빈 행을 추가.
-//  - 칸을 선택하면 오른쪽 아래 꼭짓점에 작은 원(채우기 핸들)이 나타나고, 아래로 끌면 같은 내용이 채워진다.
-//  - 모든 변경은 자동 저장(Firestore 문서 하나: inventory/inkOwned). 수정은 관리자 모드에서만 가능.
+//  - 잔량 칸의 막대(병)는 우클릭(폰은 길게 누르기) 메뉴로 추가·삭제한다.
+//  - 칸을 선택하면 오른쪽 아래 꼭짓점에 작은 원(채우기 핸들)이 나타나고, 아래로 끌면 같은 내용이 채워진다. (잔량 칸 제외)
+//  - 모든 변경은 자동 저장. 수정은 관리자 모드에서만 가능.
 //    (화면에서 막는 것은 편의일 뿐, 실제 쓰기 권한은 Firestore 보안 규칙이 서버에서 막는다.)
 //
-// 저장 구조:  { order: ["0","1",...,"n8x2k1ab",...],            ← 행 순서 (행 id 목록)
-//               rows:  { "<행 id>": { brand, name, kind, levels:[막대별 잔량], note, portions, price, pearl } } }
-//   (예전 데이터의 level 숫자 하나는 첫 번째 막대로 읽는다)
+// 저장 구조 (문서 둘):
+//  ① 공개 문서 inventory/inkOwned — 누구나 읽을 수 있음
+//     { order: ["0","1",...,"n8x2k1ab",...],            ← 행 순서 (행 id 목록)
+//       rows:  { "<행 id>": { brand, name, kind, note, pearl, hasPortions } } }
+//  ② 관리자 전용 문서 inventory/inkPrivate — 읽기·쓰기 모두 관리자만 (일반 모드에서는 아예 불러오지 않음)
+//     { rows: { "<행 id>": { levels:[막대별 잔량], price, portions } } }
+//   - hasPortions 는 "소분 가능 개수가 적혀 있는지"만 알려 주는 공개 표시. 일반 모드는 이것으로 O 를 그린다.
+//   - 예전 데이터(공개 문서 안의 level / price / portions)는 관리자 모드의 "비공개로 옮기기" 버튼으로 ②로 옮긴다.
+//     옮기기 전에는 관리자가 예전 값을 그대로 보고 고칠 수 있다. 예전 level 숫자 하나는 첫 번째 막대로 읽는다.
 //   - 행마다 바뀌지 않는 id 를 가진다. 중간에 행을 끼워 넣어도 다른 행의 데이터는 건드리지 않고 order 만 바뀐다.
 //   - order 가 없는 예전 데이터는 id "0"~"269" 순서로 본다.
 (() => {
@@ -19,8 +26,11 @@
   const DEFAULT_ROWS = 270;
   const MAX_ROWS = 600;                          // 문서 하나(1MiB 제한)에 안전하게 담기 위한 상한
   const STEPS = 10;
-  const DOC_PATH = ['inventory', 'inkOwned'];
-  const SAVE_DELAY = 600;                        // 입력을 멈추고 이 시간(ms)이 지나면 저장
+  const DOC_PATH = ['inventory', 'inkOwned'];            // 공개 문서
+  const PRIVATE_PATH = ['inventory', 'inkPrivate'];      // 관리자 전용 문서
+  const PRIVATE_FIELDS = ['levels', 'price', 'portions'];   // 관리자 전용 문서에만 저장하는 필드 (예전 level 도 여기로 옮김)
+  const LEGACY_PRIVATE = ['level', ...PRIVATE_FIELDS];
+  const SAVE_DELAY = 600;                       // 입력을 멈추고 이 시간(ms)이 지나면 저장
   const RETRY_DELAY = 5000;
 
   // width 는 기본 너비. 잔량 열만 화면이 넓으면 늘어난다(width 는 그때의 최소값).
@@ -52,6 +62,11 @@
   let order = defaultOrder();   // 화면에 보이는 행 순서 (행 id)
   const data = {};              // 행 id → { 필드: 값 }
   let loadState = 'idle';       // idle | loading | ready | error
+  // 관리자 전용 데이터(잔량·가격·소분 가능 개수): 관리자 모드에서만 불러온다
+  let privState = 'idle';       // idle | loading | ready | error
+  let privData = null;          // 관리자 전용 문서 내용 { rows: {...} }
+  const legacy = {};            // 행 id → 공개 문서에 남아 있던 예전 비공개 필드 (옮기기 전에만 있음)
+  let legacyCount = 0;
   let root = null;              // 현재 화면 컨테이너
   const pending = new Map();    // 아직 저장 안 된 변경. 키: "id|필드" 또는 "@order"
   let saveTimer = null;
@@ -59,7 +74,8 @@
   let saveStatus = '';          // '' | saving | saved | error | denied
 
   const isAdminMode = () => document.documentElement.dataset.mode === 'admin';
-  const canEdit = () => isAdminMode() && loadState === 'ready';
+  const canEdit = () => isAdminMode() && loadState === 'ready' && privState === 'ready';
+  const hasText = (v) => { const s = String(v == null ? '' : v).trim(); return !!s && s !== '0'; };
   const esc = (s) => String(s).replace(/[&"'<>]/g, (c) => `&#${c.charCodeAt(0)};`);
   const newId = () => 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
@@ -86,6 +102,10 @@
   function queueSave(id, field, value) {
     (data[id] = data[id] || {})[field] = value;
     pending.set(id + '|' + field, { id, field, value });
+    if (field === 'portions') {   // 개수 자체는 관리자 전용, "적혀 있는지"만 공개 표시(hasPortions)로 함께 저장
+      data[id].hasPortions = hasText(value);
+      pending.set(id + '|hasPortions', { id, field: 'hasPortions', value: data[id].hasPortions });
+    }
     setStatus('saving');
     if (field === 'kind' || field === 'name' || field === 'pearl') emitStats();   // 사이드바 개수 갱신
     scheduleFlush(field === 'level' || field === 'levels' ? 0 : SAVE_DELAY);
@@ -110,13 +130,18 @@
     const batch = [...pending.entries()];
     try {
       const { db, doc, setDoc } = await INKFB.db();
-      const payload = {};
+      // 공개 문서와 관리자 전용 문서로 나눠서 저장
+      const pub = {};
+      const priv = {};
       batch.forEach(([, e]) => {
-        if (e.order) { payload.order = e.order; return; }
-        payload.rows = payload.rows || {};
-        (payload.rows[e.id] = payload.rows[e.id] || {})[e.field] = e.value;
+        if (e.order) { pub.order = e.order; return; }
+        const target = PRIVATE_FIELDS.includes(e.field) ? priv : (pub.rows = pub.rows || {});
+        (target[e.id] = target[e.id] || {})[e.field] = e.value;
       });
-      await setDoc(doc(db, ...DOC_PATH), payload, { merge: true });
+      const jobs = [];
+      if (pub.order || pub.rows) jobs.push(setDoc(doc(db, ...DOC_PATH), pub, { merge: true }));
+      if (Object.keys(priv).length) jobs.push(setDoc(doc(db, ...PRIVATE_PATH), { rows: priv }, { merge: true }));
+      await Promise.all(jobs);
       batch.forEach(([k, e]) => { if (pending.get(k) === e) pending.delete(k); });
       saving = false;
       saveCache();   // 다음에 들어올 때 바로 보여 줄 최신 내용을 보관
@@ -143,7 +168,8 @@
   // 2) 가장 최근에 받은 내용을 브라우저에 보관해 두었다가, 다시 들어오면 그 내용을 즉시 보여 주고
   //    서버의 최신 내용이 오면 바뀐 경우에만 다시 그린다. (최신 내용이 오기 전에는 수정할 수 없다)
   // SDK 는 저장(쓰기)할 때만 쓴다.
-  const CACHE_KEY = 'inkventory.cache.v1';
+  const CACHE_KEY = 'inkventory.cache.v2';   // 공개 내용만 보관. (v1 보관본에는 잔량·가격이 들어 있어 지운다)
+  try { localStorage.removeItem('inkventory.cache.v1'); } catch (err) { /* 무시 */ }
   let hydrated = false;     // 보관해 둔 내용으로 화면을 채운 적이 있음
   let shownSnapshot = '';   // 지금 화면에 반영된 내용의 요약(바뀌었는지 비교용)
 
@@ -188,10 +214,68 @@
     Object.keys(rows).forEach((id) => { if (!known.has(id)) loaded.push(id); }); // 안전장치: 데이터가 있는데 순서에 없는 행
     order = loaded;
     Object.keys(data).forEach((id) => { delete data[id]; });
-    Object.keys(rows).forEach((id) => { data[id] = rows[id]; });
+    Object.keys(legacy).forEach((id) => { delete legacy[id]; });
+    legacyCount = 0;
+    Object.keys(rows).forEach((id) => {
+      const src = rows[id] || {};
+      const pub = {};
+      const old = {};
+      Object.keys(src).forEach((k) => { if (LEGACY_PRIVATE.includes(k)) old[k] = src[k]; else pub[k] = src[k]; });
+      // 일반 모드에서 O 를 그릴 공개 표시. 옮기기 전 예전 데이터는 portions 가 적혀 있는지로 대신 판단
+      pub.hasPortions = typeof src.hasPortions === 'boolean' ? src.hasPortions : hasText(src.portions);
+      data[id] = pub;
+      if (Object.keys(old).length) { legacy[id] = old; legacyCount++; }
+    });
+    if (privData) mergePrivate();   // 관리자 전용 값을 이미 불러왔다면 다시 합침
   }
 
-  const snapshot = () => JSON.stringify({ order, rows: data });
+  // 관리자 전용 값(관리자 전용 문서, 없으면 예전 공개 문서에 남은 값)을 화면용 data 에 합친다. 관리자 모드에서만 호출됨.
+  function mergePrivate() {
+    const rows = (privData && privData.rows) || {};
+    Object.keys(data).forEach((id) => {
+      const merged = Object.assign({}, legacy[id] || {}, rows[id] || {});
+      LEGACY_PRIVATE.forEach((k) => { if (merged[k] !== undefined) data[id][k] = merged[k]; });
+    });
+  }
+
+  // 일반 모드로 돌아가면 메모리에서도 관리자 전용 값을 지운다
+  function dropPrivate() {
+    privData = null;
+    privState = 'idle';
+    Object.keys(data).forEach((id) => { LEGACY_PRIVATE.forEach((k) => { delete data[id][k]; }); });
+    if (root) {   // 화면에 남은 값도 지움
+      root.querySelectorAll('.cell[data-f="price"], .cell[data-f="portions"]').forEach((input) => { input.value = ''; });
+      fillAll();
+    }
+  }
+
+  async function loadPrivate() {
+    if (!isAdminMode() || loadState !== 'ready' || privState === 'loading' || privState === 'ready') return;
+    privState = 'loading';
+    try {
+      const { db, doc, getDoc } = await INKFB.db();
+      const snap = await getDoc(doc(db, ...PRIVATE_PATH));
+      privData = snap.exists() ? snap.data() : { rows: {} };
+      privState = 'ready';
+      mergePrivate();
+      if (root) { fillAll(); applyEditable(); }
+    } catch (err) {
+      privState = 'error';
+      showNotice('관리자 전용 데이터(잔량·가격·소분 가능)를 불러오지 못했습니다. 새로고침해 주세요.');
+    }
+  }
+
+  // 공개 내용만 요약 (보관본·변경 비교용). 관리자 전용 값은 절대 넣지 않는다.
+  function publicRows() {
+    const out = {};
+    Object.keys(data).forEach((id) => {
+      const row = {};
+      Object.keys(data[id]).forEach((k) => { if (!LEGACY_PRIVATE.includes(k)) row[k] = data[id][k]; });
+      out[id] = row;
+    });
+    return out;
+  }
+  const snapshot = () => JSON.stringify({ order, rows: publicRows() });
 
   function saveCache() {
     shownSnapshot = snapshot();
@@ -289,16 +373,17 @@
       const bar = line.querySelector('.bar');
       paintBar(bar, levels[i]);
       bar.inert = !edit;
+      bar.title = edit ? '우클릭: 막대 추가·삭제' : '';
       bar.setAttribute('aria-label', levels.length > 1 ? `잔량 ${i + 1}번째 병` : '잔량');
     });
     tr.querySelector('td.c-level').classList.toggle('multi', levels.length > 1);
   }
 
   // 소분 가능 칸: 일반 모드에서는 숫자 대신 O 표시(내용이 있을 때만). CSS 가 .has-val 로 그린다.
+  // (공개 표시 hasPortions 로 그린다. 개수 자체는 관리자 전용이라 일반 모드에는 없음)
   function syncPortionsMark(tr) {
-    const v = String((data[tr.dataset.id] && data[tr.dataset.id].portions) || '').trim();
     const td = tr.querySelector('td.col-portions');
-    if (td) td.classList.toggle('has-val', !!v && v !== '0');
+    if (td) td.classList.toggle('has-val', !!(data[tr.dataset.id] && data[tr.dataset.id].hasPortions));
   }
 
   function rowHtml(id, n) {
@@ -376,8 +461,11 @@
 
   function applyEditable() {
     if (!root) return;
+    if (isAdminMode()) loadPrivate();                    // 관리자 모드가 되면 관리자 전용 데이터를 불러옴
+    else if (privState !== 'idle') dropPrivate();        // 일반 모드로 돌아오면 메모리와 화면에서 지움
     const edit = canEdit();
-    root.querySelectorAll('.bar').forEach((bar) => { bar.inert = !edit; });
+    root.querySelectorAll('.bar').forEach((bar) => { bar.inert = !edit; bar.title = edit ? '우클릭: 막대 추가·삭제' : ''; });
+    if (!edit) closeCtx();
     if (!edit) root.querySelector('.row-add').classList.remove('is-on');
     root.querySelectorAll('.cell').forEach((input) => {
       input.readOnly = !edit;
@@ -387,6 +475,7 @@
     root.classList.toggle('is-editable', edit);
     if (!edit) { closeMenu(false); clearSelection(); }
     if (isAdminMode()) INKFB.db().catch(() => {});   // 관리자 모드가 되면 저장용 SDK 를 미리 받아 둠 (첫 저장이 빠르게)
+    updateMigrateBar();
     showStatus();
   }
 
@@ -504,16 +593,16 @@
 
   const tbodyEl = () => root.querySelector('tbody');
 
-  // 칸의 값. 잔량 칸은 막대별 잔량의 배열.
+  // 칸의 값 (채우기용). 잔량 칸은 채우기 대상이 아니라서 비워 둔다.
   function valueAt(r, c) {
     const tr = tbodyEl().rows[r];
     if (!tr) return '';
     const d = data[tr.dataset.id] || {};
-    const key = COLUMNS[c].key;
-    return key === 'level' ? getLevels(tr.dataset.id) : (typeof d[key] === 'string' ? d[key] : '');
+    const v = d[COLUMNS[c].key];
+    return typeof v === 'string' ? v : '';
   }
-  const isEmptyValue = (v) => (Array.isArray(v) ? !v.some(Boolean) : !v);
-  const sameValue = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const isEmptyValue = (v) => !v;
+  const sameValue = (a, b) => a === b;
 
   // 표 위쪽 기준 높이(rel)에 해당하는 행 번호 (행마다 높이가 달라도 됨)
   function rowIndexAtRel(rel) {
@@ -527,51 +616,18 @@
     return lo;
   }
 
-  let badgeLayer = null;   // 잔량 칸의 막대 추가(+)/삭제(−) 버튼 층
-
   function clearSelection() {
     sel = null;
     if (selBox) { selBox.hidden = true; handle.hidden = true; }
-    if (badgeLayer) badgeLayer.innerHTML = '';
-  }
-
-  // 선택한 잔량 칸에만 나타나는 버튼: 마지막 막대 → +, 나머지 막대 → −.
-  // (막대가 2개 이상이고 마지막 막대가 비어 있으면 + 대신 − 로 바뀌어 잘못 추가한 막대를 바로 지울 수 있음)
-  function renderBadges(left, width) {
-    badgeLayer.innerHTML = '';
-    if (!sel || sel.r0 !== sel.r1 || COLUMNS[sel.c].key !== 'level') return;
-    const tr = tbodyEl().rows[sel.r0];
-    if (!tr) return;
-    const wrap = root.querySelector('.table-wrap');
-    const w = wrap.getBoundingClientRect();
-    const levels = getLevels(tr.dataset.id);
-    const lines = tr.querySelectorAll('.bar-line');
-    levels.forEach((lv, i) => {
-      const last = i === levels.length - 1;
-      const kind = !last ? 'minus' : (levels.length > 1 && lv === 0 ? 'minus' : 'plus');
-      if (kind === 'plus' && levels.length >= MAX_BARS) return;
-      const r = lines[i].getBoundingClientRect();
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'bar-badge ' + kind;
-      b.dataset.i = String(i);
-      b.dataset.kind = kind;
-      b.textContent = kind === 'plus' ? '+' : '−';
-      b.title = kind === 'plus' ? '막대 추가' : '이 막대 삭제';
-      b.setAttribute('aria-label', b.title);
-      b.style.left = (left + width - 8) + 'px';
-      b.style.top = (r.top + r.height / 2 - w.top - wrap.clientTop + wrap.scrollTop - 8) + 'px';
-      badgeLayer.appendChild(b);
-    });
   }
 
   function positionSelection() {
     if (!root || !selBox) return;
-    if (!sel || !canEdit()) { selBox.hidden = true; handle.hidden = true; badgeLayer.innerHTML = ''; return; }
+    if (!sel || !canEdit()) { selBox.hidden = true; handle.hidden = true; return; }
     const tbody = tbodyEl();
     const top = tbody.rows[sel.r0] && tbody.rows[sel.r0].cells[sel.c];
     const bottom = tbody.rows[sel.r1] && tbody.rows[sel.r1].cells[sel.c];
-    if (!top || !bottom) { selBox.hidden = true; handle.hidden = true; badgeLayer.innerHTML = ''; return; }
+    if (!top || !bottom) { selBox.hidden = true; handle.hidden = true; return; }
 
     const wrap = root.querySelector('.table-wrap');
     const table = root.querySelector('table.grid');
@@ -586,12 +642,11 @@
     selBox.style.cssText = `left:${left}px;top:${y}px;width:${width}px;height:${height}px`;
     selBox.hidden = false;
 
-    // 핸들은 원본 칸에 내용이 있을 때만. (표 가장자리 밖으로 삐져나가 스크롤이 생기지 않게 안쪽으로 맞춤)
-    const hasValue = !isEmptyValue(valueAt(sel.r0, sel.c));
-    handle.hidden = !hasValue;
+    // 핸들은 원본 칸에 내용이 있을 때만(잔량 칸은 제외). 표 가장자리 밖으로 삐져나가 스크롤이 생기지 않게 안쪽으로 맞춤
+    const fillable = COLUMNS[sel.c].key !== 'level';
+    handle.hidden = !(fillable && !isEmptyValue(valueAt(sel.r0, sel.c)));
     handle.style.left = Math.min(left + width, table.offsetWidth - 5) + 'px';
     handle.style.top = Math.min(y + height, table.offsetHeight - 5) + 'px';
-    renderBadges(left, width);
   }
 
   function selectCell(td) {
@@ -602,6 +657,7 @@
 
   function applyFill(c, s, t) {
     const key = COLUMNS[c].key;
+    if (key === 'level') return;   // 잔량 칸은 채우기 제외
     const val = valueAt(s, c);
     const tbody = tbodyEl();
     for (let i = s + 1; i <= t; i++) {
@@ -609,49 +665,102 @@
       if (!tr) break;
       if (COLUMNS[c].lockable && tr.classList.contains('is-sample')) continue; // 대각선 칸은 건너뜀
       if (sameValue(valueAt(i, c), val)) continue;
-      if (key === 'level') {
-        setLevels(tr.dataset.id, val);   // 막대 개수와 값을 통째로 복사
-        syncBars(tr);
-      } else {
-        if (key === 'kind') setPick(tr.querySelector('.pick'), val);
-        else tr.querySelector(`.cell[data-f="${key}"]`).value = val;
-        queueSave(tr.dataset.id, key, val);
-        if (key === 'kind') syncLock(tr);
-        if (key === 'portions') syncPortionsMark(tr);
-      }
+      if (key === 'kind') setPick(tr.querySelector('.pick'), val);
+      else tr.querySelector(`.cell[data-f="${key}"]`).value = val;
+      queueSave(tr.dataset.id, key, val);
+      if (key === 'kind') syncLock(tr);
+      if (key === 'portions') syncPortionsMark(tr);
     }
   }
+
+  // ── 잔량 칸 우클릭(폰은 길게 누르기) 메뉴: 막대 추가 / 이 막대 삭제 ──
+  let ctxEl = null;           // 메뉴 요소 (body 에 한 번만 만듦)
+  let ctxTarget = null;       // { id, bi }  (어느 행의 몇 번째 막대에서 열었는지)
+  let longPress = null;       // 길게 누르기 감시 { timer, x, y }
+  let suppressClick = false;  // 길게 눌러 메뉴를 연 뒤 따라오는 클릭은 무시
+
+  function ensureCtx() {
+    if (ctxEl) return ctxEl;
+    ctxEl = document.createElement('ul');
+    ctxEl.className = 'menu ctx-menu';
+    ctxEl.setAttribute('role', 'menu');
+    ctxEl.setAttribute('aria-label', '잔량 막대');
+    ctxEl.hidden = true;
+    ctxEl.innerHTML = '<li role="menuitem" tabindex="-1" data-act="add">막대 추가</li><li role="menuitem" tabindex="-1" data-act="del">이 막대 삭제</li>';
+    document.body.appendChild(ctxEl);
+    ctxEl.addEventListener('click', (e) => {
+      const li = e.target.closest('[role="menuitem"]');
+      if (li && li.getAttribute('aria-disabled') !== 'true') runCtx(li.dataset.act);
+    });
+    ctxEl.addEventListener('keydown', (e) => {
+      const items = [...ctxEl.querySelectorAll('[role="menuitem"]')].filter((li) => li.getAttribute('aria-disabled') !== 'true');
+      const i = items.indexOf(document.activeElement);
+      if (e.key === 'ArrowDown' && items.length) { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+      else if (e.key === 'ArrowUp' && items.length) { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+      else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (i >= 0) runCtx(items[i].dataset.act); }
+      else if (e.key === 'Escape' || e.key === 'Tab') { e.preventDefault(); closeCtx(); }
+    });
+    return ctxEl;
+  }
+
+  function openCtx(x, y, tr, bi) {
+    const el = ensureCtx();
+    const levels = getLevels(tr.dataset.id);
+    ctxTarget = { id: tr.dataset.id, bi };
+    const add = el.querySelector('[data-act="add"]');
+    const del = el.querySelector('[data-act="del"]');
+    add.setAttribute('aria-disabled', String(levels.length >= MAX_BARS));
+    del.setAttribute('aria-disabled', String(levels.length <= 1));
+    el.hidden = false;
+    const w = el.offsetWidth;
+    const h = el.offsetHeight;
+    el.style.left = Math.max(8, Math.min(x, window.innerWidth - w - 8)) + 'px';
+    el.style.top = Math.max(8, Math.min(y, window.innerHeight - h - 8)) + 'px';
+    (add.getAttribute('aria-disabled') === 'true' ? del : add).focus();
+  }
+
+  function closeCtx() {
+    if (ctxEl) ctxEl.hidden = true;
+    ctxTarget = null;
+  }
+
+  function runCtx(act) {
+    const t = ctxTarget;
+    closeCtx();
+    if (!t || !root || !canEdit()) return;
+    const tr = [...tbodyEl().rows].find((r) => r.dataset.id === t.id);
+    if (!tr) return;
+    const levels = getLevels(t.id);
+    if (act === 'add') {
+      if (levels.length >= MAX_BARS) return;
+      levels.push(0);
+    } else {
+      if (levels.length <= 1) return;
+      if (levels[t.bi] > 0 && !window.confirm('이 막대를 삭제할까요? 기록해 둔 잔량이 사라집니다.')) return;
+      levels.splice(t.bi, 1);
+    }
+    setLevels(t.id, levels);
+    syncBars(tr);
+    positionSelection();   // 행 높이가 바뀌므로 선택 테두리를 다시 맞춤
+  }
+
+  function cancelLongPress() {
+    if (longPress) { clearTimeout(longPress.timer); longPress = null; }
+  }
+
+  // 메뉴 바깥을 누르거나 창이 바뀌면 닫기 (한 번만 등록)
+  document.addEventListener('pointerdown', (e) => {
+    if (ctxEl && !ctxEl.hidden && !ctxEl.contains(e.target)) closeCtx();
+  });
+  window.addEventListener('resize', closeCtx);
 
   function setupFill(container) {
     const wrap = container.querySelector('.table-wrap');
     const thead = container.querySelector('thead');
     selBox = container.querySelector('.sel-box');
     handle = container.querySelector('.fill-handle');
-    badgeLayer = container.querySelector('.badge-layer');
     sel = null;
     drag = null;
-
-    // 막대 추가/삭제 버튼
-    badgeLayer.addEventListener('click', (e) => {
-      const b = e.target.closest('.bar-badge');
-      if (!b || !sel || !canEdit()) return;
-      const tr = tbodyEl().rows[sel.r0];
-      if (!tr) return;
-      const id = tr.dataset.id;
-      const i = Number(b.dataset.i);
-      const levels = getLevels(id);
-      if (b.dataset.kind === 'plus') {
-        if (levels.length >= MAX_BARS) return;
-        levels.push(0);
-      } else {
-        if (levels[i] > 0 && !window.confirm('이 막대를 삭제할까요? 기록해 둔 잔량이 사라집니다.')) return;
-        levels.splice(i, 1);
-        if (!levels.length) levels.push(0);
-      }
-      setLevels(id, levels);
-      syncBars(tr);
-      positionSelection();   // 행 높이가 바뀌므로 선택 테두리와 버튼을 다시 맞춤
-    });
 
     function updateDragTarget() {
       const tbody = tbodyEl();
@@ -718,6 +827,54 @@
     if (!root || drag || !sel) return;
     if (!e.target.closest('.table-wrap') && !e.target.closest('.menu')) clearSelection();
   });
+
+  // ── 한 번만 쓰는 기능: 예전 공개 문서의 잔량·가격·소분 가능 개수를 관리자 전용 문서로 옮긴다 ──
+  // 순서: ① 관리자 전용 문서에 쓴다 → ② 공개 문서를 그 값들을 뺀 내용으로 통째로 바꾼다.
+  // (②가 실패해도 ①은 이미 안전하게 저장됐으므로 다시 눌러도 된다)
+  function updateMigrateBar() {
+    const bar = root && root.querySelector('.import-bar');
+    if (bar) bar.hidden = !(canEdit() && legacyCount > 0);
+  }
+
+  async function runMigrate() {
+    if (!root || !canEdit() || legacyCount === 0) return;
+    if (!window.confirm('잔량·가격·소분 가능 개수를 관리자만 볼 수 있는 비공개 문서로 옮기고, 공개 문서에서는 지웁니다.\n먼저 새 보안 규칙을 게시하셨나요? 계속할까요?')) return;
+    const btn = root.querySelector('#importBtn');
+    btn.disabled = true;
+    try {
+      const privRows = {};
+      const pubRows = {};
+      order.forEach((id) => {
+        const d = data[id];
+        if (!d) return;
+        const p = {};
+        const levels = getLevels(id);
+        if (levels.length > 1 || levels[0] > 0) p.levels = levels;
+        if (String(d.price == null ? '' : d.price).trim()) p.price = d.price;
+        if (String(d.portions == null ? '' : d.portions).trim()) p.portions = d.portions;
+        if (Object.keys(p).length) privRows[id] = p;
+        const row = {};
+        Object.keys(d).forEach((k) => { if (!LEGACY_PRIVATE.includes(k)) row[k] = d[k]; });
+        if (row.hasPortions === false) delete row.hasPortions;
+        if (Object.keys(row).length) pubRows[id] = row;
+      });
+      setStatus('saving');
+      const { db, doc, setDoc } = await INKFB.db();
+      await setDoc(doc(db, ...PRIVATE_PATH), { rows: privRows }, { merge: true });          // ① 비공개 문서
+      await setDoc(doc(db, ...DOC_PATH), { order: order.slice(), rows: pubRows });           // ② 공개 문서(통째로 교체)
+      privData = { rows: Object.assign({}, (privData && privData.rows) || {}, privRows) };
+      Object.keys(legacy).forEach((id) => { delete legacy[id]; });
+      legacyCount = 0;
+      saveCache();
+      setStatus('saved');
+    } catch (err) {
+      setStatus(err && err.code === 'permission-denied' ? 'denied' : 'error');
+      showNotice('비공개로 옮기지 못했습니다. 다시 시도해 주세요. (옮기는 도중 실패해도 데이터는 지워지지 않습니다)');
+    } finally {
+      btn.disabled = false;
+      updateMigrateBar();
+    }
+  }
 
   // ── 행 추가 ─────────────────────────────
   // b: 새 행이 들어갈 자리(0부터). b번째 행 "앞"에 빈 행을 끼워 넣는다.
@@ -806,6 +963,10 @@
     hydrateFromCache();   // 전에 받아 둔 내용이 있으면 처음부터 채워서 그림
     container.innerHTML = `
       <p class="notice" role="alert" hidden></p>
+      <div class="import-bar" hidden>
+        <span>잔량·가격·소분 가능 개수를 관리자만 볼 수 있는 비공개 문서로 옮길 수 있습니다. (먼저 새 보안 규칙을 게시해 주세요)</span>
+        <button class="btn btn--primary" type="button" id="importBtn">비공개로 옮기기</button>
+      </div>
       <div class="table-area view-enter">
         <button class="row-add" type="button" title="행 추가" aria-label="이 위치에 행 추가">${ROW_ADD_ICON}</button>
         <ul class="menu" role="listbox" aria-label="본병/소분" hidden></ul>
@@ -816,7 +977,6 @@
             <tbody>${rowsHtml()}</tbody>
           </table>
           <div class="sel-box" hidden></div>
-          <div class="badge-layer"></div>
           <button class="fill-handle" type="button" tabindex="-1" aria-label="아래로 끌어서 채우기" hidden></button>
         </div>
       </div>`;
@@ -824,6 +984,7 @@
     const tbody = container.querySelector('tbody');
     menuEl = container.querySelector('.menu');
     menuFor = null;
+    container.querySelector('#importBtn').addEventListener('click', runMigrate);
     setupRowAdd(container);
     setupFill(container);
     setupBarFit(container);
@@ -903,7 +1064,46 @@
       else if (e.key === 'Escape') { e.preventDefault(); closeMenu(true); }
       else if (e.key === 'Tab') { closeMenu(false); }
     });
-    container.querySelector('.table-wrap').addEventListener('scroll', () => closeMenu(false), { passive: true });
+    container.querySelector('.table-wrap').addEventListener('scroll', () => { closeMenu(false); closeCtx(); }, { passive: true });
+
+    // 잔량 막대 우클릭(키보드는 메뉴 키 / Shift+F10) → 막대 추가·삭제 메뉴
+    tbody.addEventListener('contextmenu', (e) => {
+      const line = e.target.closest('.bar-line');
+      if (!line || !canEdit()) return;
+      e.preventDefault();
+      cancelLongPress();
+      const tr = line.closest('tr');
+      const lines = [...tr.querySelectorAll('.bar-line')];
+      let x = e.clientX;
+      let y = e.clientY;
+      if (!x && !y) { const r = line.getBoundingClientRect(); x = r.left + 24; y = r.bottom; }   // 키보드로 열었을 때
+      selectCell(line.closest('td'));
+      openCtx(x, y, tr, lines.indexOf(line));
+    });
+    // 터치(폰): 막대를 길게 누르면 같은 메뉴. (iOS 는 contextmenu 이벤트가 없어서 직접 감시)
+    tbody.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' || !canEdit()) return;
+      const line = e.target.closest('.bar-line');
+      if (!line) return;
+      cancelLongPress();
+      longPress = {
+        x: e.clientX,
+        y: e.clientY,
+        timer: setTimeout(() => {
+          longPress = null;
+          suppressClick = true;
+          setTimeout(() => { suppressClick = false; }, 800);
+          const tr = line.closest('tr');
+          selectCell(line.closest('td'));
+          openCtx(e.clientX, e.clientY, tr, [...tr.querySelectorAll('.bar-line')].indexOf(line));
+        }, 550),
+      };
+    });
+    tbody.addEventListener('pointermove', (e) => {
+      if (longPress && Math.hypot(e.clientX - longPress.x, e.clientY - longPress.y) > 8) cancelLongPress();
+    });
+    tbody.addEventListener('pointerup', cancelLongPress);
+    tbody.addEventListener('pointercancel', cancelLongPress);
 
     // 잉크명 칸의 ✦ 버튼: 펄 잉크 표시 켜기/끄기
     tbody.addEventListener('click', (e) => {
@@ -919,6 +1119,7 @@
     tbody.addEventListener('click', (e) => {
       const seg = e.target.closest('.seg');
       if (!seg || !canEdit()) return;
+      if (suppressClick) { suppressClick = false; return; }          // 길게 눌러 메뉴를 연 직후의 클릭은 잔량을 바꾸지 않음
       const row = seg.closest('tr');
       const id = row.dataset.id;
       const i = Number(seg.dataset.i);
@@ -929,13 +1130,14 @@
       levels[bi] = levels[bi] === i ? 0 : i;                       // 같은 칸을 다시 누르면 0
       setLevels(id, levels);
       paintBar(lines[bi].querySelector('.bar'), levels[bi]);
-      selectCell(seg.closest('td'));                               // 선택 → +/− 버튼 표시
-      positionSelection();                                         // 마지막 막대가 비었는지에 따라 +/− 가 바뀜
+      selectCell(seg.closest('td'));
     });
   }
 
   function unmount() {
     closeMenu(false);
+    closeCtx();
+    cancelLongPress();
     if (resizeObs) { resizeObs.disconnect(); resizeObs = null; }
     cancelAnimationFrame(dragRaf);
     drag = null;
