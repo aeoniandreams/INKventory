@@ -47,9 +47,10 @@
   const LEVEL_COL = COLUMNS.findIndex((c) => c.key === 'level');
   const BAR_MIN = 180;        // 막대 최소 길이(px). 항상 10의 배수
   const MAX_BARS = 6;         // 한 칸에 둘 수 있는 막대(병) 수의 안전 상한. 보통은 3개 이내
-  // 일반 모드 배치: 가격 열은 없애고, 잔량 열은 내용 없이 좁게 펄 칸 색으로 채운다. (CSS html[data-layout="normal"])
-  const NORMAL_LEVEL_W = 72;
-  const NORMAL_W = COLUMNS.reduce((sum, c) => sum + (c.key === 'price' ? 0 : c.key === 'level' ? NORMAL_LEVEL_W : c.width), 0);
+  // 일반 모드 배치: 가격 열은 없애고, 잔량 열은 내용 없이 펄 칸 색으로 채운다. 소분 가능 열은 좁게(O 표시만). (CSS html[data-layout="normal"])
+  const NORMAL_LEVEL_W = 130;     // 일반 모드에서 잔량 열과 소분 가능 열의 너비는 서로 맞바꾼 값 (130 ↔ 72)
+  const NORMAL_PORTIONS_W = 72;
+  const NORMAL_W = COLUMNS.reduce((sum, c) => sum + (c.key === 'price' ? 0 : c.key === 'level' ? NORMAL_LEVEL_W : c.key === 'portions' ? NORMAL_PORTIONS_W : c.width), 0);
 
   // 본병/소분 드롭다운 선택지 (저장되는 값은 보이는 글자 그대로)
   const KIND_OPTIONS = [
