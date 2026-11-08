@@ -123,7 +123,7 @@ button { font: inherit; color: inherit; }
 .stat__dot--sample { background: #b4bac7; }
 .stat--total { grid-column: 1 / -1; }
 .stat__dot--pearl { background: #e6e9f1; box-shadow: inset 0 0 0 1.5px #8892ab; }      /* 펄: 펄 칸과 같은 색으로 채운 점 (상자 바탕과 구분되도록 진한 테두리) */
-.stat__dot--standard { background: transparent; box-shadow: inset 0 0 0 1px #b9c0d0; }  /* 스탠다드: 속이 빈 점 (연한 가는 테두리) */
+.stat__dot--standard { background: #f7f8fb; box-shadow: inset 0 0 0 1px #b9c0d0; }  /* 스탠다드: 스탠다드 잉크 칸(표 바탕색)으로 채운 점 */
 .stat__num { display: block; margin-top: 2px; font-size: 20px; font-weight: 700; line-height: 1.2; color: var(--accent); font-variant-numeric: tabular-nums; }
 
 .sidebar__foot {
@@ -415,15 +415,6 @@ html[data-layout="normal"] .grid tr.is-sample td.c-lockable { background-image: 
 .menu [role="menuitem"]:hover, .menu [role="menuitem"]:focus { background: var(--accent-soft); }
 .menu [role="menuitem"][aria-disabled="true"] { color: var(--muted); opacity: .5; cursor: default; }
 .menu [role="menuitem"][aria-disabled="true"]:hover { background: none; }
-
-/* 한 번만 쓰는 기능(잔량·가격·소분 가능을 관리자 전용 문서로 옮기기) 안내 바 */
-.import-bar {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  margin: 0 0 12px; padding: 10px 14px;
-  border-radius: 10px; background: var(--accent-soft); color: var(--accent); font-size: 14px;
-}
-.import-bar[hidden] { display: none; }
-.import-bar .btn { flex: none; }
 
 /* 칸 선택 + 채우기 핸들 (스프레드시트처럼) */
 .sel-box {

@@ -16,8 +16,7 @@
 //  ② 관리자 전용 문서 inventory/inkPrivate — 읽기·쓰기 모두 관리자만 (일반 모드에서는 아예 불러오지 않음)
 //     { rows: { "<행 id>": { levels:[막대별 잔량], price, portions } } }
 //   - hasPortions 는 "소분 가능 개수가 적혀 있는지"만 알려 주는 공개 표시. 일반 모드는 이것으로 O 를 그린다.
-//   - 예전 데이터(공개 문서 안의 level / price / portions)는 관리자 모드의 "비공개로 옮기기" 버튼으로 ②로 옮긴다.
-//     옮기기 전에는 관리자가 예전 값을 그대로 보고 고칠 수 있다. 예전 level 숫자 하나는 첫 번째 막대로 읽는다.
+//   - 공개 문서에 혹시 level / price / portions 가 들어 있어도 읽을 때 무시한다(비공개 값은 ② 에서만 읽는다).
 //   - 행마다 바뀌지 않는 id 를 가진다. 중간에 행을 끼워 넣어도 다른 행의 데이터는 건드리지 않고 order 만 바뀐다.
 //   - order 가 없는 예전 데이터는 id "0"~"269" 순서로 본다.
 (() => {
@@ -66,8 +65,6 @@
   // 관리자 전용 데이터(잔량·가격·소분 가능 개수): 관리자 모드에서만 불러온다
   let privState = 'idle';       // idle | loading | ready | error
   let privData = null;          // 관리자 전용 문서 내용 { rows: {...} }
-  const legacy = {};            // 행 id → 공개 문서에 남아 있던 예전 비공개 필드 (옮기기 전에만 있음)
-  let legacyCount = 0;
   let root = null;              // 현재 화면 컨테이너
   const pending = new Map();    // 아직 저장 안 된 변경. 키: "id|필드" 또는 "@order"
   let saveTimer = null;
@@ -215,27 +212,22 @@
     Object.keys(rows).forEach((id) => { if (!known.has(id)) loaded.push(id); }); // 안전장치: 데이터가 있는데 순서에 없는 행
     order = loaded;
     Object.keys(data).forEach((id) => { delete data[id]; });
-    Object.keys(legacy).forEach((id) => { delete legacy[id]; });
-    legacyCount = 0;
     Object.keys(rows).forEach((id) => {
       const src = rows[id] || {};
       const pub = {};
-      const old = {};
-      Object.keys(src).forEach((k) => { if (LEGACY_PRIVATE.includes(k)) old[k] = src[k]; else pub[k] = src[k]; });
-      // 일반 모드에서 O 를 그릴 공개 표시. 옮기기 전 예전 데이터는 portions 가 적혀 있는지로 대신 판단
-      pub.hasPortions = typeof src.hasPortions === 'boolean' ? src.hasPortions : hasText(src.portions);
+      Object.keys(src).forEach((k) => { if (!LEGACY_PRIVATE.includes(k)) pub[k] = src[k]; });   // 비공개 필드는 공개 문서에서 읽지 않는다
+      pub.hasPortions = src.hasPortions === true;   // 일반 모드에서 O 를 그릴 공개 표시
       data[id] = pub;
-      if (Object.keys(old).length) { legacy[id] = old; legacyCount++; }
     });
     if (privData) mergePrivate();   // 관리자 전용 값을 이미 불러왔다면 다시 합침
   }
 
-  // 관리자 전용 값(관리자 전용 문서, 없으면 예전 공개 문서에 남은 값)을 화면용 data 에 합친다. 관리자 모드에서만 호출됨.
+  // 관리자 전용 문서의 값을 화면용 data 에 합친다. 관리자 모드에서만 호출됨.
   function mergePrivate() {
     const rows = (privData && privData.rows) || {};
     Object.keys(data).forEach((id) => {
-      const merged = Object.assign({}, legacy[id] || {}, rows[id] || {});
-      LEGACY_PRIVATE.forEach((k) => { if (merged[k] !== undefined) data[id][k] = merged[k]; });
+      const p = rows[id] || {};
+      PRIVATE_FIELDS.forEach((k) => { if (p[k] !== undefined) data[id][k] = p[k]; });
     });
   }
 
@@ -476,7 +468,6 @@
     root.classList.toggle('is-editable', edit);
     if (!edit) { closeMenu(false); clearSelection(); }
     if (isAdminMode()) INKFB.db().catch(() => {});   // 관리자 모드가 되면 저장용 SDK 를 미리 받아 둠 (첫 저장이 빠르게)
-    updateMigrateBar();
     showStatus();
   }
 
@@ -829,54 +820,6 @@
     if (!e.target.closest('.table-wrap') && !e.target.closest('.menu')) clearSelection();
   });
 
-  // ── 한 번만 쓰는 기능: 예전 공개 문서의 잔량·가격·소분 가능 개수를 관리자 전용 문서로 옮긴다 ──
-  // 순서: ① 관리자 전용 문서에 쓴다 → ② 공개 문서를 그 값들을 뺀 내용으로 통째로 바꾼다.
-  // (②가 실패해도 ①은 이미 안전하게 저장됐으므로 다시 눌러도 된다)
-  function updateMigrateBar() {
-    const bar = root && root.querySelector('.import-bar');
-    if (bar) bar.hidden = !(canEdit() && legacyCount > 0);
-  }
-
-  async function runMigrate() {
-    if (!root || !canEdit() || legacyCount === 0) return;
-    if (!window.confirm('잔량·가격·소분 가능 개수를 관리자만 볼 수 있는 비공개 문서로 옮기고, 공개 문서에서는 지웁니다.\n먼저 새 보안 규칙을 게시하셨나요? 계속할까요?')) return;
-    const btn = root.querySelector('#importBtn');
-    btn.disabled = true;
-    try {
-      const privRows = {};
-      const pubRows = {};
-      order.forEach((id) => {
-        const d = data[id];
-        if (!d) return;
-        const p = {};
-        const levels = getLevels(id);
-        if (levels.length > 1 || levels[0] > 0) p.levels = levels;
-        if (String(d.price == null ? '' : d.price).trim()) p.price = d.price;
-        if (String(d.portions == null ? '' : d.portions).trim()) p.portions = d.portions;
-        if (Object.keys(p).length) privRows[id] = p;
-        const row = {};
-        Object.keys(d).forEach((k) => { if (!LEGACY_PRIVATE.includes(k)) row[k] = d[k]; });
-        if (row.hasPortions === false) delete row.hasPortions;
-        if (Object.keys(row).length) pubRows[id] = row;
-      });
-      setStatus('saving');
-      const { db, doc, setDoc } = await INKFB.db();
-      await setDoc(doc(db, ...PRIVATE_PATH), { rows: privRows }, { merge: true });          // ① 비공개 문서
-      await setDoc(doc(db, ...DOC_PATH), { order: order.slice(), rows: pubRows });           // ② 공개 문서(통째로 교체)
-      privData = { rows: Object.assign({}, (privData && privData.rows) || {}, privRows) };
-      Object.keys(legacy).forEach((id) => { delete legacy[id]; });
-      legacyCount = 0;
-      saveCache();
-      setStatus('saved');
-    } catch (err) {
-      setStatus(err && err.code === 'permission-denied' ? 'denied' : 'error');
-      showNotice('비공개로 옮기지 못했습니다. 다시 시도해 주세요. (옮기는 도중 실패해도 데이터는 지워지지 않습니다)');
-    } finally {
-      btn.disabled = false;
-      updateMigrateBar();
-    }
-  }
-
   // ── 행 추가 ─────────────────────────────
   // b: 새 행이 들어갈 자리(0부터). b번째 행 "앞"에 빈 행을 끼워 넣는다.
   function insertRow(b) {
@@ -964,10 +907,6 @@
     hydrateFromCache();   // 전에 받아 둔 내용이 있으면 처음부터 채워서 그림
     container.innerHTML = `
       <p class="notice" role="alert" hidden></p>
-      <div class="import-bar" hidden>
-        <span>잔량·가격·소분 가능 개수를 관리자만 볼 수 있는 비공개 문서로 옮길 수 있습니다. (먼저 새 보안 규칙을 게시해 주세요)</span>
-        <button class="btn btn--primary" type="button" id="importBtn">비공개로 옮기기</button>
-      </div>
       <div class="table-area view-enter">
         <button class="row-add" type="button" title="행 추가" aria-label="이 위치에 행 추가">${ROW_ADD_ICON}</button>
         <ul class="menu" role="listbox" aria-label="본병/소분" hidden></ul>
@@ -985,7 +924,6 @@
     const tbody = container.querySelector('tbody');
     menuEl = container.querySelector('.menu');
     menuFor = null;
-    container.querySelector('#importBtn').addEventListener('click', runMigrate);
     setupRowAdd(container);
     setupFill(container);
     setupBarFit(container);
