@@ -4,7 +4,7 @@
   --ink: #1f2430;
   --muted: #6f7380;
   --line: #d7dbe4;
-  --accent: #2b3a67;
+  --accent: #353c4a;
   --accent-soft: #e8ebf4;
 
   --sidebar-w: 264px;
@@ -119,8 +119,8 @@ button { font: inherit; color: inherit; }
 }
 .stat__label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
 .stat__dot { width: 8px; height: 8px; border-radius: 50%; }
-.stat__dot--bottle { background: #2b3a67; }
-.stat__dot--sample { background: #aab6e0; }
+.stat__dot--bottle { background: #353c4a; }
+.stat__dot--sample { background: #b4bac7; }
 .stat--total { grid-column: 1 / -1; }
 .stat__dot--pearl { background: #9a96e6; }                                  /* 펄: 색이 채워진 점 */
 .stat__dot--standard { background: transparent; box-shadow: inset 0 0 0 1.5px #98a2bb; } /* 스탠다드: 속이 빈 점 */
@@ -213,11 +213,11 @@ button { font: inherit; color: inherit; }
 .row-add.is-on { opacity: 1; visibility: visible; }
 .row-add svg { display: block; transform: scaleX(-1); }
 .row-add::before { content: ''; position: absolute; inset: -6px; } /* 누르기 쉽게 터치 영역 확장 */
-.row-add:hover { color: #1b274d; }
+.row-add:hover { color: #2b313d; }
 
 /* 방금 추가한 행: 잠깐 강조 */
 .grid tbody tr.row-new td { animation: row-flash 1.4s ease-out; }
-@keyframes row-flash { from { background-color: #dfe4f2; } to { background-color: transparent; } }
+@keyframes row-flash { from { background-color: #d9deea; } to { background-color: transparent; } }
 
 .table-wrap {
   position: relative; width: 100%;       /* 화면 너비를 다 쓰고, 남는 너비는 잔량 열이 가져간다 */
@@ -279,8 +279,8 @@ button { font: inherit; color: inherit; }
   background: var(--chip-bg); color: var(--chip-fg);
 }
 .pick-text:empty { display: none; }
-.pick-text[data-kind="bottle"] { --chip-bg: #2b3a67; --chip-fg: #ffffff; }  /* 본병: 사이트 남색 */
-.pick-text[data-kind="sample"] { --chip-bg: #dfe4f1; --chip-fg: #2b3a67; }  /* 소분: 연한 남색(페리윙클) */
+.pick-text[data-kind="bottle"] { --chip-bg: #353c4a; --chip-fg: #ffffff; }  /* 본병: 강조색(어두운 회청색) */
+.pick-text[data-kind="sample"] { --chip-bg: #d9deea; --chip-fg: #353c4a; }  /* 소분: 연한 회청색 */
 .is-editable .pick-text:not(:empty)::after { /* 칩 안의 ▾ (관리자 모드에서만) */
   content: ''; flex: none; width: 5px; height: 5px; margin: -3px 1px 0 0;
   border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
@@ -343,7 +343,7 @@ button { font: inherit; color: inherit; }
 .bar {
   --track: #e6e8ee;
   --divider: #c6c9d3;      /* 빈 막대 위의 선: 옅은 회색 */
-  --divider-in: #243059;   /* 채워진 막대 위의 선: 남색보다 아주 약간 어두워 거의 안 보임 */
+  --divider-in: #303643;   /* 채워진 막대 위의 선: 막대 색보다 아주 약간 어두워 거의 안 보임 */
   position: relative; display: flex;
   width: var(--bar-w, 180px); margin-left: var(--bar-ml, 0px); height: 28px;
 }
@@ -356,7 +356,7 @@ button { font: inherit; color: inherit; }
   position: absolute; left: 0; top: 0; bottom: 0;
   transition: width .15s var(--ease);
 }
-.track .pv   { width: calc(var(--pv, 0) * 10%); background: #aab3cf; } /* 마우스를 올렸을 때 미리보기 */
+.track .pv   { width: calc(var(--pv, 0) * 10%); background: #b0b6c3; } /* 마우스를 올렸을 때 미리보기 */
 .track .fill { width: calc(var(--lv, 0) * 10%); background: var(--accent); }
 
 /* 클릭 영역 10칸(눈에 안 보임) + 칸 사이 구분선 */
@@ -389,7 +389,7 @@ button { font: inherit; color: inherit; }
 .is-editable td.c-name:hover .pearl-btn, .is-editable td.c-name:focus-within .pearl-btn,
 .pearl-btn:focus-visible { opacity: 1; }
 @media (pointer: coarse) { .is-editable .pearl-btn { opacity: .5; } }
-.pearl-btn[aria-pressed="true"] { color: #2f528a; }
+.pearl-btn[aria-pressed="true"] { color: #353c4a; }
 .pearl-btn:hover { background: rgba(255, 255, 255, .6); color: var(--accent); }
 .is-editable td.c-name .cell { padding-right: 32px; }
 
@@ -406,7 +406,7 @@ button { font: inherit; color: inherit; }
   border: 1px solid var(--accent);
 }
 .sel-box[hidden], .fill-handle[hidden] { display: none; }
-.is-filling .sel-box { border-style: dashed; background: rgba(43, 58, 103, .07); }
+.is-filling .sel-box { border-style: dashed; background: rgba(53, 60, 74, .07); }
 .is-filling { cursor: crosshair; user-select: none; }
 .fill-handle {
   position: absolute; z-index: 1; width: 9px; height: 9px; margin: -5px 0 0 -5px; padding: 0;
