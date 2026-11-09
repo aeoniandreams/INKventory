@@ -389,6 +389,27 @@ button { font: inherit; color: inherit; }
   background: #eef0f6; box-shadow: inset 0 0 0 1px #cfd4e0;
 }
 .swatch img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.swatch.has-img { cursor: zoom-in; }
+.swatch.has-img:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* 발색 원본 보기: 화면 가득 어둡게 가리고 사진을 가운데에. 어두운 부분을 누르면 닫힘 */
+.lightbox {
+  position: fixed; inset: 0; z-index: 200;
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px; box-sizing: border-box;
+  background: rgba(14, 17, 26, .72);
+  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+  overscroll-behavior: contain; touch-action: none; cursor: zoom-out;
+  outline: none; animation: lightbox-in .18s ease-out;
+}
+.lightbox__img {
+  display: block; max-width: 100%; max-height: 100%; width: auto; height: auto;
+  object-fit: contain; border-radius: 10px; background: #fff; cursor: default;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .45);
+}
+html.has-lightbox { overflow: hidden; }
+@keyframes lightbox-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .lightbox { animation: none; } }
 .swatch.has-img::after {   /* 사진 위에 얇은 테두리 */
   content: ''; position: absolute; inset: 0; border-radius: 50%;
   box-shadow: inset 0 0 0 1px rgba(31, 36, 48, .14); pointer-events: none;

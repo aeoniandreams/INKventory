@@ -463,9 +463,63 @@
     if (cur && cur.getAttribute('src') === src) return;
     holder.innerHTML = `<img src="${esc(src)}" alt="" loading="lazy" decoding="async" width="28" height="28">`;
     holder.classList.add('has-img');
-    holder.setAttribute('role', 'img');
-    holder.setAttribute('aria-label', '발색 사진');
+    holder.setAttribute('role', 'button');
+    holder.setAttribute('tabindex', '0');
+    holder.setAttribute('aria-label', '발색 사진 크게 보기');
   }
+
+  // 원을 누르면 원본(img/swatch/full/ 의 같은 파일명)을 화면 가득 보여 주고, 뒤는 어둡게 가린다.
+  // 어두운 부분을 누르면(또는 Esc) 닫힌다. 원본이 불러와지는 동안에는 작은 사진을 먼저 보여 준다.
+  let lightbox = null;
+  let lightboxFrom = null;
+
+  function fullSrc(src) { return src.replace(/^img\/swatch\//, 'img/swatch/full/'); }
+
+  function closeLightbox() {
+    if (!lightbox) return;
+    lightbox.remove();
+    lightbox = null;
+    document.documentElement.classList.remove('has-lightbox');
+    if (lightboxFrom && lightboxFrom.isConnected) { try { lightboxFrom.focus({ preventScroll: true }); } catch (err) { /* 무시 */ } }
+    lightboxFrom = null;
+  }
+
+  function openLightbox(holder) {
+    const img = holder.querySelector('img');
+    if (!img) return;
+    closeLightbox();
+    closeCtx();
+    const thumb = img.getAttribute('src');
+    const full = fullSrc(thumb);
+    const tr = holder.closest('tr');
+    const d = tr && data[tr.dataset.id];
+    const label = d ? [d.brand, d.name].filter(Boolean).join(' ') : '';
+
+    lightbox = document.createElement('div');
+    lightbox.className = 'lightbox';
+    lightbox.setAttribute('role', 'dialog');
+    lightbox.setAttribute('aria-modal', 'true');
+    lightbox.setAttribute('aria-label', label ? `${label} 발색 사진` : '발색 사진');
+    lightbox.tabIndex = -1;
+    const big = document.createElement('img');
+    big.className = 'lightbox__img';
+    big.alt = label;
+    big.src = thumb;                       // 원본이 오기 전까지 작은 사진을 보여 줌
+    lightbox.appendChild(big);
+    lightbox.addEventListener('click', (e) => { if (e.target === lightbox) closeLightbox(); });   // 어두운 부분만 닫기
+    document.body.appendChild(lightbox);
+    document.documentElement.classList.add('has-lightbox');
+    lightboxFrom = holder;
+    lightbox.focus({ preventScroll: true });
+
+    const loader = new Image();
+    loader.onload = () => { if (lightbox && big.isConnected) big.src = full; };
+    loader.src = full;                     // 원본이 없으면 작은 사진을 그대로 둠
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (lightbox && e.key === 'Escape') { e.preventDefault(); closeLightbox(); }
+  });
 
   function fillRow(row) {
     syncSwatch(row);
@@ -1082,6 +1136,19 @@
     tbody.addEventListener('pointerup', cancelLongPress);
     tbody.addEventListener('pointercancel', cancelLongPress);
 
+    // 발색 원: 누르면(키보드는 Enter / Space) 원본 사진 보기
+    tbody.addEventListener('click', (e) => {
+      const sw = e.target.closest('.swatch.has-img');
+      if (sw) openLightbox(sw);
+    });
+    tbody.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const sw = e.target.closest('.swatch.has-img');
+      if (!sw || e.target !== sw) return;
+      e.preventDefault();
+      openLightbox(sw);
+    });
+
     // 잉크명 칸의 ✦ 버튼: 펄 잉크 표시 켜기/끄기
     tbody.addEventListener('click', (e) => {
       const btn = e.target.closest('.pearl-btn');
@@ -1112,6 +1179,7 @@
   }
 
   function unmount() {
+    closeLightbox();
     closeMenu(false);
     closeCtx();
     cancelLongPress();
