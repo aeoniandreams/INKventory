@@ -380,6 +380,20 @@ button { font: inherit; color: inherit; }
 .seg.in:not(:last-child)::after { background: var(--divider-in); }
 .bar:not([inert]) .seg { cursor: pointer; }
 
+/* 발색 열: 칸마다 원 하나. 사진이 있으면 원 안에 채워진다 (img/swatch/) */
+.grid th.col-swatch { text-align: center; padding: 0 6px; }
+.grid td.c-swatch { padding: 0; }
+.swatch {
+  position: relative; display: block; width: 28px; height: 28px; margin: 0 auto;
+  border-radius: 50%; overflow: hidden;
+  background: #eef0f6; box-shadow: inset 0 0 0 1px #cfd4e0;
+}
+.swatch img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.swatch.has-img::after {   /* 사진 위에 얇은 테두리 */
+  content: ''; position: absolute; inset: 0; border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(31, 36, 48, .14); pointer-events: none;
+}
+
 /* 펄 잉크: 잉크명 칸을 연한 회청색으로. 열 제목 셀(#dfe7f7)보다 약간 밝고 본문 바탕(#f7f8fb)보다는 어둡다 */
 .grid tbody tr.is-pearl td.c-name { background-color: #e6e9f1; }
 @media (hover: hover) {

@@ -35,10 +35,11 @@
   // width 는 기본 너비. 잔량 열만 화면이 넓으면 늘어난다(width 는 그때의 최소값).
   const COLUMNS = [
     { key: 'brand',    label: '브랜드',          width: 180, max: 100 },
-    { key: 'name',     label: '잉크명',          width: 180, max: 100, pearlToggle: true },   // 펄 잉크는 셀을 연한 파랑으로 칠함
+    { key: 'name',     label: '잉크명',          width: 260, max: 100, pearlToggle: true },   // 펄 잉크는 셀을 연한 파랑으로 칠함
     { key: 'kind',     label: '본병/소분',       width: 128, pick: true },   // 클릭하면 드롭다운
+    { key: 'swatch',   label: '발색',            width: 64 },                // 잉크 발색 사진이 들어가는 원 (img/swatch/ 의 사진)
     { key: 'level',    label: '잔량',            width: 205 },               // 막대 180px + 좌우 여백 12px씩 + 오른쪽 선 1px
-    { key: 'note',     label: '비고',            width: 260, max: 300 },
+    { key: 'note',     label: '비고',            width: 180, max: 300 },
     { key: 'portions', label: '소분 가능 (5ml)', width: 130, max: 20, lockable: true },
     { key: 'price',    label: '가격',            width: 110, max: 50, lockable: true },
   ];
@@ -382,6 +383,7 @@
   function rowHtml(id, n) {
     const cells = COLUMNS.map((c) => {
       if (c.key === 'level') return `<td class="c-level col-level"><div class="bars">${lineHtml()}</div></td>`;
+      if (c.key === 'swatch') return `<td class="c-swatch col-swatch"><span class="swatch"></span></td>`;
       if (c.pick) {
         return `<td class="c-text col-${c.key}"><button class="pick" type="button" data-f="${c.key}" data-label="${c.label}" aria-label="${c.label} ${n}행" aria-haspopup="listbox" aria-expanded="false" tabindex="-1"><span class="pick-text"></span></button></td>`;
       }
@@ -431,7 +433,42 @@
     if (btn) btn.setAttribute('aria-pressed', String(pearl));
   }
 
+  // ── 발색 사진 ──
+  // 사진 파일은 저장소의 img/swatch/ 에 두고, img/swatch/manifest.json 에 { "행 id": "img/swatch/파일명?v=버전" } 으로 연결한다.
+  // (사진을 건네주면 작은 정사각형으로 잘라 넣고 이 목록을 갱신해 올린다. 링크를 따로 만들 필요가 없다)
+  let swatchMap = null;
+
+  async function loadSwatches() {
+    if (swatchMap) return;
+    swatchMap = {};
+    try {
+      const r = await fetch('img/swatch/manifest.json', { cache: 'no-cache' });   // 사진 자체는 오래 보관, 목록은 매번 확인
+      if (r.ok) swatchMap = await r.json();
+    } catch (err) { /* 사진이 없으면 빈 원 */ }
+    if (root) root.querySelectorAll('tbody tr').forEach(syncSwatch);
+  }
+
+  function syncSwatch(tr) {
+    const holder = tr.querySelector('.swatch');
+    if (!holder) return;
+    const src = swatchMap && swatchMap[tr.dataset.id];
+    const cur = holder.querySelector('img');
+    if (!src) {
+      if (cur) cur.remove();
+      holder.classList.remove('has-img');
+      holder.removeAttribute('role');
+      holder.removeAttribute('aria-label');
+      return;
+    }
+    if (cur && cur.getAttribute('src') === src) return;
+    holder.innerHTML = `<img src="${esc(src)}" alt="" loading="lazy" decoding="async" width="28" height="28">`;
+    holder.classList.add('has-img');
+    holder.setAttribute('role', 'img');
+    holder.setAttribute('aria-label', '발색 사진');
+  }
+
   function fillRow(row) {
+    syncSwatch(row);
     const d = data[row.dataset.id];
     if (!d) return;
     syncPearl(row);
@@ -928,6 +965,7 @@
     setupFill(container);
     setupBarFit(container);
     fillAll();
+    loadSwatches();
     applyEditable();
     if (loadState === 'error') loadState = 'idle'; // 오류였다면 화면에 다시 들어올 때 재시도
     load();
