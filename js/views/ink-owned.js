@@ -518,8 +518,10 @@
     const repo = swatchMap && swatchMap[id];
     if (repo) return { thumb: repo, full: fullSrc(repo) };
     const d = data[id];
-    const key = d && normName((d.brand || '') + (d.name || ''));
-    const fid = key && driveMap[key];
+    // 콜라보 브랜드("나가사와 고베 X 큐포도")는 가장 앞의 이름("나가사와 고베")만 써도 찾는다. 전체 이름으로 지어도 된다.
+    const brand = (d && d.brand) || '';
+    const lead = brand.split(/\s+[xX×]\s+/)[0];
+    const fid = d && (driveMap[normName(brand + (d.name || ''))] || (lead !== brand && driveMap[normName(lead + (d.name || ''))]));
     if (fid) {
       const u = 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(fid) + '&sz=w';
       return { thumb: u + '96', full: u + '1600' };
