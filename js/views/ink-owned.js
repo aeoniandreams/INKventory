@@ -405,6 +405,144 @@
     clearSelection();
     root.querySelector('tbody').innerHTML = rowsHtml();
     fillAll();
+    prevOrder = null;
+    renderBrands();
+  }
+
+  // ── 브랜드별 잉크 개수 (표 왼쪽 패널) ──
+  // 표의 브랜드 칸 글자 그대로 묶는다("글입다" 와 "글입다 X 민음사" 는 다른 브랜드). 잉크명이 있는 행만 센다(사이드바 '잉크 개수'와 같은 기준).
+  // 순서는 표에 처음 나온 순서. 이름을 누르면 표가 그 브랜드의 첫 행으로 이동.
+  function renderBrands() {
+    const list = root && root.querySelector('.brand-list');
+    if (!list) return;
+    const groups = [];
+    const byName = new Map();
+    let total = 0;
+    order.forEach((id) => {
+      const d = data[id] || {};
+      if (!String(d.name || '').trim()) return;
+      const b = String(d.brand || '').trim() || '(브랜드 없음)';
+      let g = byName.get(b);
+      if (!g) { g = { b, n: 0, id }; byName.set(b, g); groups.push(g); }
+      g.n++;
+      total++;
+    });
+    list.innerHTML = groups.map((g) => `<li><button type="button" data-id="${esc(g.id)}" title="${esc(g.b)}"><span class="bn">${esc(g.b)}</span><span class="bc">${g.n}</span></button></li>`).join('');
+    const sum = root.querySelector('.brand-panel__sum');
+    if (sum) sum.textContent = `${groups.length}곳 · ${total}개`;
+  }
+
+  // ── 정렬 ──
+  // 브랜드 가나다순 → 같은 브랜드 안에서 잉크명 가나다순. 숫자는 크기순(No.22 < No.79), 영문은 대소문자 무시.
+  // 글자 종류 순서: 기호 → 숫자 → 한글 → 영문 → 그 밖(그리스 문자 등). 한글이 있는 이름에서는 한자를 무시(한자 뒤의 한글 읽기로 정렬).
+  // 그래서 "글입다" → "글입다 만우절 에디션" → "글입다 X 민음사" 처럼 기본 브랜드가 앞, 한글 변형, 콜라보(X) 순이 된다.
+  let prevOrder = null;   // 정렬 직전 순서 (되돌리기용)
+
+  function sortText(s) {
+    let t = String(s == null ? '' : s).normalize('NFC').toLowerCase();
+    if (/[가-힣ㄱ-ㆎ]/.test(t)) t = t.replace(/[㐀-䶿一-鿿豈-﫿]/g, '');
+    return t.replace(/\s+/g, ' ').trim();
+  }
+
+  function charRank(cp) {
+    if (cp === 32) return 0;
+    if (cp >= 48 && cp <= 57) return 2;
+    if ((cp >= 0xac00 && cp <= 0xd7a3) || (cp >= 0x3131 && cp <= 0x318e) || (cp >= 0x1100 && cp <= 0x11ff)) return 3;
+    if (cp >= 97 && cp <= 122) return 4;
+    if (cp < 128 || (cp >= 0x2000 && cp <= 0x2bff)) return 1;
+    return 5;
+  }
+
+  function compareText(a, b) {
+    const isDigit = (c) => c >= 48 && c <= 57;
+    let i = 0;
+    let j = 0;
+    while (i < a.length && j < b.length) {
+      const ca = a.codePointAt(i);
+      const cb = b.codePointAt(j);
+      if (isDigit(ca) && isDigit(cb)) {
+        let ei = i; while (ei < a.length && isDigit(a.charCodeAt(ei))) ei++;
+        let ej = j; while (ej < b.length && isDigit(b.charCodeAt(ej))) ej++;
+        const na = Number(a.slice(i, ei));
+        const nb = Number(b.slice(j, ej));
+        if (na !== nb) return na < nb ? -1 : 1;
+        i = ei; j = ej;
+        continue;
+      }
+      if (ca !== cb) {
+        const ra = charRank(ca);
+        const rb = charRank(cb);
+        if (ra !== rb) return ra - rb;
+        return ca < cb ? -1 : 1;
+      }
+      i += ca > 0xffff ? 2 : 1;
+      j += cb > 0xffff ? 2 : 1;
+    }
+    return (a.length - i) - (b.length - j);   // 한쪽이 먼저 끝나면 짧은 쪽이 앞
+  }
+
+  function sortedOrder() {
+    const keys = new Map(order.map((id) => { const d = data[id] || {}; return [id, { b: sortText(d.brand), n: sortText(d.name) }]; }));
+    return order.slice().sort((x, y) => {
+      const a = keys.get(x);
+      const b = keys.get(y);
+      if (!a.b !== !b.b) return a.b ? -1 : 1;                  // 브랜드가 비어 있는 행은 맨 뒤
+      const c = compareText(a.b, b.b);
+      if (c) return c;
+      if (!a.n !== !b.n) return a.n ? -1 : 1;                  // 같은 브랜드 안에서 잉크명이 빈 행은 뒤
+      return compareText(a.n, b.n);                            // 완전히 같으면 지금 순서 유지 (정렬은 안정적)
+    });
+  }
+
+  function reorderRows() {
+    const tbody = tbodyEl();
+    const byId = new Map([...tbody.rows].map((tr) => [tr.dataset.id, tr]));
+    const frag = document.createDocumentFragment();
+    order.forEach((id) => { const tr = byId.get(id); if (tr) frag.appendChild(tr); });
+    tbody.appendChild(frag);
+    relabel(0);
+    closeMenu(false);
+    closeCtx();
+    clearSelection();
+  }
+
+  function syncUndo() {
+    const b = root && root.querySelector('.sort-undo');
+    if (b) b.hidden = !(prevOrder && canEdit());
+  }
+
+  function sortRows() {
+    if (!root || !canEdit()) return;
+    const next = sortedOrder();
+    if (next.every((id, i) => id === order[i])) {
+      showNotice('이미 정렬되어 있습니다.');
+      setTimeout(() => showNotice(''), 2500);
+      return;
+    }
+    prevOrder = order.slice();
+    order = next;
+    queueOrder();
+    reorderRows();
+    renderBrands();
+    syncUndo();
+  }
+
+  function undoSort() {
+    if (!root || !canEdit() || !prevOrder) return;
+    order = prevOrder;
+    prevOrder = null;
+    queueOrder();
+    reorderRows();
+    renderBrands();
+    syncUndo();
+  }
+
+  // 브랜드 이름을 누르면 표를 그 브랜드의 첫 행으로 이동
+  function scrollToRow(id) {
+    const wrap = root && root.querySelector('.table-wrap');
+    const tr = wrap && [...tbodyEl().rows].find((r) => r.dataset.id === id);
+    if (!tr) return;
+    wrap.scrollTo({ top: Math.max(0, tr.offsetTop - 40), behavior: 'smooth' });
   }
 
   // 접근성 라벨의 "n행" 번호를 from(0부터) 이후로 다시 매김
@@ -642,6 +780,8 @@
     });
     root.querySelectorAll('.pick').forEach((p) => { p.tabIndex = edit ? 0 : -1; });
     root.classList.toggle('is-editable', edit);
+    root.querySelector('.sort-btn').hidden = !edit;     // 정렬은 관리자 모드에서만
+    syncUndo();
     if (!edit) { closeMenu(false); clearSelection(); }
     if (isAdminMode()) INKFB.db().catch(() => {});   // 관리자 모드가 되면 저장용 SDK 를 미리 받아 둠 (첫 저장이 빠르게)
     showStatus();
@@ -838,7 +978,9 @@
       queueSave(tr.dataset.id, key, val);
       if (key === 'kind') syncLock(tr);
       if (key === 'portions') syncPortionsMark(tr);
+      if (key === 'brand' || key === 'name') syncSwatch(tr);
     }
+    if (key === 'brand' || key === 'name') renderBrands();
   }
 
   // ── 잔량 칸 우클릭(폰은 길게 누르기) 메뉴: 막대 추가 / 이 막대 삭제 ──
@@ -1008,6 +1150,8 @@
     const id = newId();
     order.splice(b, 0, id);
     queueOrder();
+    prevOrder = null;     // 새 행이 생기면 정렬 되돌리기는 더 이상 쓸 수 없음
+    syncUndo();
 
     const tbody = tbodyEl();
     tbody.rows[b].insertAdjacentHTML('beforebegin', rowHtml(id, b + 1));
@@ -1024,6 +1168,8 @@
   // 반전하면 꼬리가 오른쪽 아래로 가서 표를 향한다.
   const ROW_ADD_ICON = '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 17a2 2 0 0 1-2 2H7.2l-5.2 2L4 15.8V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M13 8v6"/><path d="M10 11h6"/></svg>';
   const ROW_ADD_SIZE = 19;
+  // Lucide "arrow-down-a-z" (정렬 버튼)
+  const SORT_ICON = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M20 8h-5"/><path d="M15 10V6.5a2.5 2.5 0 0 1 5 0V10"/><path d="M15 14h5l-5 6h5"/></svg>';
   const TAIL_Y = (22 / 24) * ROW_ADD_SIZE; // 아이콘 맨 아래(꼬리 끝, 선 굵기 포함)의 높이
   const NEAR = 12;                         // 선에서 이 거리(px) 안이면 "행과 행 사이"로 본다
 
@@ -1083,6 +1229,17 @@
     hydrateFromCache();   // 전에 받아 둔 내용이 있으면 처음부터 채워서 그림
     container.innerHTML = `
       <p class="notice" role="alert" hidden></p>
+      <div class="ink-layout">
+      <aside class="brand-panel" aria-label="브랜드별 잉크 개수">
+        <div class="brand-panel__head">
+          <span class="brand-panel__title">브랜드</span><span class="brand-panel__sum"></span>
+          <span class="brand-panel__tools">
+            <button class="sort-undo" type="button" hidden>되돌리기</button>
+            <button class="sort-btn" type="button" hidden title="브랜드 → 잉크명 가나다순으로 정렬">${SORT_ICON}정렬</button>
+          </span>
+        </div>
+        <ul class="brand-list"></ul>
+      </aside>
       <div class="table-area view-enter">
         <button class="row-add" type="button" title="행 추가" aria-label="이 위치에 행 추가">${ROW_ADD_ICON}</button>
         <ul class="menu" role="listbox" aria-label="본병/소분" hidden></ul>
@@ -1095,11 +1252,20 @@
           <div class="sel-box" hidden></div>
           <button class="fill-handle" type="button" tabindex="-1" aria-label="아래로 끌어서 채우기" hidden></button>
         </div>
+      </div>
       </div>`;
 
     const tbody = container.querySelector('tbody');
     menuEl = container.querySelector('.menu');
     menuFor = null;
+    prevOrder = null;
+    renderBrands();
+    container.querySelector('.sort-btn').addEventListener('click', sortRows);
+    container.querySelector('.sort-undo').addEventListener('click', undoSort);
+    container.querySelector('.brand-list').addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-id]');
+      if (b) scrollToRow(b.dataset.id);
+    });
     setupRowAdd(container);
     setupFill(container);
     setupBarFit(container);
@@ -1121,7 +1287,10 @@
       if (!input || !canEdit()) return;
       queueSave(input.closest('tr').dataset.id, input.dataset.f, input.value);
       if (input.dataset.f === 'portions') syncPortionsMark(input.closest('tr'));
-      if (input.dataset.f === 'brand' || input.dataset.f === 'name') syncSwatch(input.closest('tr'));   // 이름이 바뀌면 드라이브 사진도 다시 찾음
+      if (input.dataset.f === 'brand' || input.dataset.f === 'name') {
+        syncSwatch(input.closest('tr'));   // 이름이 바뀌면 드라이브 사진도 다시 찾음
+        renderBrands();                    // 브랜드별 개수도 바로 갱신
+      }
       positionSelection(); // 내용이 생기거나 사라지면 핸들 표시도 바뀜
     });
 
@@ -1265,6 +1434,7 @@
   }
 
   function unmount() {
+    prevOrder = null;
     closeLightbox();
     closeMenu(false);
     closeCtx();

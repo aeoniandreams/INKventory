@@ -199,6 +199,50 @@ button { font: inherit; color: inherit; }
 /* ── 표 화면 (보유 잉크) ─────────────────── */
 .main--table { padding: 20px clamp(12px, 3vw, 32px) 24px 6px; }  /* 왼쪽은 정수 px (선이 흐릿해지지 않게) */
 
+/* 왼쪽에 브랜드별 개수 패널, 오른쪽에 표.
+   사이드바가 열려도(너비 --sidebar-w) 패널이 가려지지 않도록, 왼쪽을 사이드바 너비만큼 비워 두고 그 오른쪽에서 시작한다.
+   (화면이 좁아 그럴 여유가 없으면 아래 @media 에서 패널을 표 위로 올림) */
+.ink-layout { display: flex; align-items: flex-start; gap: 16px; margin-left: var(--sidebar-w); }
+.ink-layout > .table-area { flex: 1 1 0; min-width: 0; }
+
+.brand-panel {
+  flex: none; width: 224px; display: flex; flex-direction: column;
+  max-height: calc(100vh - var(--topbar-h) - 44px);
+  max-height: calc(100dvh - var(--topbar-h) - 44px);
+  background: var(--surface);
+  border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+}
+.brand-panel__head {
+  flex: none; min-height: 40px; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px;
+  padding: 6px 8px 6px 14px;
+  background: #dfe7f7; border-bottom: 1px solid var(--line);
+  font-size: 13px; font-weight: 700; color: var(--muted);
+}
+.brand-panel__sum { font-weight: 500; font-size: 12px; font-variant-numeric: tabular-nums; }
+.brand-panel__tools { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+.sort-btn, .sort-undo {
+  display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 9px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 8px; cursor: pointer;
+  font-size: 12px; font-weight: 600; color: var(--accent); white-space: nowrap;
+}
+.sort-btn[hidden], .sort-undo[hidden] { display: none; }
+.sort-undo { background: none; border-color: transparent; color: var(--muted); font-weight: 500; }
+.sort-btn:hover, .sort-undo:hover { background: var(--accent-soft); }
+.brand-list { flex: 1 1 auto; min-height: 0; margin: 0; padding: 4px 0; list-style: none; overflow-y: auto; }
+.brand-list button {
+  width: 100%; display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  padding: 6px 14px; background: none; border: 0; cursor: pointer; text-align: left;
+  font-size: 13px; line-height: 1.35; color: var(--ink);
+}
+.brand-list .bn { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.brand-list .bc { flex: none; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--accent); }
+@media (hover: hover) { .brand-list button:hover { background: var(--accent-soft); } }
+.brand-list button:focus-visible { outline-offset: -2px; }
+@media (max-width: 1100px) {
+  .ink-layout { flex-direction: column; align-items: stretch; margin-left: 0; gap: 12px; }
+  .brand-panel { width: auto; max-height: 220px; }
+}
+
 /* 표 왼쪽 여백(28px)은 행 추가 아이콘 자리 */
 .table-area { position: relative; padding-left: 28px; }
 
@@ -488,7 +532,7 @@ html[data-layout="normal"] .grid td.col-portions.has-val::after {
   font-weight: 700; color: var(--accent); pointer-events: none;
 }
 html[data-layout="normal"] .main--table { padding-left: clamp(12px, 3vw, 32px); }  /* 좌우 여백을 같게 해서 정확히 가운데로 */
-html[data-layout="normal"] .table-area { padding-left: 0; display: flex; justify-content: center; }
+html[data-layout="normal"] .table-area { padding-left: 0; display: flex; justify-content: flex-end; }   /* 표는 오른쪽에 붙임 */
 html[data-layout="normal"] .table-wrap { width: auto; max-width: 100%; }
 
 .view-enter { animation: view-in .35s var(--ease); }
