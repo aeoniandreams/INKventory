@@ -410,18 +410,41 @@
   }
 
   // ── 브랜드별 잉크 개수 (표 왼쪽 패널) ──
-  // 표의 브랜드 칸 글자 그대로 묶는다("글입다" 와 "글입다 X 민음사" 는 다른 브랜드). 잉크명이 있는 행만 센다(사이드바 '잉크 개수'와 같은 기준).
-  // 순서는 표에 처음 나온 순서. 이름을 누르면 표가 그 브랜드의 첫 행으로 이동.
+  // 브랜드 칸 글자의 "가장 앞 단어(들)"로 묶는다. 예: "디아민", "디아민 뉴욕 에디션", "디아민 X 컬트펜" → 디아민 /
+  // "코바야시 문구관", "코바야시 문구관 Team Love" → 코바야시 문구관.
+  // 묶는 기준 이름: 아래 목록 + 표에서 다른 브랜드 글자의 앞부분이 되는 브랜드(예: 표에 "디아민"이 따로 있으면 자동).
+  // 새 브랜드가 "세일러"처럼 단독 행 없이 변형만 있을 때는 이 목록에 추가해 주면 된다.
+  // 잉크명이 있는 행만 센다(사이드바 '잉크 개수'와 같은 기준). 순서는 표에 처음 나온 순서. 이름을 누르면 그 브랜드의 첫 행으로 이동.
+  const BRAND_NAMES = [
+    '글입다', '나가사와 고베', '도미넌트 인더스트리', '디아민', '로버트 오스터',
+    '빈타', '세일러', '코바야시 문구관', '토노 앤 림스',
+  ];
+  const cleanBrand = (s) => String(s || '').normalize('NFC').replace(/\s+/g, ' ').trim();
+
   function renderBrands() {
     const list = root && root.querySelector('.brand-list');
     if (!list) return;
-    const groups = [];
-    const byName = new Map();
-    let total = 0;
+    const rows = [];
     order.forEach((id) => {
       const d = data[id] || {};
       if (!String(d.name || '').trim()) return;
-      const b = String(d.brand || '').trim() || '(브랜드 없음)';
+      rows.push({ id, b: cleanBrand(d.brand) });
+    });
+    // 묶는 기준 이름: 목록 + 다른 브랜드 글자의 앞부분(단어 경계)이 되는 브랜드
+    const present = [...new Set(rows.map((r) => r.b).filter(Boolean))];
+    const keys = new Set(BRAND_NAMES.map(cleanBrand));
+    present.forEach((s) => { if (present.some((t) => t !== s && t.startsWith(s + ' '))) keys.add(s); });
+    const keyList = [...keys].sort((x, y) => x.length - y.length);   // 가장 짧은(가장 앞) 이름을 우선
+    const groupOf = (b) => {
+      if (!b) return '(브랜드 없음)';
+      const k = keyList.find((c) => b === c || b.startsWith(c + ' '));
+      return k || b;
+    };
+    const groups = [];
+    const byName = new Map();
+    let total = 0;
+    rows.forEach(({ id, b: raw }) => {
+      const b = groupOf(raw);
       let g = byName.get(b);
       if (!g) { g = { b, n: 0, id }; byName.set(b, g); groups.push(g); }
       g.n++;

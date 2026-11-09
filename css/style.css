@@ -197,16 +197,17 @@ button { font: inherit; color: inherit; }
 .placeholder p { margin: 0; color: var(--muted); }
 
 /* ── 표 화면 (보유 잉크) ─────────────────── */
-.main--table { padding: 20px clamp(12px, 3vw, 32px) 24px 6px; }  /* 왼쪽은 정수 px (선이 흐릿해지지 않게) */
+.main--table { --main-pl: 6px; padding: 20px clamp(12px, 3vw, 32px) 24px var(--main-pl); }  /* 왼쪽은 정수 px (선이 흐릿해지지 않게) */
 
 /* 왼쪽에 브랜드별 개수 패널, 오른쪽에 표.
-   사이드바가 열려도(너비 --sidebar-w) 패널이 가려지지 않도록, 왼쪽을 사이드바 너비만큼 비워 두고 그 오른쪽에서 시작한다.
-   (화면이 좁아 그럴 여유가 없으면 아래 @media 에서 패널을 표 위로 올림) */
-.ink-layout { display: flex; align-items: flex-start; gap: 16px; margin-left: var(--sidebar-w); }
+   패널은 사이드바를 열었을 때 사이드바가 통째로 덮는 자리(왼쪽 --sidebar-w 안)에 들어가게 만든다.
+   → 사이드바를 열면 패널이 완전히 가려지고, 일부만 가려져 보이는 일이 없다. 표는 그 오른쪽부터 시작.
+   (패널 너비 = 사이드바 너비 − 화면 왼쪽 여백(--main-pl) − 표와의 간격 12px. 화면이 800px 이하면 패널을 표 위로 올림) */
+.ink-layout { display: flex; align-items: flex-start; gap: 12px; }
 .ink-layout > .table-area { flex: 1 1 0; min-width: 0; }
 
 .brand-panel {
-  flex: none; width: 224px; display: flex; flex-direction: column;
+  flex: none; width: calc(var(--sidebar-w) - var(--main-pl) - 12px); display: flex; flex-direction: column;
   max-height: calc(100vh - var(--topbar-h) - 44px);
   max-height: calc(100dvh - var(--topbar-h) - 44px);
   background: var(--surface);
@@ -238,8 +239,8 @@ button { font: inherit; color: inherit; }
 .brand-list .bc { flex: none; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--accent); }
 @media (hover: hover) { .brand-list button:hover { background: var(--accent-soft); } }
 .brand-list button:focus-visible { outline-offset: -2px; }
-@media (max-width: 1100px) {
-  .ink-layout { flex-direction: column; align-items: stretch; margin-left: 0; gap: 12px; }
+@media (max-width: 800px) {
+  .ink-layout { flex-direction: column; align-items: stretch; gap: 12px; }
   .brand-panel { width: auto; max-height: 220px; }
 }
 
@@ -531,7 +532,7 @@ html[data-layout="normal"] .grid td.col-portions.has-val::after {
   content: 'O'; position: absolute; inset: 0; display: grid; place-items: center;
   font-weight: 700; color: var(--accent); pointer-events: none;
 }
-html[data-layout="normal"] .main--table { padding-left: clamp(12px, 3vw, 32px); }  /* 좌우 여백을 같게 해서 정확히 가운데로 */
+html[data-layout="normal"] .main--table { --main-pl: clamp(12px, 3vw, 32px); }  /* 좌우 여백을 같게 해서 정확히 가운데로 */
 html[data-layout="normal"] .table-area { padding-left: 0; display: flex; justify-content: flex-end; }   /* 표는 오른쪽에 붙임 */
 html[data-layout="normal"] .table-wrap { width: auto; max-width: 100%; }
 
