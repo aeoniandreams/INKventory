@@ -436,32 +436,114 @@
   // ── 발색 사진 ──
   // 사진 파일은 저장소의 img/swatch/ 에 두고, img/swatch/manifest.json 에 { "행 id": "img/swatch/파일명?v=버전" } 으로 연결한다.
   // (사진을 건네주면 작은 정사각형으로 잘라 넣고 이 목록을 갱신해 올린다. 링크를 따로 만들 필요가 없다)
+  //
+  // 구글 드라이브 폴더(config.js 의 drive)에 "브랜드 잉크명.jpg" 로 넣은 사진도 연결된다. 두 곳에 모두 있으면 저장소 사진이 우선.
+  // 이름 비교: 한자·일본어 글자와 띄어쓰기·대소문자는 무시 (예: "Zerkon No.50 炕川 항천" = "zerkon no.50 항천.jpg").
   let swatchMap = null;
+  let driveMap = {};                                   // 정리된 파일 이름 → 드라이브 파일 id
+  const DRIVE_CACHE = 'inkventory.drive.v1';
+
+  // 비교용 이름: 확장자·한자·가나·공백 제거, 소문자, 글자 조합 방식 통일
+  function normName(s) {
+    return String(s || '').normalize('NFC')
+      .replace(/[぀-ヿ㐀-䶿一-鿿豈-﫿]/g, '')
+      .replace(/\s+/g, '').toLowerCase();
+  }
+
+  function setDriveFiles(files) {
+    const m = {};
+    (files || []).forEach((f) => {
+      if (!f || !f.id || !/^image\//.test(f.mimeType || '')) return;
+      const k = normName(String(f.name || '').replace(/\.[^.]+$/, ''));
+      if (k && !m[k]) m[k] = f.id;
+    });
+    driveMap = m;
+  }
+
+  async function fetchDriveFiles() {
+    const cfg = (window.INKVENTORY_CONFIG || {}).drive;
+    if (!cfg || !cfg.apiKey || !cfg.folderId) return null;
+    const files = [];
+    let token = '';
+    for (let page = 0; page < 10; page++) {
+      const qs = new URLSearchParams({
+        q: `'${cfg.folderId}' in parents and trashed = false and mimeType contains 'image/'`,
+        fields: 'nextPageToken,files(id,name,mimeType)',
+        pageSize: '1000',
+        key: cfg.apiKey,
+      });
+      if (token) qs.set('pageToken', token);
+      const r = await fetch('https://www.googleapis.com/drive/v3/files?' + qs);
+      if (!r.ok) throw new Error('drive ' + r.status);
+      const j = await r.json();
+      files.push(...(j.files || []));
+      token = j.nextPageToken || '';
+      if (!token) break;
+    }
+    return files;
+  }
+
+  function resyncSwatches() { if (root) root.querySelectorAll('tbody tr').forEach(syncSwatch); }
 
   async function loadSwatches() {
     if (swatchMap) return;
     swatchMap = {};
+    // 지난번에 받아 둔 드라이브 목록으로 먼저 보여 주고, 새 목록을 받으면 갱신
     try {
-      const r = await fetch('img/swatch/manifest.json', { cache: 'no-cache' });   // 사진 자체는 오래 보관, 목록은 매번 확인
-      if (r.ok) swatchMap = await r.json();
-    } catch (err) { /* 사진이 없으면 빈 원 */ }
-    if (root) root.querySelectorAll('tbody tr').forEach(syncSwatch);
+      const c = JSON.parse(localStorage.getItem(DRIVE_CACHE) || 'null');
+      if (c && Array.isArray(c.files)) setDriveFiles(c.files);
+    } catch (err) { /* 무시 */ }
+    const manifest = (async () => {
+      try {
+        const r = await fetch('img/swatch/manifest.json', { cache: 'no-cache' });   // 사진 자체는 오래 보관, 목록은 매번 확인
+        if (r.ok) swatchMap = await r.json();
+      } catch (err) { /* 사진이 없으면 빈 원 */ }
+      resyncSwatches();
+    })();
+    const drive = (async () => {
+      try {
+        const files = await fetchDriveFiles();
+        if (!files) return;
+        setDriveFiles(files);
+        try { localStorage.setItem(DRIVE_CACHE, JSON.stringify({ files })); } catch (err) { /* 저장 공간이 없어도 동작 */ }
+      } catch (err) { /* 드라이브를 못 읽으면 저장소 사진만 */ }
+      resyncSwatches();
+    })();
+    await Promise.all([manifest, drive]);
+  }
+
+  // 이 행에 쓸 사진: { thumb, full } 또는 null
+  function swatchFor(tr) {
+    const id = tr.dataset.id;
+    const repo = swatchMap && swatchMap[id];
+    if (repo) return { thumb: repo, full: fullSrc(repo) };
+    const d = data[id];
+    const key = d && normName((d.brand || '') + (d.name || ''));
+    const fid = key && driveMap[key];
+    if (fid) {
+      const u = 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(fid) + '&sz=w';
+      return { thumb: u + '96', full: u + '1600' };
+    }
+    return null;
   }
 
   function syncSwatch(tr) {
     const holder = tr.querySelector('.swatch');
     if (!holder) return;
-    const src = swatchMap && swatchMap[tr.dataset.id];
+    const s = swatchFor(tr);
     const cur = holder.querySelector('img');
-    if (!src) {
+    if (!s) {
       if (cur) cur.remove();
       holder.classList.remove('has-img');
       holder.removeAttribute('role');
+      holder.removeAttribute('tabindex');
       holder.removeAttribute('aria-label');
+      delete holder.dataset.full;
       return;
     }
-    if (cur && cur.getAttribute('src') === src) return;
-    holder.innerHTML = `<img src="${esc(src)}" alt="" loading="lazy" decoding="async" width="28" height="28">`;
+    holder.dataset.full = s.full;
+    if (cur && cur.getAttribute('src') === s.thumb) return;
+    holder.innerHTML = `<img src="${esc(s.thumb)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" width="28" height="28">`;
     holder.classList.add('has-img');
     holder.setAttribute('role', 'button');
     holder.setAttribute('tabindex', '0');
@@ -490,7 +572,7 @@
     closeLightbox();
     closeCtx();
     const thumb = img.getAttribute('src');
-    const full = fullSrc(thumb);
+    const full = holder.dataset.full || fullSrc(thumb);
     const tr = holder.closest('tr');
     const d = tr && data[tr.dataset.id];
     const label = d ? [d.brand, d.name].filter(Boolean).join(' ') : '';
@@ -504,6 +586,7 @@
     const big = document.createElement('img');
     big.className = 'lightbox__img';
     big.alt = label;
+    big.referrerPolicy = 'no-referrer';
     big.src = thumb;                       // 원본이 오기 전까지 작은 사진을 보여 줌
     lightbox.appendChild(big);
     lightbox.addEventListener('click', (e) => { if (e.target === lightbox) closeLightbox(); });   // 어두운 부분만 닫기
@@ -1036,6 +1119,7 @@
       if (!input || !canEdit()) return;
       queueSave(input.closest('tr').dataset.id, input.dataset.f, input.value);
       if (input.dataset.f === 'portions') syncPortionsMark(input.closest('tr'));
+      if (input.dataset.f === 'brand' || input.dataset.f === 'name') syncSwatch(input.closest('tr'));   // 이름이 바뀌면 드라이브 사진도 다시 찾음
       positionSelection(); // 내용이 생기거나 사라지면 핸들 표시도 바뀜
     });
 
