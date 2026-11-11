@@ -302,8 +302,12 @@ button { font: inherit; color: inherit; }
   background: transparent; border: 0; border-radius: 0; outline: none;
   text-overflow: ellipsis;
 }
-/* 터치 기기: 입력칸 글자가 16px 미만이면 iOS가 확대해 버리므로 16px */
-@media (pointer: coarse) { .cell { font-size: 16px; } }
+/* 터치 기기(폰): 읽기만 하는 화면은 브랜드 패널과 같은 13px.
+   고칠 수 있는 관리자 모드에서만, 입력칸 글자가 16px 미만이면 iOS가 확대해 버리므로 16px */
+@media (pointer: coarse) {
+  .grid { font-size: 13px; }
+  .is-editable .cell { font-size: 16px; }
+}
 /* 본병/소분 칸 (클릭하면 드롭다운) */
 .grid td.c-text { position: relative; }
 .pick {
