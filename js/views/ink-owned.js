@@ -27,7 +27,8 @@
   const STEPS = 10;
   const DOC_PATH = ['inventory', 'inkOwned'];            // 공개 문서
   const PRIVATE_PATH = ['inventory', 'inkPrivate'];      // 관리자 전용 문서
-  const PRIVATE_FIELDS = ['levels', 'portions'];   // 관리자 전용 문서에만 저장하는 필드 (예전 level 도 여기로 옮김). 가격은 잉팔잉사에서 보여 주려고 공개 문서로 옮김(2026-11)
+  const PRIVATE_FIELDS = ['levels'];   // 관리자 전용 문서에만 저장하는 필드 (예전 level 도 여기로 옮김). 가격·소분 가능은 잉팔잉사에서 보여 주려고 공개 문서로 옮김(2026-11)
+  const PUBLIC_MOVED = ['price', 'portions'];   // 예전에 관리자 전용 문서에 있던 값 → 관리자가 들어오면 공개 문서로 자동 이전 (migratePublicFields)
   const LEGACY_PRIVATE = ['level', ...PRIVATE_FIELDS];
   const SAVE_DELAY = 600;                       // 입력을 멈추고 이 시간(ms)이 지나면 저장
   const RETRY_DELAY = 5000;
@@ -52,8 +53,8 @@
   const NORMAL_PORTIONS_W = 72;   // 일반 모드의 소분 가능 열 너비
   const HIDDEN_IN_NORMAL = ['price', 'kind', 'level'];   // 일반 모드에서 없애는 열
   const NORMAL_W = COLUMNS.reduce((sum, c) => sum + (HIDDEN_IN_NORMAL.includes(c.key) ? 0 : c.key === 'portions' ? NORMAL_PORTIONS_W : c.width), 0);
-  // 잉팔잉사의 일반 모드 배치: 보유 잉크의 일반 모드 열 + 가격 (가격은 공개 데이터)
-  const NORMAL_TRADE_W = COLUMNS.reduce((sum, c) => sum + (c.key === 'kind' || c.key === 'level' ? 0 : c.key === 'portions' ? NORMAL_PORTIONS_W : c.width), 0);
+  // 잉팔잉사의 일반 모드 배치: 관리자 모드와 같은 열·같은 너비
+  const NORMAL_TRADE_W = TRADE_ADMIN_W;   // 잉팔잉사는 일반 모드와 관리자 모드가 똑같이 보인다(소분 가능은 O 가 아니라 개수)
   const normalTableW = () => (variant === 'trade' ? NORMAL_TRADE_W : NORMAL_W);   // 지금 화면의 일반 모드 표 너비
 
   // 본병/소분 드롭다운 선택지 (저장되는 값은 보이는 글자 그대로)
@@ -251,25 +252,31 @@
     privState = 'idle';
     Object.keys(data).forEach((id) => { LEGACY_PRIVATE.forEach((k) => { delete data[id][k]; }); });
     if (root) {   // 화면에 남은 값도 지움
-      root.querySelectorAll('.cell[data-f="portions"]').forEach((input) => { input.value = ''; });
+      /* 가격·소분 가능은 공개 데이터라 지울 것이 없음 */
       fillAll();
     }
   }
 
-  // 가격은 공개 문서로 옮겼다. 관리자 전용 문서에 남아 있는 예전 가격을 공개 문서로 복사하고(공개 쪽이 비어 있을 때만) 전용 문서에서는 지운다.
+  // 가격·소분 가능은 공개 문서로 옮겼다. 관리자 전용 문서에 남아 있는 예전 값을 공개 문서로 복사하고(공개 쪽이 비어 있을 때만) 전용 문서에서는 지운다.
   // 관리자가 관리자 모드에 들어오면 자동으로 한 번 실행되고, 다음부터는 옮길 것이 없다.
-  function migratePrices() {
+  function migratePublicFields() {
     const rows = (privData && privData.rows) || {};
     let n = 0;
     Object.keys(rows).forEach((id) => {
-      const v = rows[id] && rows[id].price;
-      if (v === undefined || v === null) return;
       const d = data[id];
-      if (!d) return;                                   // 이미 삭제된 행
-      if (hasText(v) && !hasText(d.price)) { d.price = String(v); pending.set(id + '|price', { id, field: 'price', value: String(v) }); }
-      pending.set('@pdel|' + id + '|price', { pdel: id, field: 'price' });
-      delete rows[id].price;
-      n++;
+      if (!d || !rows[id]) return;                       // 이미 삭제된 행
+      PUBLIC_MOVED.forEach((f) => {
+        const v = rows[id][f];
+        if (v === undefined || v === null) return;
+        if (hasText(v) && !hasText(d[f])) {
+          d[f] = String(v);
+          pending.set(id + '|' + f, { id, field: f, value: String(v) });
+          if (f === 'portions') { d.hasPortions = hasText(v); pending.set(id + '|hasPortions', { id, field: 'hasPortions', value: d.hasPortions }); }
+        }
+        pending.set('@pdel|' + id + '|' + f, { pdel: id, field: f });
+        delete rows[id][f];
+        n++;
+      });
     });
     if (n) { setStatus('saving'); scheduleFlush(0); }
   }
@@ -283,7 +290,7 @@
       privData = snap.exists() ? snap.data() : { rows: {} };
       privState = 'ready';
       mergePrivate();
-      migratePrices();
+      migratePublicFields();
       if (root) { fillAll(); applyEditable(); }
     } catch (err) {
       privState = 'error';

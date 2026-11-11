@@ -556,10 +556,10 @@ html[data-layout="normal"] main:not(.is-trade) .col-price,   /* 가격은 잉팔
 html[data-layout="normal"] .col-kind,
 html[data-layout="normal"] .col-level { display: none; }
 html[data-layout="normal"] .grid { width: var(--normal-w); min-width: 0 !important; }
-html[data-layout="normal"] col.col-portions { width: 72px !important; }
-html[data-layout="normal"] th.col-portions { padding: 0 6px; text-align: center; line-height: 1.3; }   /* 좁아진 제목은 두 줄로 */
-html[data-layout="normal"] .grid td.col-portions .cell { color: transparent; -webkit-text-fill-color: transparent; }
-html[data-layout="normal"] .grid td.col-portions.has-val::after {
+html[data-layout="normal"] main:not(.is-trade) col.col-portions { width: 72px !important; }
+html[data-layout="normal"] main:not(.is-trade) th.col-portions { padding: 0 6px; text-align: center; line-height: 1.3; }   /* 좁아진 제목은 두 줄로 */
+html[data-layout="normal"] main:not(.is-trade) .grid td.col-portions .cell { color: transparent; -webkit-text-fill-color: transparent; }   /* 보유 잉크 일반 모드: 개수 대신 O (잉팔잉사는 개수를 그대로 보여 줌) */
+html[data-layout="normal"] main:not(.is-trade) .grid td.col-portions.has-val::after {
   content: 'O'; position: absolute; inset: 0; display: grid; place-items: center;
   font-weight: 700; color: var(--accent); pointer-events: none;
 }
