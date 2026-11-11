@@ -565,6 +565,17 @@ html[data-layout="normal"] .main--table { --main-pl: clamp(12px, 3vw, 32px); }  
 html[data-layout="normal"] .table-area { padding-left: 0; display: flex; justify-content: flex-end; }   /* 표는 오른쪽에 붙임 */
 html[data-layout="normal"] .table-wrap { width: auto; max-width: 100%; }
 
+/* 잉팔잉사(.is-trade): 관리자·일반 모드 모두 "일반 모드에서 보이는 열"만 — 브랜드 / 잉크명 / 발색 / 비고 / 소분 가능.
+   (관리자 모드의 소분 가능 칸은 숫자를 보여 주고 고칠 수 있어서 130px, 일반 모드는 O 표시라 72px)
+   행 추가는 없음(소분 가능이 적힌 행만 나오는 화면이라). 표는 오른쪽, 패널과의 간격은 일반 모드와 같게. */
+.is-trade .col-kind, .is-trade .col-level, .is-trade .col-price { display: none; }
+.is-trade .grid { width: 814px; min-width: 0 !important; }
+.is-trade .table-area { padding-left: 0; display: flex; justify-content: flex-end; }
+.is-trade .table-wrap { width: auto; max-width: 100%; }
+.is-trade .row-add { display: none; }
+.is-trade .ink-layout { --table-gap: 150px; max-width: calc(var(--sidebar-w) - var(--main-pl) + var(--table-gap) + 814px + 12px); }
+@media (max-width: 800px) { .is-trade .ink-layout { max-width: none; } }
+
 /* 일반 모드에서 패널과 표 사이가 너무 멀어지지 않게: 묶음 전체의 너비를 "패널 + 표 + 사이 간격(--table-gap)"까지만 */
 html[data-layout="normal"] .ink-layout {
   --table-gap: 150px;
@@ -579,9 +590,10 @@ html[data-layout="normal"] .ink-layout {
 }
 .zoom-hint.is-on { opacity: .92; }
 @media (max-width: 800px) {
-  html[data-layout="normal"] .grid { zoom: var(--tz, .46); }
+  .grid { zoom: var(--tz, .46); }                                          /* 일반 모드·관리자 모드 모두 같은 확대·축소 */
+  .table-wrap { touch-action: pan-x pan-y; }                               /* 한 손가락 스크롤은 그대로, 두 손가락은 JS 가 처리 */
+  html[data-layout="admin"] .grid { width: var(--admin-w, 1257px); min-width: 0 !important; }   /* 관리자 표는 열이 더 많음: 고정 너비를 배율로 줄이고 늘림 */
   html[data-layout="normal"] .table-area { justify-content: center; }
-  html[data-layout="normal"] .table-wrap { touch-action: pan-x pan-y; }   /* 한 손가락 스크롤은 그대로, 두 손가락은 JS 가 처리 */
   html[data-layout="normal"] .ink-layout { max-width: none; }
 }
 

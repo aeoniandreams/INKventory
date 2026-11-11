@@ -48,6 +48,7 @@
   const BAR_MIN = 180;        // 막대 최소 길이(px). 항상 10의 배수
   const MAX_BARS = 6;         // 한 칸에 둘 수 있는 막대(병) 수의 안전 상한. 보통은 3개 이내
   // 일반 모드 배치: 가격 열은 없애고, 잔량 열은 내용 없이 펄 칸 색으로 채운다. 소분 가능 열은 좁게(O 표시만). (CSS html[data-layout="normal"])
+  const TRADE_ADMIN_W = COLUMNS.reduce((sum, c) => sum + (c.key === 'price' || c.key === 'kind' || c.key === 'level' ? 0 : c.width), 0);   // 잉팔잉사 관리자 배치의 표 너비
   const NORMAL_PORTIONS_W = 72;   // 일반 모드의 소분 가능 열 너비
   const HIDDEN_IN_NORMAL = ['price', 'kind', 'level'];   // 일반 모드에서 없애는 열
   const NORMAL_W = COLUMNS.reduce((sum, c) => sum + (HIDDEN_IN_NORMAL.includes(c.key) ? 0 : c.key === 'portions' ? NORMAL_PORTIONS_W : c.width), 0);
@@ -67,6 +68,11 @@
   let privState = 'idle';       // idle | loading | ready | error
   let privData = null;          // 관리자 전용 문서 내용 { rows: {...} }
   let root = null;              // 현재 화면 컨테이너
+  // 같은 표 코드를 두 화면이 나눠 쓴다. 'owned' = 보유 잉크(전체), 'trade' = 잉팔잉사(소분 가능이 적힌 행만, 같은 데이터를 그대로 보여 줌)
+  let variant = 'owned';
+  const isTrade = () => variant === 'trade';
+  // 지금 화면에 나오는 행 id (순서대로). 잉팔잉사는 소분 가능이 적혀 있는 행만.
+  const shownIds = () => (isTrade() ? order.filter((id) => data[id] && data[id].hasPortions) : order);
   const pending = new Map();    // 아직 저장 안 된 변경. 키: "id|필드" 또는 "@order"
   let saveTimer = null;
   let saving = false;
@@ -397,7 +403,7 @@
   }
 
   function rowsHtml() {
-    return order.map((id, i) => rowHtml(id, i + 1)).join('');
+    return shownIds().map((id, i) => rowHtml(id, i + 1)).join('');
   }
 
   function rebuildRows() {
@@ -426,7 +432,7 @@
     const list = root && root.querySelector('.brand-list');
     if (!list) return;
     const rows = [];
-    order.forEach((id) => {
+    shownIds().forEach((id) => {
       const d = data[id] || {};
       if (!String(d.name || '').trim()) return;
       rows.push({ id, b: cleanBrand(d.brand) });
@@ -607,31 +613,58 @@
   });
   window.addEventListener('resize', () => { if (!window.matchMedia('(max-width: 800px)').matches) setBrandDrawer(false); });
 
-  // ── 폰용 확대·축소: 두 손가락으로 벌리거나 오므리기 (일반 모드, 800px 이하) ──
-  // 표 전체를 CSS zoom(--tz)으로 키우고 줄인다. 처음 50%, 범위 30~200%. 손가락 사이의 점이 제자리에 있도록 스크롤 위치를 맞춘다.
-  // 마지막 배율은 이 기기에 기억한다. (한 손가락은 그대로 스크롤)
+  // ── 폰용 확대·축소: 두 손가락으로 벌리거나 오므리기 (800px 이하, 일반 모드·관리자 모드 모두 같은 방식) ──
+  // 표 전체를 CSS zoom(--tz)으로 키우고 줄인다. 손가락 사이의 점이 제자리에 있도록 스크롤 위치를 맞춘다. 한 손가락은 그대로 스크롤.
+  //  · 시작 배율: 일반 모드 표의 가로 너비가 화면 가로 너비에 딱 맞는 배율 (관리자 모드도 같은 값 → 공통 열의 크기가 두 모드에서 같다)
+  //  · 가장 작게: 지금 보이는 표 전체의 가로 너비 = 화면 가로 너비. (일반 모드는 시작 배율과 같고, 열이 더 많은 관리자 모드는 더 작게 줄여 전체를 볼 수 있다)
+  //  · 가장 크게: 200%.  마지막으로 정한 배율은 이 기기에 기억한다.
   const ZOOM_KEY = 'inkventory.zoom.v3';
   const ZOOM_MAX = 2;
+  let zoomRefresh = null;   // 배치(일반/관리자)가 바뀌었을 때 배율 범위를 다시 계산
+
+  // 이 기기의 세로 스크롤 막대 너비 (표와 같은 스타일의 상자로 재서, 표의 내용이 짧아 막대가 없을 때도 같은 값)
+  function scrollbarW() {
+    const probe = document.createElement('div');
+    probe.className = 'table-wrap';
+    probe.style.cssText = 'position:absolute;visibility:hidden;left:0;top:0;width:100px;height:50px;max-height:none;overflow:scroll';
+    document.body.appendChild(probe);
+    const w = Math.max(0, probe.offsetWidth - probe.clientWidth - 2);   // 테두리 2px 제외
+    probe.remove();
+    return w;
+  }
 
   function setupZoom(container) {
     const wrap = container.querySelector('.table-wrap');
     const area = container.querySelector('.table-area');
     const hint = container.querySelector('.zoom-hint');
-    // 가장 작게 줄였을 때(최소 배율) 표의 가로 너비 = 기기(화면) 가로 너비. 이보다 더 줄어들지 않는다.
-    const minZoom = () => {
-      const sb = Math.max(0, wrap.offsetWidth - wrap.clientWidth - 2);   // 세로 스크롤 막대 너비 (테두리 2px 제외)
-      const avail = area.clientWidth - 2 - sb;
-      return avail > 0 ? Math.min(1, Math.floor((avail / NORMAL_W) * 1000) / 1000) : 0.4;
+    const adminLayout = () => document.documentElement.dataset.layout !== 'normal';
+    const naturalW = () => (adminLayout() ? (isTrade() ? TRADE_ADMIN_W : BASE_WIDTH) : NORMAL_W);
+    // 표가 들어갈 수 있는 가로 너비. withPad=false 면 관리자 배치의 왼쪽 여백(행 추가 아이콘 자리 28px)을 빼지 않는다
+    const availW = (withPad) => {
+      const cs = window.getComputedStyle(area);
+      const pad = withPad ? (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0) : 0;
+      return area.clientWidth - pad - 2 - scrollbarW();
     };
+    const fitFor = (w, withPad) => { const a = availW(withPad); return a > 0 ? Math.min(1, Math.floor((a / w) * 1000) / 1000) : 0.4; };
+    // 시작 배율: 일반 모드에서 표(NORMAL_W)가 화면 너비에 딱 맞는 배율. 화면 너비와 일반 모드의 좌우 여백(CSS clamp(12px,3vw,32px))으로 계산해서
+    // 관리자 모드(여백이 달라 영역 너비가 조금 다름)에서도 같은 값이 나온다.
+    const startZoom = () => {
+      const vw = document.documentElement.clientWidth;
+      const m = Math.max(12, Math.min(32, vw * 0.03));
+      const a = vw - 2 * m - 2 - scrollbarW();
+      return a > 0 ? Math.min(1, Math.floor((a / NORMAL_W) * 1000) / 1000) : 0.4;
+    };
+    const minZoom = () => fitFor(naturalW(), true);
     const clampZ = (n) => Math.floor(Math.max(minZoom(), Math.min(ZOOM_MAX, n)) * 1000) / 1000;
-    let z = minZoom();
-    let follow = true;   // 아직 손가락으로 조절한 적이 없으면 화면 너비에 계속 맞춤 (돌려서 가로로 봐도)
+    let z = startZoom();
+    let follow = true;   // 아직 손가락으로 조절한 적이 없으면 시작 배율에 계속 맞춤 (돌려서 가로로 봐도)
     try { const s = Number(localStorage.getItem(ZOOM_KEY)); if (s > 0) { z = s; follow = false; } } catch (err) { /* 기억 못 해도 괜찮음 */ }
     const apply = (n) => { z = clampZ(n); container.style.setProperty('--tz', String(z)); };
     apply(z);
+    zoomRefresh = () => apply(follow ? startZoom() : z);
 
-    const active = () => document.documentElement.dataset.layout === 'normal' && window.matchMedia('(max-width: 800px)').matches;
-    if (window.ResizeObserver) new ResizeObserver(() => { if (active()) apply(follow ? minZoom() : z); }).observe(area);
+    const active = () => window.matchMedia('(max-width: 800px)').matches;
+    if (window.ResizeObserver) new ResizeObserver(() => { if (active()) zoomRefresh(); }).observe(area);
     const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
     let pinch = null;
     let hintTimer = null;
@@ -932,6 +965,8 @@
     root.querySelectorAll('.pick').forEach((p) => { p.tabIndex = edit ? 0 : -1; });
     root.classList.toggle('is-editable', edit);
     root.querySelector('.sort-btn').hidden = !edit;     // 정렬은 관리자 모드에서만
+    if (zoomRefresh) zoomRefresh();                      // 배치가 바뀌면 확대·축소 범위도 다시 계산
+    if (barFit) barFit();                                // 잔량 막대 길이도 다시 맞춤
     syncUndo();
     if (!edit) { closeMenu(false); clearSelection(); }
     if (isAdminMode()) INKFB.db().catch(() => {});   // 관리자 모드가 되면 저장용 SDK 를 미리 받아 둠 (첫 저장이 빠르게)
@@ -942,13 +977,16 @@
   // 막대 길이는 10의 배수(칸 폭이 정수 px)로 맞추고, 남는 몇 px 는 좌우로 나눠서 가운데에 둔다.
   let resizeObs = null;
 
+  let barFit = null;   // 배치가 바뀌었을 때 막대 길이를 다시 맞추기 위해
+
   function setupBarFit(container) {
     const table = container.querySelector('table.grid');
     const th = table.querySelectorAll('thead th')[LEVEL_COL];
     container.style.setProperty('--normal-w', NORMAL_W + 'px');   // 일반 모드 배치의 표 너비 (표와 바깥 배치가 함께 참고)
+    container.style.setProperty('--admin-w', (isTrade() ? TRADE_ADMIN_W : BASE_WIDTH) + 'px');   // 관리자 배치의 표 너비 (폰에서 확대·축소의 기준)
     const fit = () => {
       if (document.documentElement.dataset.layout === 'normal') { positionSelection(); return; } // 일반 배치에는 막대가 없음
-      const inner = th.getBoundingClientRect().width - 24 - 1;   // 좌우 여백 12px씩 + 오른쪽 선 1px
+      const inner = th.getBoundingClientRect().width / gridZoom() - 24 - 1;   // 좌우 여백 12px씩 + 오른쪽 선 1px
       const bar = Math.max(BAR_MIN, Math.floor(inner / STEPS) * STEPS);
       const ml = Math.max(0, Math.floor((inner - bar) / 2));
       table.style.setProperty('--bar-w', bar + 'px');
@@ -958,6 +996,7 @@
     if (resizeObs) resizeObs.disconnect();
     resizeObs = new ResizeObserver(fit);
     resizeObs.observe(th);
+    barFit = fit;
     fit();
   }
 
@@ -1052,6 +1091,15 @@
 
   const tbodyEl = () => root.querySelector('tbody');
 
+  // 폰에서는 표 전체를 CSS zoom 으로 키우고 줄인다. offsetTop/offsetHeight 는 확대 전 길이, getBoundingClientRect 는 화면에 보이는 길이라서,
+  // 둘을 섞어 쓰는 곳(선택 상자, 채우기, 행 추가)은 이 배율(z)로 맞춘다. 확대하지 않을 때는 1.
+  function gridZoom() {
+    const t = root && root.querySelector('table.grid');
+    if (!t || !t.offsetWidth) return 1;
+    const z = t.getBoundingClientRect().width / t.offsetWidth;
+    return z > 0 ? z : 1;
+  }
+
   // 칸의 값 (채우기용). 잔량 칸은 채우기 대상이 아니라서 비워 둔다.
   function valueAt(r, c) {
     const tr = tbodyEl().rows[r];
@@ -1066,11 +1114,12 @@
   // 표 위쪽 기준 높이(rel)에 해당하는 행 번호 (행마다 높이가 달라도 됨)
   function rowIndexAtRel(rel) {
     const rows = tbodyEl().rows;
+    const z = gridZoom();
     let lo = 0;
     let hi = rows.length - 1;
     while (lo < hi) {
       const mid = (lo + hi + 1) >> 1;
-      if (rows[mid].offsetTop <= rel) lo = mid; else hi = mid - 1;
+      if (rows[mid].offsetTop * z <= rel) lo = mid; else hi = mid - 1;
     }
     return lo;
   }
@@ -1104,8 +1153,9 @@
     // 핸들은 원본 칸에 내용이 있을 때만(잔량 칸은 제외). 표 가장자리 밖으로 삐져나가 스크롤이 생기지 않게 안쪽으로 맞춤
     const fillable = COLUMNS[sel.c].key !== 'level';
     handle.hidden = !(fillable && !isEmptyValue(valueAt(sel.r0, sel.c)));
-    handle.style.left = Math.min(left + width, table.offsetWidth - 5) + 'px';
-    handle.style.top = Math.min(y + height, table.offsetHeight - 5) + 'px';
+    const zz = gridZoom();
+    handle.style.left = Math.min(left + width, table.offsetWidth * zz - 5) + 'px';
+    handle.style.top = Math.min(y + height, table.offsetHeight * zz - 5) + 'px';
   }
 
   function selectCell(td) {
@@ -1292,7 +1342,7 @@
   // ── 행 추가 ─────────────────────────────
   // b: 새 행이 들어갈 자리(0부터). b번째 행 "앞"에 빈 행을 끼워 넣는다.
   function insertRow(b) {
-    if (!root || !canEdit() || b < 1 || b > order.length) return;
+    if (isTrade() || !root || !canEdit() || b < 1 || b > order.length) return;
     if (order.length >= MAX_ROWS) {
       showNotice(`행은 최대 ${MAX_ROWS}개까지 추가할 수 있습니다.`);
       setTimeout(() => showNotice(''), 3500);
@@ -1339,24 +1389,26 @@
       const rows = tbody.rows;
       if (!rows.length) return null;
       const top = wrap.getBoundingClientRect().top + wrap.clientTop;
-      const headH = thead.offsetHeight;
+      const z = gridZoom();
+      const headH = thead.offsetHeight * z;
       if (clientY < top + headH || clientY > top + wrap.clientHeight) return null;
       const rel = clientY - top + wrap.scrollTop;          // 표 위쪽 기준
       const r = rowIndexAtRel(rel);
-      const rt = rows[r].offsetTop;
-      const rb = rt + rows[r].offsetHeight;
+      const rt = rows[r].offsetTop * z;
+      const rb = rt + rows[r].offsetHeight * z;
       if (rel < rt || rel >= rb) return null;
       const b = rel - rt <= NEAR ? r : (rb - rel <= NEAR ? r + 1 : null);
       return b !== null && b >= 1 && b <= rows.length - 1 ? b : null;
     }
 
     function update(e) {
-      if (drag || !canEdit() || e.target.closest('.row-add')) return; // 버튼 위에 있으면 그대로 유지
+      if (isTrade() || drag || !canEdit() || e.target.closest('.row-add')) return; // 버튼 위에 있으면 그대로 유지
       const b = boundaryAt(e.clientY);
       if (b === null) { hide(); return; }
       const top = wrap.getBoundingClientRect().top + wrap.clientTop;
-      const headH = thead.offsetHeight;
-      const lineY = top + tbody.rows[b].offsetTop - wrap.scrollTop - 0.5; // 경계선(1px)의 중앙
+      const z = gridZoom();
+      const headH = thead.offsetHeight * z;
+      const lineY = top + tbody.rows[b].offsetTop * z - wrap.scrollTop - 0.5; // 경계선(1px)의 중앙
       if (lineY < top + headH || lineY > top + wrap.clientHeight) { hide(); return; }
       btn.style.top = (lineY - area.getBoundingClientRect().top - TAIL_Y) + 'px';
       btn.dataset.before = b; // b번째 행(0부터) 앞에 추가
@@ -1375,8 +1427,10 @@
     });
   }
 
-  function mount(container) {
+  function mount(container, which) {
+    variant = which === 'trade' ? 'trade' : 'owned';
     root = container;
+    container.classList.toggle('is-trade', isTrade());
     hydrateFromCache();   // 전에 받아 둔 내용이 있으면 처음부터 채워서 그림
     container.innerHTML = `
       <p class="notice" role="alert" hidden></p>
@@ -1604,6 +1658,8 @@
 
   function unmount() {
     teardownBrandDrawer();
+    zoomRefresh = null;
+    barFit = null;
     prevOrder = null;
     closeLightbox();
     closeMenu(false);
@@ -1654,7 +1710,13 @@
 
   window.INKVENTORY_VIEWS = window.INKVENTORY_VIEWS || {};
   window.INKVENTORY_VIEWS['ink-owned'] = {
-    mount,
+    mount: (container) => mount(container, 'owned'),
+    unmount,
+    onMode() { applyEditable(); },
+  };
+  // 잉팔잉사: 보유 잉크와 같은 데이터·같은 저장소를 쓰므로, 어느 쪽에서 고치든 다른 쪽 화면에 그대로 반영된다.
+  window.INKVENTORY_VIEWS['ink-sale'] = {
+    mount: (container) => mount(container, 'trade'),
     unmount,
     onMode() { applyEditable(); },
   };
