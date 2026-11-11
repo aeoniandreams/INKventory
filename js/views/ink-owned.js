@@ -40,15 +40,15 @@
     { key: 'swatch',   label: '발색',            width: 64 },                // 잉크 발색 사진이 들어가는 원 (img/swatch/ 의 사진)
     { key: 'level',    label: '잔량',            width: 205 },               // 막대 180px + 좌우 여백 12px씩 + 오른쪽 선 1px
     { key: 'note',     label: '비고',            width: 180, max: 300 },
-    { key: 'portions', label: '소분 가능 (5ml)', width: 130, max: 20, lockable: true },
-    { key: 'price',    label: '가격',            width: 110, max: 50, lockable: true },
+    { key: 'portions', label: '소분 가능 (5ml)', width: 98, max: 20, lockable: true },    // 소분 가능·가격은 같은 비율(×0.75)로 줄인 너비
+    { key: 'price',    label: '가격',            width: 83, max: 50, lockable: true },
   ];
   const BASE_WIDTH = COLUMNS.reduce((sum, c) => sum + c.width, 0);
   const LEVEL_COL = COLUMNS.findIndex((c) => c.key === 'level');
   const BAR_MIN = 180;        // 막대 최소 길이(px). 항상 10의 배수
   const MAX_BARS = 6;         // 한 칸에 둘 수 있는 막대(병) 수의 안전 상한. 보통은 3개 이내
   // 일반 모드 배치: 가격 열은 없애고, 잔량 열은 내용 없이 펄 칸 색으로 채운다. 소분 가능 열은 좁게(O 표시만). (CSS html[data-layout="normal"])
-  const TRADE_ADMIN_W = COLUMNS.reduce((sum, c) => sum + (c.key === 'price' || c.key === 'kind' || c.key === 'level' ? 0 : c.width), 0);   // 잉팔잉사 관리자 배치의 표 너비
+  const TRADE_ADMIN_W = COLUMNS.reduce((sum, c) => sum + (c.key === 'kind' || c.key === 'level' ? 0 : c.width), 0);   // 잉팔잉사 관리자 배치의 표 너비 (가격 열 포함)
   const NORMAL_PORTIONS_W = 72;   // 일반 모드의 소분 가능 열 너비
   const HIDDEN_IN_NORMAL = ['price', 'kind', 'level'];   // 일반 모드에서 없애는 열
   const NORMAL_W = COLUMNS.reduce((sum, c) => sum + (HIDDEN_IN_NORMAL.includes(c.key) ? 0 : c.key === 'portions' ? NORMAL_PORTIONS_W : c.width), 0);
@@ -134,12 +134,13 @@
     setStatus('saving');
     const batch = [...pending.entries()];
     try {
-      const { db, doc, setDoc } = await INKFB.db();
+      const { db, doc, setDoc, deleteField } = await INKFB.db();
       // 공개 문서와 관리자 전용 문서로 나눠서 저장
       const pub = {};
       const priv = {};
       batch.forEach(([, e]) => {
         if (e.order) { pub.order = e.order; return; }
+        if (e.del) { (pub.rows = pub.rows || {})[e.del] = deleteField(); priv[e.del] = deleteField(); return; }   // 행 삭제: 공개·관리자 전용 문서에서 모두 지움
         const target = PRIVATE_FIELDS.includes(e.field) ? priv : (pub.rows = pub.rows || {});
         (target[e.id] = target[e.id] || {})[e.field] = e.value;
       });
@@ -1184,7 +1185,34 @@
     if (key === 'brand' || key === 'name') renderBrands();
   }
 
-  // ── 잔량 칸 우클릭(폰은 길게 누르기) 메뉴: 막대 추가 / 이 막대 삭제 ──
+  // ── 행 삭제 (보유 잉크 화면, 관리자 모드) ──
+  // 순서(order)에서 빼고, 공개·관리자 전용 문서의 이 행 데이터도 지운다. (데이터만 남기면 "순서에 없는 행" 안전장치가 다시 살려 낸다)
+  function deleteRow(id) {
+    if (isTrade() || !root || !canEdit()) return;
+    const i = order.indexOf(id);
+    if (i < 0) return;
+    const d = data[id] || {};
+    const label = [cleanBrand(d.brand), String(d.name || '').trim()].filter(Boolean).join(' ') || '빈 행';
+    if (!window.confirm(`"${label}" 행을 삭제할까요?
+삭제하면 되돌릴 수 없습니다.`)) return;
+    order.splice(i, 1);
+    delete data[id];
+    if (privData && privData.rows) delete privData.rows[id];
+    [...pending.keys()].forEach((k) => { if (k.startsWith(id + '|')) pending.delete(k); });   // 이 행의 저장 대기 중이던 수정은 버림
+    pending.set('@del|' + id, { del: id });
+    queueOrder();
+    const tr = [...tbodyEl().rows].find((r) => r.dataset.id === id);
+    if (tr) tr.remove();
+    relabel(0);
+    clearSelection();
+    closeMenu(false);
+    prevOrder = null;     // 정렬 되돌리기는 더 이상 쓸 수 없음
+    syncUndo();
+    renderBrands();
+    emitStats();
+  }
+
+  // ── 우클릭(폰은 막대를 길게 누르기) 메뉴: 행 삭제 / 막대 추가 / 이 막대 삭제 ──
   let ctxEl = null;           // 메뉴 요소 (body 에 한 번만 만듦)
   let ctxTarget = null;       // { id, bi }  (어느 행의 몇 번째 막대에서 열었는지)
   let longPress = null;       // 길게 누르기 감시 { timer, x, y }
@@ -1195,9 +1223,10 @@
     ctxEl = document.createElement('ul');
     ctxEl.className = 'menu ctx-menu';
     ctxEl.setAttribute('role', 'menu');
-    ctxEl.setAttribute('aria-label', '잔량 막대');
+    ctxEl.setAttribute('aria-label', '행·잔량 막대');
     ctxEl.hidden = true;
-    ctxEl.innerHTML = '<li role="menuitem" tabindex="-1" data-act="add">막대 추가</li><li role="menuitem" tabindex="-1" data-act="del">이 막대 삭제</li>';
+    ctxEl.innerHTML = '<li role="menuitem" tabindex="-1" data-act="add">막대 추가</li><li role="menuitem" tabindex="-1" data-act="del">이 막대 삭제</li>' +
+      '<li class="menu-sep" role="separator" aria-hidden="true" data-sep></li><li role="menuitem" tabindex="-1" data-act="row" class="menu-danger">행 삭제</li>';
     document.body.appendChild(ctxEl);
     ctxEl.addEventListener('click', (e) => {
       const li = e.target.closest('[role="menuitem"]');
@@ -1220,6 +1249,9 @@
     ctxTarget = { id: tr.dataset.id, bi };
     const add = el.querySelector('[data-act="add"]');
     const del = el.querySelector('[data-act="del"]');
+    const rowItem = el.querySelector('[data-act="row"]');
+    const onBar = bi >= 0;                                    // 막대 위에서 열었을 때만 막대 항목을 보여 줌
+    [add, del, el.querySelector('[data-sep]')].forEach((li) => { li.style.display = onBar ? '' : 'none'; });
     add.setAttribute('aria-disabled', String(levels.length >= MAX_BARS));
     del.setAttribute('aria-disabled', String(levels.length <= 1));
     el.hidden = false;
@@ -1227,7 +1259,7 @@
     const h = el.offsetHeight;
     el.style.left = Math.max(8, Math.min(x, window.innerWidth - w - 8)) + 'px';
     el.style.top = Math.max(8, Math.min(y, window.innerHeight - h - 8)) + 'px';
-    (add.getAttribute('aria-disabled') === 'true' ? del : add).focus();
+    (onBar ? (add.getAttribute('aria-disabled') === 'true' ? del : add) : rowItem).focus();
   }
 
   function closeCtx() {
@@ -1239,6 +1271,7 @@
     const t = ctxTarget;
     closeCtx();
     if (!t || !root || !canEdit()) return;
+    if (act === 'row') { deleteRow(t.id); return; }
     const tr = [...tbodyEl().rows].find((r) => r.dataset.id === t.id);
     if (!tr) return;
     const levels = getLevels(t.id);
@@ -1577,17 +1610,18 @@
 
     // 잔량 막대 우클릭(키보드는 메뉴 키 / Shift+F10) → 막대 추가·삭제 메뉴
     tbody.addEventListener('contextmenu', (e) => {
-      const line = e.target.closest('.bar-line');
-      if (!line || !canEdit()) return;
+      const tr = e.target.closest('tr');
+      if (!tr || !canEdit() || isTrade()) return;      // 잉팔잉사·일반 모드에서는 브라우저 기본 메뉴 그대로
       e.preventDefault();
       cancelLongPress();
-      const tr = line.closest('tr');
+      const line = e.target.closest('.bar-line');
       const lines = [...tr.querySelectorAll('.bar-line')];
       let x = e.clientX;
       let y = e.clientY;
-      if (!x && !y) { const r = line.getBoundingClientRect(); x = r.left + 24; y = r.bottom; }   // 키보드로 열었을 때
-      selectCell(line.closest('td'));
-      openCtx(x, y, tr, lines.indexOf(line));
+      if (!x && !y) { const r = (line || e.target.closest('td') || tr).getBoundingClientRect(); x = r.left + 24; y = r.bottom; }   // 키보드로 열었을 때
+      const td = e.target.closest('td');
+      if (td) selectCell(td);
+      openCtx(x, y, tr, line ? lines.indexOf(line) : -1);
     });
     // 터치(폰): 막대를 길게 누르면 같은 메뉴. (iOS 는 contextmenu 이벤트가 없어서 직접 감시)
     tbody.addEventListener('pointerdown', (e) => {
