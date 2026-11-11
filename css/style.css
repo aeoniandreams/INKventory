@@ -222,14 +222,14 @@ button { font: inherit; color: inherit; }
 }
 .brand-panel__sum { font-weight: 500; font-size: 12px; font-variant-numeric: tabular-nums; }
 .brand-panel__tools { margin-left: auto; display: flex; align-items: center; gap: 4px; }
-.sort-btn, .sort-undo, .sync-btn {
+.sort-btn, .sort-undo {
   display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 9px;
   background: var(--surface); border: 1px solid var(--line); border-radius: 8px; cursor: pointer;
   font-size: 12px; font-weight: 600; color: var(--accent); white-space: nowrap;
 }
-.sort-btn[hidden], .sort-undo[hidden], .sync-btn[hidden] { display: none; }
+.sort-btn[hidden], .sort-undo[hidden] { display: none; }
 .sort-undo { background: none; border-color: transparent; color: var(--muted); font-weight: 500; }
-.sort-btn:hover, .sort-undo:hover, .sync-btn:hover { background: var(--accent-soft); }
+.sort-btn:hover, .sort-undo:hover { background: var(--accent-soft); }
 .brand-list { flex: 1 1 auto; min-height: 0; margin: 0; padding: 4px 0; list-style: none; overflow-y: auto; }
 .brand-list button {
   width: 100%; display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
@@ -258,6 +258,9 @@ button { font: inherit; color: inherit; }
     transform: translateX(0); visibility: visible; box-shadow: 0 0 40px rgba(0, 0, 0, .15);
     transition: transform var(--dur) var(--ease), visibility 0s linear 0s;
   }
+  /* 오른쪽 사이드바도 왼쪽 사이드바와 같은 바탕(--surface)·같은 머리 높이/구분선으로 */
+  .brand-panel { background: var(--surface); }
+  .brand-panel__head { min-height: var(--topbar-h); background: var(--surface); padding-left: 24px; }
 }
 
 /* 표 왼쪽 여백(28px)은 행 추가 아이콘 자리 */

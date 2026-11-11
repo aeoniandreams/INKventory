@@ -299,7 +299,7 @@
           <p>준비 중입니다.</p>
         </div>`;
     } else {
-      pageTitle.textContent = '홈';
+      pageTitle.textContent = 'HOME';
       document.title = 'INKventory';
       // 임시 시작 화면 — 내용은 추후 추가
       main.innerHTML = `

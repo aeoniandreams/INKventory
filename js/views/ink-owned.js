@@ -453,7 +453,7 @@
     });
     list.innerHTML = groups.map((g) => `<li><button type="button" data-id="${esc(g.id)}" title="${esc(g.b)}"><span class="bn">${esc(g.b)}</span><span class="bc">${g.n}</span></button></li>`).join('');
     const sum = root.querySelector('.brand-panel__sum');
-    if (sum) sum.textContent = `${groups.length}곳 · ${total}개`;
+    if (sum) sum.textContent = `${groups.length}곳`;
   }
 
   // ── 정렬 ──
@@ -559,114 +559,6 @@
     reorderRows();
     renderBrands();
     syncUndo();
-  }
-
-  // ── 구글 시트와 "소분 가능" 맞추기 (관리자 모드, 패널 위의 '시트' 버튼) ──
-  // 시트 주소는 이 브라우저에만 기억한다(저장소·서버에 올리지 않음). 시트는 "링크가 있는 모든 사용자" 공개여야 읽을 수 있다.
-  // 브랜드+잉크명(띄어쓰기·대소문자·'오리지널' 글자 무시)으로 같은 행을 찾아, 시트와 다른 소분 가능 값만 보여 주고 확인을 받은 뒤 바꾼다.
-  const SHEET_KEY = 'inkventory.sheet.v1';
-  let sheetBusy = false;
-
-  function loadSheetTable(id, gid) {
-    return new Promise((resolve, reject) => {
-      const cb = '__inkSheet' + Date.now();
-      const s = document.createElement('script');
-      let timer = null;
-      const done = (err, val) => {
-        clearTimeout(timer);
-        try { delete window[cb]; } catch (e) { window[cb] = undefined; }
-        s.remove();
-        if (err) reject(err); else resolve(val);
-      };
-      timer = setTimeout(() => done(new Error('timeout')), 15000);
-      window[cb] = (res) => (res && res.status === 'ok' && res.table ? done(null, res.table) : done(new Error('bad response')));
-      s.onerror = () => done(new Error('load'));
-      s.src = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=responseHandler:${cb}&headers=1${gid ? '&gid=' + gid : ''}`;
-      document.head.appendChild(s);
-    });
-  }
-
-  const syncKey = (b, n) => (cleanBrand(b) + cleanBrand(n)).replace(/오리지널/g, '').replace(/\s+/g, '').toLowerCase();
-
-  async function syncPortions() {
-    if (!root || !canEdit() || sheetBusy) return;
-    const flash = (msg, ms) => { showNotice(msg); if (ms) setTimeout(() => showNotice(''), ms); };
-    let link = '';
-    try { link = localStorage.getItem(SHEET_KEY) || ''; } catch (err) { /* 무시 */ }
-    if (!link) {
-      link = window.prompt('소분 가능을 비교할 구글 스프레드시트 주소를 붙여넣어 주세요.\n("링크가 있는 모든 사용자"가 볼 수 있어야 하고, 이 주소는 이 브라우저에만 기억됩니다.)') || '';
-      if (!link.trim()) return;
-    }
-    const id = (link.match(/\/d\/([\w-]+)/) || [])[1];
-    const gid = (link.match(/[#&?]gid=(\d+)/) || [])[1];
-    if (!id) { flash('시트 주소를 알아볼 수 없습니다. 다시 눌러 주소를 입력해 주세요.', 5000); try { localStorage.removeItem(SHEET_KEY); } catch (err) { /* 무시 */ } return; }
-
-    sheetBusy = true;
-    flash('시트를 불러오는 중…');
-    let table;
-    try { table = await loadSheetTable(id, gid); } catch (err) {
-      sheetBusy = false;
-      try { localStorage.removeItem(SHEET_KEY); } catch (e) { /* 무시 */ }
-      flash('시트를 불러오지 못했습니다. 주소와 공유 설정("링크가 있는 모든 사용자")을 확인해 주세요.', 6000);
-      return;
-    }
-    sheetBusy = false;
-    if (!root || !canEdit()) return;
-    try { localStorage.setItem(SHEET_KEY, link); } catch (err) { /* 무시 */ }
-
-    const col = (word) => table.cols.findIndex((c) => String(c.label || '').includes(word));
-    const cb = col('브랜드');
-    const cn = col('잉크명');
-    const cp = col('소분 가능');
-    if (cb < 0 || cn < 0 || cp < 0) { flash('시트에서 "브랜드", "잉크명", "소분 가능" 열을 찾지 못했습니다.', 6000); return; }
-    const cell = (r, i) => { const c = r.c && r.c[i]; return c && c.v !== null && c.v !== undefined ? String(c.v).trim() : ''; };
-
-    const sheetRows = (table.rows || []).map((r) => ({ b: cell(r, cb), n: cell(r, cn), p: cell(r, cp) })).filter((r) => r.b || r.n);
-    const siteBy = new Map();
-    order.forEach((rid) => {
-      const d = data[rid] || {};
-      if (!cleanBrand(d.brand) && !String(d.name || '').trim()) return;
-      const k = syncKey(d.brand, d.name);
-      if (!siteBy.has(k)) siteBy.set(k, []);
-      siteBy.get(k).push(rid);
-    });
-    const seen = new Map();
-    const changes = [];
-    const missing = [];
-    sheetRows.forEach((r) => {
-      const k = syncKey(r.b, r.n);
-      const j = seen.get(k) || 0;
-      seen.set(k, j + 1);
-      const rid = (siteBy.get(k) || [])[j];
-      const label = `${cleanBrand(r.b)} ${cleanBrand(r.n)}`.trim();
-      if (!rid) { missing.push(label); return; }
-      const d = data[rid] || {};
-      if (String(d.kind || '').startsWith('소분')) return;          // 소분 행은 소분 가능 칸이 잠겨 있음
-      const cur = String(d.portions === undefined || d.portions === null ? '' : d.portions).trim();
-      if (cur !== r.p) changes.push({ rid, label, from: cur, to: r.p });
-    });
-
-    if (!changes.length) {
-      flash(`소분 가능이 시트와 이미 같습니다.${missing.length ? ` (시트에서 사이트에 없는 이름 ${missing.length}곳은 건너뜀)` : ''}`, 6000);
-      return;
-    }
-    const show = (v) => (v === '' ? '(빈칸)' : v);
-    let msg = `시트와 다른 소분 가능 ${changes.length}곳:\n\n` +
-      changes.slice(0, 30).map((c) => `${c.label}: ${show(c.from)} → ${show(c.to)}`).join('\n') +
-      (changes.length > 30 ? `\n… 외 ${changes.length - 30}곳` : '');
-    if (missing.length) msg += `\n\n(사이트에서 같은 이름을 못 찾아 건너뛴 시트 행 ${missing.length}곳: ${missing.slice(0, 6).join(', ')}${missing.length > 6 ? ' …' : ''})`;
-    msg += '\n\n시트와 같게 바꿀까요?';
-    if (!window.confirm(msg)) return;
-
-    const rowsById = new Map([...tbodyEl().rows].map((tr) => [tr.dataset.id, tr]));
-    changes.forEach((c) => {
-      queueSave(c.rid, 'portions', c.to);
-      const tr = rowsById.get(c.rid);
-      const input = tr && tr.querySelector('.cell[data-f="portions"]');
-      if (input) { input.value = c.to; fitCell(input); syncPortionsMark(tr); }
-    });
-    positionSelection();
-    flash(`소분 가능 ${changes.length}곳을 시트와 같게 바꿨습니다.`, 5000);
   }
 
   // ── 폰(800px 이하): 브랜드 패널을 오른쪽 사이드바로 ──
@@ -1040,7 +932,6 @@
     root.querySelectorAll('.pick').forEach((p) => { p.tabIndex = edit ? 0 : -1; });
     root.classList.toggle('is-editable', edit);
     root.querySelector('.sort-btn').hidden = !edit;     // 정렬은 관리자 모드에서만
-    root.querySelector('.sync-btn').hidden = !edit;
     syncUndo();
     if (!edit) { closeMenu(false); clearSelection(); }
     if (isAdminMode()) INKFB.db().catch(() => {});   // 관리자 모드가 되면 저장용 SDK 를 미리 받아 둠 (첫 저장이 빠르게)
@@ -1494,7 +1385,6 @@
         <div class="brand-panel__head">
           <span class="brand-panel__title">브랜드</span><span class="brand-panel__sum"></span>
           <span class="brand-panel__tools">
-            <button class="sync-btn" type="button" hidden title="구글 시트와 소분 가능 비교하고 맞추기">시트</button>
             <button class="sort-undo" type="button" hidden>되돌리기</button>
             <button class="sort-btn" type="button" hidden title="브랜드 → 잉크명 가나다순으로 정렬">${SORT_ICON}정렬</button>
           </span>
@@ -1525,7 +1415,6 @@
     setupZoom(container);
     setupBrandDrawer();
     container.querySelector('.sort-btn').addEventListener('click', sortRows);
-    container.querySelector('.sync-btn').addEventListener('click', syncPortions);
     container.querySelector('.sort-undo').addEventListener('click', undoSort);
     container.querySelector('.brand-list').addEventListener('click', (e) => {
       const b = e.target.closest('button[data-id]');
