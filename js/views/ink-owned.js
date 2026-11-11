@@ -48,9 +48,9 @@
   const BAR_MIN = 180;        // 막대 최소 길이(px). 항상 10의 배수
   const MAX_BARS = 6;         // 한 칸에 둘 수 있는 막대(병) 수의 안전 상한. 보통은 3개 이내
   // 일반 모드 배치: 가격 열은 없애고, 잔량 열은 내용 없이 펄 칸 색으로 채운다. 소분 가능 열은 좁게(O 표시만). (CSS html[data-layout="normal"])
-  const NORMAL_LEVEL_W = 130;     // 일반 모드에서 잔량 열과 소분 가능 열의 너비는 서로 맞바꾼 값 (130 ↔ 72)
-  const NORMAL_PORTIONS_W = 72;
-  const NORMAL_W = COLUMNS.reduce((sum, c) => sum + (c.key === 'price' ? 0 : c.key === 'level' ? NORMAL_LEVEL_W : c.key === 'portions' ? NORMAL_PORTIONS_W : c.width), 0);
+  const NORMAL_PORTIONS_W = 72;   // 일반 모드의 소분 가능 열 너비
+  const HIDDEN_IN_NORMAL = ['price', 'kind', 'level'];   // 일반 모드에서 없애는 열
+  const NORMAL_W = COLUMNS.reduce((sum, c) => sum + (HIDDEN_IN_NORMAL.includes(c.key) ? 0 : c.key === 'portions' ? NORMAL_PORTIONS_W : c.width), 0);
 
   // 본병/소분 드롭다운 선택지 (저장되는 값은 보이는 글자 그대로)
   const KIND_OPTIONS = [
@@ -559,6 +559,27 @@
     reorderRows();
     renderBrands();
     syncUndo();
+  }
+
+  // ── 폰용 확대·축소 슬라이더 (일반 모드, 800px 이하에서만 보임 — CSS 참고) ──
+  // 처음 50%. 마지막으로 정한 배율은 이 기기에 기억해 둔다.
+  const ZOOM_KEY = 'inkventory.zoom.v1';
+
+  function setupZoom(container) {
+    const range = container.querySelector('.zoom-range');
+    const out = container.querySelector('.zoom-val');
+    let v = 50;
+    try { const s = Number(localStorage.getItem(ZOOM_KEY)); if (s >= 30 && s <= 150) v = s; } catch (err) { /* 기억 못 해도 괜찮음 */ }
+    const apply = (n) => {
+      container.style.setProperty('--tz', String(n / 100));
+      out.textContent = Math.round(n) + '%';
+      range.value = String(n);
+    };
+    apply(v);
+    range.addEventListener('input', () => {
+      apply(Number(range.value));
+      try { localStorage.setItem(ZOOM_KEY, range.value); } catch (err) { /* 무시 */ }
+    });
   }
 
   // 브랜드 이름을 누르면 표를 그 브랜드의 첫 행으로 이동
@@ -1264,6 +1285,12 @@
         </div>
         <ul class="brand-list"></ul>
       </aside>
+      <div class="zoom-ctl" role="group" aria-label="표 확대·축소">
+        <span aria-hidden="true">축소</span>
+        <input class="zoom-range" type="range" min="30" max="150" step="5" value="50" aria-label="표 크기">
+        <span aria-hidden="true">확대</span>
+        <b class="zoom-val" aria-live="polite">50%</b>
+      </div>
       <div class="table-area view-enter">
         <button class="row-add" type="button" title="행 추가" aria-label="이 위치에 행 추가">${ROW_ADD_ICON}</button>
         <ul class="menu" role="listbox" aria-label="본병/소분" hidden></ul>
@@ -1284,6 +1311,7 @@
     menuFor = null;
     prevOrder = null;
     renderBrands();
+    setupZoom(container);
     container.querySelector('.sort-btn').addEventListener('click', sortRows);
     container.querySelector('.sort-undo').addEventListener('click', undoSort);
     container.querySelector('.brand-list').addEventListener('click', (e) => {
