@@ -26,7 +26,6 @@
   const main = $('#main');
   const pageTitle = $('#pageTitle');
   const toggleBtn = $('#sidebarToggle');
-  const closeBtn = $('#sidebarClose');
   const backdrop = $('#backdrop');
 
   // 카테고리별 화면 모듈 (js/views/*.js 가 등록). 등록 안 된 항목은 "준비 중" 화면.
@@ -97,13 +96,12 @@
     sidebar.classList.toggle('is-open', open);
     backdrop.classList.toggle('is-visible', open);
     toggleBtn.setAttribute('aria-expanded', open);
-    if (open) closeBtn.focus({ preventScroll: true });
+    if (open) $('#sidebarCollapse').focus({ preventScroll: true });
     else if (sidebar.contains(document.activeElement)) toggleBtn.focus({ preventScroll: true });
   }
 
   toggleBtn.addEventListener('click', () => setSidebar(!isOpen()));
-  closeBtn.addEventListener('click', () => setSidebar(false));
-  $('#sidebarCollapse').addEventListener('click', () => setSidebar(false));   // 사이트명 왼쪽의 사이드바 아이콘도 닫기
+  $('#sidebarCollapse').addEventListener('click', () => setSidebar(false));   // 사이트명 왼쪽의 아이콘(열기 버튼과 같은 모양)으로 닫기
   backdrop.addEventListener('click', () => setSidebar(false));
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && isOpen() && !authDialog.open) setSidebar(false);

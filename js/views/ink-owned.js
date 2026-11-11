@@ -387,7 +387,7 @@
       if (c.pick) {
         return `<td class="c-text col-${c.key}"><button class="pick" type="button" data-f="${c.key}" data-label="${c.label}" aria-label="${c.label} ${n}행" aria-haspopup="listbox" aria-expanded="false" tabindex="-1"><span class="pick-text"></span></button></td>`;
       }
-      const input = `<input class="cell" type="text" data-f="${c.key}" data-label="${c.label}" maxlength="${c.max}" aria-label="${c.label} ${n}행" autocomplete="off" spellcheck="false" readonly tabindex="-1">`;
+      const input = `<textarea class="cell" rows="1" wrap="off" data-f="${c.key}" data-label="${c.label}" maxlength="${c.max}" aria-label="${c.label} ${n}행" autocomplete="off" spellcheck="false" readonly tabindex="-1"></textarea>`;
       if (c.pearlToggle) {
         return `<td class="c-text c-name col-${c.key}">${input}<button class="pearl-btn" type="button" tabindex="-1" aria-pressed="false" title="펄 잉크로 표시" aria-label="펄 잉크로 표시">${SPARKLES_ICON}</button></td>`;
       }
@@ -561,23 +561,77 @@
     syncUndo();
   }
 
+  // ── 폰(800px 이하): 브랜드 패널을 오른쪽 사이드바로 ──
+  // 상단 바 오른쪽 버튼으로 열고, 어두운 부분 / Esc / 브랜드 선택으로 닫는다. (스타일은 CSS .brand-panel 의 @media 참고)
+  const PANEL_RIGHT_ICON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/></svg>';
+  let brandToggleBtn = null;
+  let brandBackdrop = null;
+
+  function brandPanelEl() { return root && root.querySelector('.brand-panel'); }
+
+  function setBrandDrawer(open) {
+    const panel = brandPanelEl();
+    if (panel) panel.classList.toggle('is-open', open);
+    if (brandBackdrop) brandBackdrop.classList.toggle('is-visible', open);
+    if (brandToggleBtn) brandToggleBtn.setAttribute('aria-expanded', String(open));
+  }
+
+  function teardownBrandDrawer() {
+    if (brandToggleBtn) brandToggleBtn.remove();
+    if (brandBackdrop) brandBackdrop.remove();
+    brandToggleBtn = null;
+    brandBackdrop = null;
+  }
+
+  function setupBrandDrawer() {
+    teardownBrandDrawer();
+    const topbar = document.querySelector('.topbar');
+    if (!topbar) return;
+    brandToggleBtn = document.createElement('button');
+    brandToggleBtn.className = 'icon-btn brand-toggle';
+    brandToggleBtn.type = 'button';
+    brandToggleBtn.setAttribute('aria-label', '브랜드 목록 열기');
+    brandToggleBtn.setAttribute('aria-expanded', 'false');
+    brandToggleBtn.innerHTML = PANEL_RIGHT_ICON;
+    brandToggleBtn.addEventListener('click', () => { const p = brandPanelEl(); setBrandDrawer(!(p && p.classList.contains('is-open'))); });
+    topbar.appendChild(brandToggleBtn);
+    brandBackdrop = document.createElement('div');
+    brandBackdrop.className = 'backdrop';
+    brandBackdrop.addEventListener('click', () => setBrandDrawer(false));
+    document.body.appendChild(brandBackdrop);
+  }
+
+  document.addEventListener('keydown', (e) => {
+    const p = brandPanelEl();
+    if (e.key === 'Escape' && p && p.classList.contains('is-open')) setBrandDrawer(false);
+  });
+  window.addEventListener('resize', () => { if (!window.matchMedia('(max-width: 800px)').matches) setBrandDrawer(false); });
+
   // ── 폰용 확대·축소: 두 손가락으로 벌리거나 오므리기 (일반 모드, 800px 이하) ──
   // 표 전체를 CSS zoom(--tz)으로 키우고 줄인다. 처음 50%, 범위 30~200%. 손가락 사이의 점이 제자리에 있도록 스크롤 위치를 맞춘다.
   // 마지막 배율은 이 기기에 기억한다. (한 손가락은 그대로 스크롤)
-  const ZOOM_KEY = 'inkventory.zoom.v2';
-  const ZOOM_MIN = 0.3;
+  const ZOOM_KEY = 'inkventory.zoom.v3';
   const ZOOM_MAX = 2;
 
   function setupZoom(container) {
     const wrap = container.querySelector('.table-wrap');
+    const area = container.querySelector('.table-area');
     const hint = container.querySelector('.zoom-hint');
-    const clampZ = (n) => Math.round(Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, n)) * 100) / 100;
-    let z = 0.5;
-    try { const s = Number(localStorage.getItem(ZOOM_KEY)); if (s >= ZOOM_MIN && s <= ZOOM_MAX) z = s; } catch (err) { /* 기억 못 해도 괜찮음 */ }
+    // 가장 작게 줄였을 때(최소 배율) 표의 가로 너비 = 기기(화면) 가로 너비. 이보다 더 줄어들지 않는다.
+    const minZoom = () => {
+      const sb = Math.max(0, wrap.offsetWidth - wrap.clientWidth - 2);   // 세로 스크롤 막대 너비 (테두리 2px 제외)
+      const avail = area.clientWidth - 2 - sb;
+      return avail > 0 ? Math.min(1, Math.floor((avail / NORMAL_W) * 1000) / 1000) : 0.4;
+    };
+    const clampZ = (n) => Math.floor(Math.max(minZoom(), Math.min(ZOOM_MAX, n)) * 1000) / 1000;
+    let z = minZoom();
+    let follow = true;   // 아직 손가락으로 조절한 적이 없으면 화면 너비에 계속 맞춤 (돌려서 가로로 봐도)
+    try { const s = Number(localStorage.getItem(ZOOM_KEY)); if (s > 0) { z = s; follow = false; } } catch (err) { /* 기억 못 해도 괜찮음 */ }
     const apply = (n) => { z = clampZ(n); container.style.setProperty('--tz', String(z)); };
     apply(z);
 
     const active = () => document.documentElement.dataset.layout === 'normal' && window.matchMedia('(max-width: 800px)').matches;
+    if (window.ResizeObserver) new ResizeObserver(() => { if (active()) apply(follow ? minZoom() : z); }).observe(area);
     const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
     let pinch = null;
     let hintTimer = null;
@@ -604,6 +658,7 @@
       const nz = clampZ(pinch.z * (dist(e.touches) / pinch.d));
       if (nz === z) return;
       const k = nz / pinch.z;
+      follow = false;
       apply(nz);
       wrap.scrollLeft = (pinch.sl + pinch.cx) * k - pinch.cx;
       wrap.scrollTop = (pinch.st + pinch.cy) * k - pinch.cy;
@@ -628,7 +683,10 @@
     const wrap = root && root.querySelector('.table-wrap');
     const tr = wrap && [...tbodyEl().rows].find((r) => r.dataset.id === id);
     if (!tr) return;
-    wrap.scrollTo({ top: Math.max(0, tr.offsetTop - 40), behavior: 'smooth' });
+    // 화면 위치(getBoundingClientRect)로 계산해야 폰의 확대·축소(CSS zoom) 상태에서도 정확하다
+    const head = wrap.querySelector('thead');
+    const y = tr.getBoundingClientRect().top - wrap.getBoundingClientRect().top + wrap.scrollTop;
+    wrap.scrollTo({ top: Math.max(0, y - (head ? head.getBoundingClientRect().height : 40)), behavior: 'smooth' });
   }
 
   // 접근성 라벨의 "n행" 번호를 from(0부터) 이후로 다시 매김
@@ -838,6 +896,7 @@
     row.querySelectorAll('.cell').forEach((input) => {
       const v = d[input.dataset.f];
       if (typeof v === 'string' && input.value !== v && document.activeElement !== input) input.value = v;
+      fitCell(input);
     });
     row.querySelectorAll('.pick').forEach((p) => {
       const v = d[p.dataset.f];
@@ -846,6 +905,12 @@
     syncBars(row);
     syncPortionsMark(row);
     syncLock(row);
+  }
+
+  // 칸 안의 줄 수에 맞게 높이를 늘린다 (줄바꿈은 Shift/Ctrl/Alt + Enter)
+  function fitCell(el) {
+    const n = el.value.split('\n').length;
+    if (el.rows !== n) el.rows = n;
   }
 
   function fillAll() {
@@ -1060,7 +1125,7 @@
       if (COLUMNS[c].lockable && tr.classList.contains('is-sample')) continue; // 대각선 칸은 건너뜀
       if (sameValue(valueAt(i, c), val)) continue;
       if (key === 'kind') setPick(tr.querySelector('.pick'), val);
-      else tr.querySelector(`.cell[data-f="${key}"]`).value = val;
+      else { const cell = tr.querySelector(`.cell[data-f="${key}"]`); cell.value = val; fitCell(cell); }
       queueSave(tr.dataset.id, key, val);
       if (key === 'kind') syncLock(tr);
       if (key === 'portions') syncPortionsMark(tr);
@@ -1348,11 +1413,12 @@
     prevOrder = null;
     renderBrands();
     setupZoom(container);
+    setupBrandDrawer();
     container.querySelector('.sort-btn').addEventListener('click', sortRows);
     container.querySelector('.sort-undo').addEventListener('click', undoSort);
     container.querySelector('.brand-list').addEventListener('click', (e) => {
       const b = e.target.closest('button[data-id]');
-      if (b) scrollToRow(b.dataset.id);
+      if (b) { scrollToRow(b.dataset.id); setBrandDrawer(false); }
     });
     setupRowAdd(container);
     setupFill(container);
@@ -1373,6 +1439,7 @@
     tbody.addEventListener('input', (e) => {
       const input = e.target.closest('.cell');
       if (!input || !canEdit()) return;
+      fitCell(input);
       queueSave(input.closest('tr').dataset.id, input.dataset.f, input.value);
       if (input.dataset.f === 'portions') syncPortionsMark(input.closest('tr'));
       if (input.dataset.f === 'brand' || input.dataset.f === 'name') {
@@ -1382,7 +1449,8 @@
       positionSelection(); // 내용이 생기거나 사라지면 핸들 표시도 바뀜
     });
 
-    // 칸 안에서 ↓ / Enter: 아래 칸으로, ↑ / Shift+Enter: 위 칸으로 (표가 따라 스크롤됨).
+    // 칸 안에서 ↓ / Enter: 아래 칸으로, ↑: 위 칸으로 (표가 따라 스크롤됨).
+    // Shift / Ctrl / Alt + Enter: 칸 안에서 줄바꿈. 여러 줄 칸에서는 ↑↓가 먼저 줄 사이를 움직이고, 맨 윗줄·맨 아랫줄에서만 다른 칸으로 넘어감.
     // 한글 조합 중에는 무시. 잠긴(대각선) 칸은 건너뜀. 본병/소분 칸은 ↑↓로 이동, Alt+↑↓ / Enter / Space 로 목록 열기.
     tbody.addEventListener('keydown', (e) => {
       const el = e.target.closest('.cell, .pick');
@@ -1393,9 +1461,22 @@
         if (e.shiftKey || e.ctrlKey || e.metaKey) return;
         if (isPick && e.altKey) { if (canEdit()) { e.preventDefault(); openMenu(el); } return; }
         if (e.altKey) return;
+        if (!isPick && el.value.includes('\n')) {   // 여러 줄 칸: 같은 칸 안에서 줄 이동이 먼저
+          const before = el.value.slice(0, el.selectionStart);
+          const after = el.value.slice(el.selectionEnd);
+          if (e.key === 'ArrowUp' ? before.includes('\n') : after.includes('\n')) return;
+        }
         dir = e.key === 'ArrowDown' ? 1 : -1;
       } else if (e.key === 'Enter' && !isPick) {
-        dir = e.shiftKey ? -1 : 1;
+        if (e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) {   // 줄바꿈
+          if (!canEdit() || el.readOnly) return;
+          e.preventDefault();
+          if (el.maxLength > 0 && el.value.length - (el.selectionEnd - el.selectionStart) >= el.maxLength) return;
+          el.setRangeText('\n', el.selectionStart, el.selectionEnd, 'end');
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          return;
+        }
+        dir = 1;
       }
       if (!dir) return;
       e.preventDefault();
@@ -1522,6 +1603,7 @@
   }
 
   function unmount() {
+    teardownBrandDrawer();
     prevOrder = null;
     closeLightbox();
     closeMenu(false);
