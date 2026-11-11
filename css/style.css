@@ -552,7 +552,7 @@ html[data-layout="normal"] .grid tr.is-sample td.c-lockable { background-image: 
    - 소분 가능 열은 좁게(72px) 줄이고, 숫자 대신 내용이 있는 칸에만 O 를 보여 준다.
    - 표는 남는 너비를 늘려 채우지 않고 오른쪽에 둔다.
    - 폰(800px 이하): 표 위 슬라이더로 확대·축소 (처음 50%). 아래 @media. */
-html[data-layout="normal"] .col-price,
+html[data-layout="normal"] main:not(.is-trade) .col-price,   /* 가격은 잉팔잉사 일반 모드에서만 보임 */
 html[data-layout="normal"] .col-kind,
 html[data-layout="normal"] .col-level { display: none; }
 html[data-layout="normal"] .grid { width: var(--normal-w); min-width: 0 !important; }
@@ -567,10 +567,10 @@ html[data-layout="normal"] .main--table { --main-pl: clamp(12px, 3vw, 32px); }  
 html[data-layout="normal"] .table-area { padding-left: 0; display: flex; justify-content: flex-end; }   /* 표는 오른쪽에 붙임 */
 html[data-layout="normal"] .table-wrap { width: auto; max-width: 100%; }
 
-/* 잉팔잉사(.is-trade): 일반 모드에서 보이는 열 — 브랜드 / 잉크명 / 발색 / 비고 / 소분 가능. 관리자 모드는 거기에 가격이 더해짐.
+/* 잉팔잉사(.is-trade): 브랜드 / 잉크명 / 발색 / 비고 / 소분 가능 / 가격 (가격은 공개 데이터). 관리자·일반 모드 모두 같은 열.
    (관리자 모드의 소분 가능 칸은 숫자를 보여 주고 고칠 수 있어서 JS 의 열 너비, 일반 모드는 O 표시라 72px)
    행 추가는 없음(소분 가능이 적힌 행만 나오는 화면이라). 표는 오른쪽, 패널과의 간격은 일반 모드와 같게. */
-.is-trade .col-kind, .is-trade .col-level { display: none; }   /* 가격 열은 관리자 모드에서만 보임(일반 모드는 아래 규칙이 가격 열을 숨김) */
+.is-trade .col-kind, .is-trade .col-level { display: none; }   /* 가격 열은 보임 (보유 잉크의 일반 모드만 아래 규칙으로 가격 열을 숨김) */
 .is-trade .grid { width: var(--admin-w, 865px); min-width: 0 !important; }   /* --admin-w 는 JS 가 열 너비 합으로 지정 */
 .is-trade .table-area { padding-left: 0; display: flex; justify-content: flex-end; }
 .is-trade .table-wrap { width: auto; max-width: 100%; }

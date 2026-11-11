@@ -27,7 +27,7 @@
   const STEPS = 10;
   const DOC_PATH = ['inventory', 'inkOwned'];            // 공개 문서
   const PRIVATE_PATH = ['inventory', 'inkPrivate'];      // 관리자 전용 문서
-  const PRIVATE_FIELDS = ['levels', 'price', 'portions'];   // 관리자 전용 문서에만 저장하는 필드 (예전 level 도 여기로 옮김)
+  const PRIVATE_FIELDS = ['levels', 'portions'];   // 관리자 전용 문서에만 저장하는 필드 (예전 level 도 여기로 옮김). 가격은 잉팔잉사에서 보여 주려고 공개 문서로 옮김(2026-11)
   const LEGACY_PRIVATE = ['level', ...PRIVATE_FIELDS];
   const SAVE_DELAY = 600;                       // 입력을 멈추고 이 시간(ms)이 지나면 저장
   const RETRY_DELAY = 5000;
@@ -52,6 +52,9 @@
   const NORMAL_PORTIONS_W = 72;   // 일반 모드의 소분 가능 열 너비
   const HIDDEN_IN_NORMAL = ['price', 'kind', 'level'];   // 일반 모드에서 없애는 열
   const NORMAL_W = COLUMNS.reduce((sum, c) => sum + (HIDDEN_IN_NORMAL.includes(c.key) ? 0 : c.key === 'portions' ? NORMAL_PORTIONS_W : c.width), 0);
+  // 잉팔잉사의 일반 모드 배치: 보유 잉크의 일반 모드 열 + 가격 (가격은 공개 데이터)
+  const NORMAL_TRADE_W = COLUMNS.reduce((sum, c) => sum + (c.key === 'kind' || c.key === 'level' ? 0 : c.key === 'portions' ? NORMAL_PORTIONS_W : c.width), 0);
+  const normalTableW = () => (variant === 'trade' ? NORMAL_TRADE_W : NORMAL_W);   // 지금 화면의 일반 모드 표 너비
 
   // 본병/소분 드롭다운 선택지 (저장되는 값은 보이는 글자 그대로)
   const KIND_OPTIONS = [
@@ -138,8 +141,10 @@
       // 공개 문서와 관리자 전용 문서로 나눠서 저장
       const pub = {};
       const priv = {};
+      const privDel = {};   // 공개 문서로 옮긴 뒤에 관리자 전용 문서에서 지울 예전 값 (공개 저장이 성공한 다음에만 지움)
       batch.forEach(([, e]) => {
         if (e.order) { pub.order = e.order; return; }
+        if (e.pdel) { (privDel[e.pdel] = privDel[e.pdel] || {})[e.field] = deleteField(); return; }
         if (e.del) { (pub.rows = pub.rows || {})[e.del] = deleteField(); priv[e.del] = deleteField(); return; }   // 행 삭제: 공개·관리자 전용 문서에서 모두 지움
         const target = PRIVATE_FIELDS.includes(e.field) ? priv : (pub.rows = pub.rows || {});
         (target[e.id] = target[e.id] || {})[e.field] = e.value;
@@ -148,6 +153,7 @@
       if (pub.order || pub.rows) jobs.push(setDoc(doc(db, ...DOC_PATH), pub, { merge: true }));
       if (Object.keys(priv).length) jobs.push(setDoc(doc(db, ...PRIVATE_PATH), { rows: priv }, { merge: true }));
       await Promise.all(jobs);
+      if (Object.keys(privDel).length) await setDoc(doc(db, ...PRIVATE_PATH), { rows: privDel }, { merge: true });
       batch.forEach(([k, e]) => { if (pending.get(k) === e) pending.delete(k); });
       saving = false;
       saveCache();   // 다음에 들어올 때 바로 보여 줄 최신 내용을 보관
@@ -245,9 +251,27 @@
     privState = 'idle';
     Object.keys(data).forEach((id) => { LEGACY_PRIVATE.forEach((k) => { delete data[id][k]; }); });
     if (root) {   // 화면에 남은 값도 지움
-      root.querySelectorAll('.cell[data-f="price"], .cell[data-f="portions"]').forEach((input) => { input.value = ''; });
+      root.querySelectorAll('.cell[data-f="portions"]').forEach((input) => { input.value = ''; });
       fillAll();
     }
+  }
+
+  // 가격은 공개 문서로 옮겼다. 관리자 전용 문서에 남아 있는 예전 가격을 공개 문서로 복사하고(공개 쪽이 비어 있을 때만) 전용 문서에서는 지운다.
+  // 관리자가 관리자 모드에 들어오면 자동으로 한 번 실행되고, 다음부터는 옮길 것이 없다.
+  function migratePrices() {
+    const rows = (privData && privData.rows) || {};
+    let n = 0;
+    Object.keys(rows).forEach((id) => {
+      const v = rows[id] && rows[id].price;
+      if (v === undefined || v === null) return;
+      const d = data[id];
+      if (!d) return;                                   // 이미 삭제된 행
+      if (hasText(v) && !hasText(d.price)) { d.price = String(v); pending.set(id + '|price', { id, field: 'price', value: String(v) }); }
+      pending.set('@pdel|' + id + '|price', { pdel: id, field: 'price' });
+      delete rows[id].price;
+      n++;
+    });
+    if (n) { setStatus('saving'); scheduleFlush(0); }
   }
 
   async function loadPrivate() {
@@ -259,6 +283,7 @@
       privData = snap.exists() ? snap.data() : { rows: {} };
       privState = 'ready';
       mergePrivate();
+      migratePrices();
       if (root) { fillAll(); applyEditable(); }
     } catch (err) {
       privState = 'error';
@@ -639,7 +664,7 @@
     const area = container.querySelector('.table-area');
     const hint = container.querySelector('.zoom-hint');
     const adminLayout = () => document.documentElement.dataset.layout !== 'normal';
-    const naturalW = () => (adminLayout() ? (isTrade() ? TRADE_ADMIN_W : BASE_WIDTH) : NORMAL_W);
+    const naturalW = () => (adminLayout() ? (isTrade() ? TRADE_ADMIN_W : BASE_WIDTH) : normalTableW());
     // 표가 들어갈 수 있는 가로 너비. withPad=false 면 관리자 배치의 왼쪽 여백(행 추가 아이콘 자리 28px)을 빼지 않는다
     const availW = (withPad) => {
       const cs = window.getComputedStyle(area);
@@ -653,7 +678,7 @@
       const vw = document.documentElement.clientWidth;
       const m = Math.max(12, Math.min(32, vw * 0.03));
       const a = vw - 2 * m - 2 - scrollbarW();
-      return a > 0 ? Math.min(1, Math.floor((a / NORMAL_W) * 1000) / 1000) : 0.4;
+      return a > 0 ? Math.min(1, Math.floor((a / normalTableW()) * 1000) / 1000) : 0.4;
     };
     const minZoom = () => fitFor(naturalW(), true);
     const clampZ = (n) => Math.floor(Math.max(minZoom(), Math.min(ZOOM_MAX, n)) * 1000) / 1000;
@@ -983,7 +1008,7 @@
   function setupBarFit(container) {
     const table = container.querySelector('table.grid');
     const th = table.querySelectorAll('thead th')[LEVEL_COL];
-    container.style.setProperty('--normal-w', NORMAL_W + 'px');   // 일반 모드 배치의 표 너비 (표와 바깥 배치가 함께 참고)
+    container.style.setProperty('--normal-w', normalTableW() + 'px');   // 일반 모드 배치의 표 너비 (표와 바깥 배치가 함께 참고)
     container.style.setProperty('--admin-w', (isTrade() ? TRADE_ADMIN_W : BASE_WIDTH) + 'px');   // 관리자 배치의 표 너비 (폰에서 확대·축소의 기준)
     const fit = () => {
       if (document.documentElement.dataset.layout === 'normal') { positionSelection(); return; } // 일반 배치에는 막대가 없음
