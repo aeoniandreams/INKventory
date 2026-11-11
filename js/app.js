@@ -26,6 +26,7 @@
   const main = $('#main');
   const pageTitle = $('#pageTitle');
   const toggleBtn = $('#sidebarToggle');
+  const collapseBtn = $('#sidebarCollapse');   // 사이드바 안의 닫기 아이콘 (없어도 앱은 동작)
   const backdrop = $('#backdrop');
 
   // 카테고리별 화면 모듈 (js/views/*.js 가 등록). 등록 안 된 항목은 "준비 중" 화면.
@@ -96,12 +97,13 @@
     sidebar.classList.toggle('is-open', open);
     backdrop.classList.toggle('is-visible', open);
     toggleBtn.setAttribute('aria-expanded', open);
-    if (open) $('#sidebarCollapse').focus({ preventScroll: true });
+    if (open && collapseBtn) collapseBtn.focus({ preventScroll: true });
     else if (sidebar.contains(document.activeElement)) toggleBtn.focus({ preventScroll: true });
   }
 
   toggleBtn.addEventListener('click', () => setSidebar(!isOpen()));
-  $('#sidebarCollapse').addEventListener('click', () => setSidebar(false));   // 사이트명 왼쪽의 아이콘(열기 버튼과 같은 모양)으로 닫기
+  // 사이트명 왼쪽의 아이콘(열기 버튼과 같은 모양)으로 닫기. (index.html 이 예전 것이어도 앱 전체가 멈추지 않게 없을 때는 건너뜀)
+  if (collapseBtn) collapseBtn.addEventListener('click', () => setSidebar(false));
   backdrop.addEventListener('click', () => setSidebar(false));
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && isOpen() && !authDialog.open) setSidebar(false);
