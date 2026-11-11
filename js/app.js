@@ -103,6 +103,7 @@
 
   toggleBtn.addEventListener('click', () => setSidebar(!isOpen()));
   closeBtn.addEventListener('click', () => setSidebar(false));
+  $('#sidebarCollapse').addEventListener('click', () => setSidebar(false));   // 사이트명 왼쪽의 사이드바 아이콘도 닫기
   backdrop.addEventListener('click', () => setSidebar(false));
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && isOpen() && !authDialog.open) setSidebar(false);

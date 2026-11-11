@@ -561,25 +561,66 @@
     syncUndo();
   }
 
-  // ── 폰용 확대·축소 슬라이더 (일반 모드, 800px 이하에서만 보임 — CSS 참고) ──
-  // 처음 50%. 마지막으로 정한 배율은 이 기기에 기억해 둔다.
-  const ZOOM_KEY = 'inkventory.zoom.v1';
+  // ── 폰용 확대·축소: 두 손가락으로 벌리거나 오므리기 (일반 모드, 800px 이하) ──
+  // 표 전체를 CSS zoom(--tz)으로 키우고 줄인다. 처음 50%, 범위 30~200%. 손가락 사이의 점이 제자리에 있도록 스크롤 위치를 맞춘다.
+  // 마지막 배율은 이 기기에 기억한다. (한 손가락은 그대로 스크롤)
+  const ZOOM_KEY = 'inkventory.zoom.v2';
+  const ZOOM_MIN = 0.3;
+  const ZOOM_MAX = 2;
 
   function setupZoom(container) {
-    const range = container.querySelector('.zoom-range');
-    const out = container.querySelector('.zoom-val');
-    let v = 50;
-    try { const s = Number(localStorage.getItem(ZOOM_KEY)); if (s >= 30 && s <= 150) v = s; } catch (err) { /* 기억 못 해도 괜찮음 */ }
-    const apply = (n) => {
-      container.style.setProperty('--tz', String(n / 100));
-      out.textContent = Math.round(n) + '%';
-      range.value = String(n);
+    const wrap = container.querySelector('.table-wrap');
+    const hint = container.querySelector('.zoom-hint');
+    const clampZ = (n) => Math.round(Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, n)) * 100) / 100;
+    let z = 0.5;
+    try { const s = Number(localStorage.getItem(ZOOM_KEY)); if (s >= ZOOM_MIN && s <= ZOOM_MAX) z = s; } catch (err) { /* 기억 못 해도 괜찮음 */ }
+    const apply = (n) => { z = clampZ(n); container.style.setProperty('--tz', String(z)); };
+    apply(z);
+
+    const active = () => document.documentElement.dataset.layout === 'normal' && window.matchMedia('(max-width: 800px)').matches;
+    const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+    let pinch = null;
+    let hintTimer = null;
+
+    wrap.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 2 && active()) {
+        const r = wrap.getBoundingClientRect();
+        pinch = {
+          d: dist(e.touches),
+          z,
+          cx: (e.touches[0].clientX + e.touches[1].clientX) / 2 - r.left,
+          cy: (e.touches[0].clientY + e.touches[1].clientY) / 2 - r.top,
+          sl: wrap.scrollLeft,
+          st: wrap.scrollTop,
+        };
+      } else {
+        pinch = null;
+      }
+    }, { passive: true });
+
+    wrap.addEventListener('touchmove', (e) => {
+      if (!pinch || e.touches.length !== 2) return;
+      e.preventDefault();                                   // 두 손가락일 때는 브라우저의 화면 확대 대신 표를 확대
+      const nz = clampZ(pinch.z * (dist(e.touches) / pinch.d));
+      if (nz === z) return;
+      const k = nz / pinch.z;
+      apply(nz);
+      wrap.scrollLeft = (pinch.sl + pinch.cx) * k - pinch.cx;
+      wrap.scrollTop = (pinch.st + pinch.cy) * k - pinch.cy;
+      hint.textContent = Math.round(z * 100) + '%';
+      hint.classList.add('is-on');
+      clearTimeout(hintTimer);
+      hintTimer = setTimeout(() => hint.classList.remove('is-on'), 900);
+    }, { passive: false });
+
+    const end = (e) => {
+      if (e.touches.length < 2 && pinch) {
+        pinch = null;
+        try { localStorage.setItem(ZOOM_KEY, String(z)); } catch (err) { /* 무시 */ }
+      }
     };
-    apply(v);
-    range.addEventListener('input', () => {
-      apply(Number(range.value));
-      try { localStorage.setItem(ZOOM_KEY, range.value); } catch (err) { /* 무시 */ }
-    });
+    wrap.addEventListener('touchend', end, { passive: true });
+    wrap.addEventListener('touchcancel', end, { passive: true });
   }
 
   // 브랜드 이름을 누르면 표를 그 브랜드의 첫 행으로 이동
@@ -839,7 +880,7 @@
   function setupBarFit(container) {
     const table = container.querySelector('table.grid');
     const th = table.querySelectorAll('thead th')[LEVEL_COL];
-    table.style.setProperty('--normal-w', NORMAL_W + 'px');   // 일반 모드 배치의 표 너비
+    container.style.setProperty('--normal-w', NORMAL_W + 'px');   // 일반 모드 배치의 표 너비 (표와 바깥 배치가 함께 참고)
     const fit = () => {
       if (document.documentElement.dataset.layout === 'normal') { positionSelection(); return; } // 일반 배치에는 막대가 없음
       const inner = th.getBoundingClientRect().width - 24 - 1;   // 좌우 여백 12px씩 + 오른쪽 선 1px
@@ -1285,13 +1326,8 @@
         </div>
         <ul class="brand-list"></ul>
       </aside>
-      <div class="zoom-ctl" role="group" aria-label="표 확대·축소">
-        <span aria-hidden="true">축소</span>
-        <input class="zoom-range" type="range" min="30" max="150" step="5" value="50" aria-label="표 크기">
-        <span aria-hidden="true">확대</span>
-        <b class="zoom-val" aria-live="polite">50%</b>
-      </div>
       <div class="table-area view-enter">
+        <span class="zoom-hint" aria-hidden="true"></span>
         <button class="row-add" type="button" title="행 추가" aria-label="이 위치에 행 추가">${ROW_ADD_ICON}</button>
         <ul class="menu" role="listbox" aria-label="본병/소분" hidden></ul>
         <div class="table-wrap" tabindex="0" role="region" aria-label="보유 잉크 표">

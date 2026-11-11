@@ -66,9 +66,10 @@ button { font: inherit; color: inherit; }
 .sidebar__head {
   height: var(--topbar-h);
   display: flex; align-items: center; justify-content: space-between;
-  padding: 0 12px 0 24px;
+  padding: 0 12px 0 12px;
   border-bottom: 1px solid var(--line);
 }
+.sidebar__title { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .brand {
   font-size: 20px; font-weight: 800; letter-spacing: -.01em; color: var(--accent);
 }
@@ -536,17 +537,36 @@ html[data-layout="normal"] .main--table { --main-pl: clamp(12px, 3vw, 32px); }  
 html[data-layout="normal"] .table-area { padding-left: 0; display: flex; justify-content: flex-end; }   /* 표는 오른쪽에 붙임 */
 html[data-layout="normal"] .table-wrap { width: auto; max-width: 100%; }
 
-/* 폰용 확대·축소 슬라이더 (일반 모드 + 800px 이하). 표 전체를 CSS zoom 으로 키우고 줄인다. */
-.zoom-ctl { display: none; }
+/* 일반 모드에서 패널과 표 사이가 너무 멀어지지 않게: 묶음 전체의 너비를 "패널 + 표 + 사이 간격(--table-gap)"까지만 */
+html[data-layout="normal"] .ink-layout {
+  --table-gap: 150px;
+  max-width: calc(var(--sidebar-w) - var(--main-pl) + var(--table-gap) + var(--normal-w) + 12px);
+}
+
+/* 폰(일반 모드 + 800px 이하): 두 손가락으로 표 확대·축소 (JS setupZoom). 표 전체를 CSS zoom 으로 키우고 줄인다. */
+.zoom-hint {
+  position: absolute; right: 10px; top: 6px; z-index: 4; padding: 2px 9px; border-radius: 999px;
+  background: var(--accent); color: #fff; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
+  opacity: 0; pointer-events: none; transition: opacity .15s;
+}
+.zoom-hint.is-on { opacity: .92; }
 @media (max-width: 800px) {
-  html[data-layout="normal"] .zoom-ctl {
-    display: flex; align-items: center; gap: 10px; padding: 0 4px;
-    font-size: 12px; color: var(--muted);
-  }
-  .zoom-ctl input { flex: 1; min-width: 0; height: 28px; accent-color: var(--accent); }
-  .zoom-ctl b { min-width: 40px; text-align: right; font-weight: 600; color: var(--accent); font-variant-numeric: tabular-nums; }
   html[data-layout="normal"] .grid { zoom: var(--tz, .5); }
   html[data-layout="normal"] .table-area { justify-content: center; }
+  html[data-layout="normal"] .table-wrap { touch-action: pan-x pan-y; }   /* 한 손가락 스크롤은 그대로, 두 손가락은 JS 가 처리 */
+  html[data-layout="normal"] .ink-layout { max-width: none; }
+}
+
+/* 스크롤 막대: 배경 없이, 가늘게, 사이트 포인트색(남색) 막대만 */
+.table-wrap::-webkit-scrollbar, .brand-list::-webkit-scrollbar, .nav::-webkit-scrollbar, .menu::-webkit-scrollbar { width: 8px; height: 8px; background: transparent; }
+.table-wrap::-webkit-scrollbar-track, .brand-list::-webkit-scrollbar-track, .nav::-webkit-scrollbar-track, .menu::-webkit-scrollbar-track,
+.table-wrap::-webkit-scrollbar-corner { background: transparent; }
+.table-wrap::-webkit-scrollbar-thumb, .brand-list::-webkit-scrollbar-thumb, .nav::-webkit-scrollbar-thumb, .menu::-webkit-scrollbar-thumb {
+  background: var(--accent); border-radius: 999px; border: 2px solid transparent; background-clip: padding-box;   /* 8px 칸 안에서 보이는 굵기 4px */
+}
+.table-wrap::-webkit-scrollbar-button, .brand-list::-webkit-scrollbar-button, .nav::-webkit-scrollbar-button, .menu::-webkit-scrollbar-button { display: none; }
+@supports not selector(::-webkit-scrollbar) {   /* 파이어폭스 등 */
+  .table-wrap, .brand-list, .nav, .menu { scrollbar-width: thin; scrollbar-color: var(--accent) transparent; }
 }
 
 .view-enter { animation: view-in .35s var(--ease); }
