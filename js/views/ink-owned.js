@@ -426,7 +426,7 @@
       if (c.pick) {
         return `<td class="c-text col-${c.key}"><button class="pick" type="button" data-f="${c.key}" data-label="${c.label}" aria-label="${c.label} ${n}행" aria-haspopup="listbox" aria-expanded="false" tabindex="-1"><span class="pick-text"></span></button></td>`;
       }
-      const input = `<textarea class="cell" rows="1" wrap="off" data-f="${c.key}" data-label="${c.label}" maxlength="${c.max}" aria-label="${c.label} ${n}행" autocomplete="off" spellcheck="false" readonly tabindex="-1"></textarea>`;
+      const input = `<div class="cell-wrap" data-v=""><textarea class="cell" rows="1" data-f="${c.key}" data-label="${c.label}" maxlength="${c.max}" aria-label="${c.label} ${n}행" autocomplete="off" spellcheck="false" readonly tabindex="-1"></textarea></div>`;
       if (c.pearlToggle) {
         return `<td class="c-text c-name col-${c.key}">${input}<button class="pearl-btn" type="button" tabindex="-1" aria-pressed="false" title="펄 잉크로 표시" aria-label="펄 잉크로 표시">${SPARKLES_ICON}</button></td>`;
       }
@@ -1020,10 +1020,10 @@
     syncLock(row);
   }
 
-  // 칸 안의 줄 수에 맞게 높이를 늘린다 (줄바꿈은 Shift/Ctrl/Alt + Enter)
+  // 칸의 글자를 바깥 상자(.cell-wrap)의 data-v 에도 적어 둔다. CSS 가 이 글자를 보이지 않게 같은 폭으로 그려서 칸(행)의 높이를 정하므로,
+  // 긴 글자는 단어 단위로 자동 줄바꿈되고 행이 알아서 늘어난다 (직접 줄바꿈은 Shift/Ctrl/Alt + Enter).
   function fitCell(el) {
-    const n = el.value.split('\n').length;
-    if (el.rows !== n) el.rows = n;
+    if (el.parentNode && el.parentNode.dataset) el.parentNode.dataset.v = el.value;
   }
 
   function fillAll() {
@@ -1634,10 +1634,8 @@
         if (e.shiftKey || e.ctrlKey || e.metaKey) return;
         if (isPick && e.altKey) { if (canEdit()) { e.preventDefault(); openMenu(el); } return; }
         if (e.altKey) return;
-        if (!isPick && el.value.includes('\n')) {   // 여러 줄 칸: 같은 칸 안에서 줄 이동이 먼저
-          const before = el.value.slice(0, el.selectionStart);
-          const after = el.value.slice(el.selectionEnd);
-          if (e.key === 'ArrowUp' ? before.includes('\n') : after.includes('\n')) return;
+        if (!isPick && (el.value.includes('\n') || el.offsetHeight > 41)) {   // 여러 줄(줄바꿈 또는 자동 줄바꿈) 칸: 같은 칸 안에서 줄 이동이 먼저
+          if (e.key === 'ArrowUp' ? el.selectionStart > 0 : el.selectionEnd < el.value.length) return;   // 글자 맨 앞/맨 뒤에서만 다른 칸으로
         }
         dir = e.key === 'ArrowDown' ? 1 : -1;
       } else if (e.key === 'Enter' && !isPick) {

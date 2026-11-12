@@ -113,6 +113,25 @@
     return lines;
   }
 
+  // 단어(띄어쓰기) 단위로 줄바꿈. 한 단어가 maxW 보다 길면 그 단어만 글자 단위로 끊음 (사이트의 칸과 같은 방식)
+  function wrapWords(ctx, text, maxW) {
+    const lines = [];
+    let cur = '';
+    const push = () => { if (cur) lines.push(cur); cur = ''; };
+    String(text).split(' ').forEach((word) => {
+      const trial = cur ? `${cur} ${word}` : word;
+      if (ctx.measureText(trial).width <= maxW) { cur = trial; return; }
+      push();
+      if (ctx.measureText(word).width <= maxW) { cur = word; return; }
+      Array.from(word).forEach((ch) => {                    // 긴 단어: 글자 단위
+        if (ctx.measureText(cur + ch).width > maxW && cur) push();
+        cur += ch;
+      });
+    });
+    push();
+    return lines.length ? lines : [''];
+  }
+
   function ellipsize(ctx, text, maxW) {
     if (ctx.measureText(text).width <= maxW) return text;
     let t = Array.from(text);
@@ -191,8 +210,11 @@
     const FOOT = 26;
     const W = TABLE_COLS.reduce((s, c) => s + c.w, 0);
     const meas = document.createElement('canvas').getContext('2d');
-    const lineCount = (it) => Math.max(1, ...['brand', 'name', 'note', 'portions', 'price'].map((f) => String(it[f] || '').split('\n').length));
-    const heights = list.map((it) => Math.max(40, lineCount(it) * 20 + 20));
+    meas.font = `400 14px ${FONT}`;
+    const TEXT_COLS = TABLE_COLS.filter((c) => c.k !== 'swatch');
+    // 칸마다 줄 단위로 나눈 글자 (직접 줄바꿈 + 칸 너비에 맞춘 자동 줄바꿈)
+    const cellLines = list.map((it) => Object.fromEntries(TEXT_COLS.map((c) => [c.k, String(it[c.k] || '').split('\n').flatMap((ln) => wrapWords(meas, ln, c.w - 24))])));
+    const heights = cellLines.map((cl) => Math.max(40, Math.max(...Object.values(cl).map((arr) => arr.length)) * 20 + 20));
     const H = HEAD + heights.reduce((a, b) => a + b, 0);
     const cv = document.createElement('canvas');
     cv.width = (W + PAD * 2) * S;
@@ -250,7 +272,7 @@
         } else {
           ctx.fillStyle = '#1f2430';
           ctx.font = `400 14px ${FONT}`;
-          String(it[c.k] || '').split('\n').forEach((ln, li) => ctx.fillText(ellipsize(ctx, ln, c.w - 24), cx + 12, y + 20 + li * 20));
+          cellLines[ri][c.k].forEach((ln, li) => ctx.fillText(ln, cx + 12, y + 20 + li * 20));
         }
         // 오른쪽 선
         ctx.fillStyle = '#d7dbe4';
@@ -276,7 +298,6 @@
     ctx.textAlign = 'right';
     ctx.fillText(pageCount > 1 ? `INKventory · 잉팔잉사 ${pageNo}/${pageCount}` : 'INKventory · 잉팔잉사', PAD + W, PAD + H + 18);
     ctx.textAlign = 'left';
-    void meas;
     return cv;
   }
 

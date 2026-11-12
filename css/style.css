@@ -315,27 +315,26 @@ button { font: inherit; color: inherit; }
 .grid td.c-text { padding: 0; }
 
 /* 글자 입력 칸: 평소엔 일반 글자처럼 보이고, 관리자 모드에서 누르면 입력 가능 */
-/* 칸은 textarea: 한 줄이면 높이 40px, Shift/Ctrl/Alt+Enter 로 줄을 바꾸면 줄 수만큼 행이 늘어난다(JS 가 rows 지정). 자동 줄바꿈은 없음. */
+/* 칸은 textarea. 칸 너비보다 긴 글자는 단어 단위로 자동 줄바꿈(한글은 띄어쓰기 기준, 한 단어가 칸보다 길면 그때만 글자 중간에서 끊음).
+   행 높이는 글자 수에 맞게 늘어난다: 바깥 상자(.cell-wrap)의 ::after 가 같은 글자를 보이지 않게 같은 폭으로 그려서 높이를 정하고,
+   textarea 는 그 위에 겹쳐 같은 높이로 늘어난다 (JS 의 fitCell 이 data-v 에 글자를 적어 줌). 한 줄이면 높이 40px. */
+.cell-wrap { display: grid; }
+.cell-wrap::after {
+  content: attr(data-v) ' '; grid-area: 1 / 1; visibility: hidden; pointer-events: none;
+  min-height: 40px; padding: 10px 12px; font: inherit; line-height: 20px;
+  white-space: pre-wrap; word-break: keep-all; overflow-wrap: anywhere;
+}
 .cell {
-  display: block; width: 100%; height: auto; min-height: 40px; margin: 0; padding: 10px 12px;
+  grid-area: 1 / 1; display: block; width: 100%; margin: 0; padding: 10px 12px;
   font: inherit; line-height: 20px; color: var(--ink);
   background: transparent; border: 0; border-radius: 0; outline: none;
-  resize: none; overflow: hidden; white-space: pre; text-overflow: ellipsis;
-}
-/* textarea 는 말줄임(…)이 안 되므로, 칸보다 긴 글자는 오른쪽 끝을 흐리게 잘라 보여 준다. 짧은 글자는 영향 없음 */
-.cell:not(:focus) {
-  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 14px), transparent);
-  mask-image: linear-gradient(to right, #000 calc(100% - 14px), transparent);
-}
-.is-editable td.c-name .cell:not(:focus) {   /* 펄 버튼 자리(오른쪽 32px) 앞에서 사라지게 */
-  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 34px), transparent calc(100% - 24px));
-  mask-image: linear-gradient(to right, #000 calc(100% - 34px), transparent calc(100% - 24px));
+  resize: none; overflow: hidden; white-space: pre-wrap; word-break: keep-all; overflow-wrap: anywhere;
 }
 /* 터치 기기(폰): 읽기만 하는 화면은 브랜드 패널과 같은 13px.
    고칠 수 있는 관리자 모드에서만, 입력칸 글자가 16px 미만이면 iOS가 확대해 버리므로 16px */
 @media (pointer: coarse) {
   .grid { font-size: 13px; }
-  .is-editable .cell { font-size: 16px; }
+  .is-editable .cell, .is-editable .cell-wrap::after { font-size: 16px; }
 }
 /* 본병/소분 칸 (클릭하면 드롭다운) */
 .grid td.c-text { position: relative; }
@@ -513,7 +512,7 @@ html.has-lightbox { overflow: hidden; }
 @media (pointer: coarse) { .is-editable .pearl-btn { opacity: .5; } }
 .pearl-btn[aria-pressed="true"] { color: #353c4a; }
 .pearl-btn:hover { background: rgba(255, 255, 255, .6); color: var(--accent); }
-.is-editable td.c-name .cell { padding-right: 32px; }
+.is-editable td.c-name .cell, .is-editable td.c-name .cell-wrap::after { padding-right: 32px; }
 
 /* 소분인 행의 소분 가능·가격 칸: 우측이 높은 대각선, 입력 불가 */
 .grid tr.is-sample td.c-lockable {
