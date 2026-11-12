@@ -1021,7 +1021,7 @@
   }
 
   // 칸의 글자를 바깥 상자(.cell-wrap)의 data-v 에도 적어 둔다. CSS 가 이 글자를 보이지 않게 같은 폭으로 그려서 칸(행)의 높이를 정하므로,
-  // 긴 글자는 단어 단위로 자동 줄바꿈되고 행이 알아서 늘어난다 (직접 줄바꿈은 Shift/Ctrl/Alt + Enter).
+  // 긴 글자는 단어 단위로 자동 줄바꿈되고 행이 알아서 늘어난다 (직접 줄바꿈은 Shift + Enter).
   function fitCell(el) {
     if (el.parentNode && el.parentNode.dataset) el.parentNode.dataset.v = el.value;
   }
@@ -1623,7 +1623,7 @@
     });
 
     // 칸 안에서 ↓ / Enter: 아래 칸으로, ↑: 위 칸으로 (표가 따라 스크롤됨).
-    // Shift / Ctrl / Alt + Enter: 칸 안에서 줄바꿈. 여러 줄 칸에서는 ↑↓가 먼저 줄 사이를 움직이고, 맨 윗줄·맨 아랫줄에서만 다른 칸으로 넘어감.
+    // Shift + Enter: 칸 안에서 줄바꿈. (Ctrl / Alt + Enter 는 아무 동작도 하지 않음) 여러 줄 칸에서는 ↑↓가 먼저 줄 사이를 움직이고, 맨 윗줄·맨 아랫줄에서만 다른 칸으로 넘어감.
     // 한글 조합 중에는 무시. 잠긴(대각선) 칸은 건너뜀. 본병/소분 칸은 ↑↓로 이동, Alt+↑↓ / Enter / Space 로 목록 열기.
     tbody.addEventListener('keydown', (e) => {
       const el = e.target.closest('.cell, .pick');
@@ -1639,7 +1639,8 @@
         }
         dir = e.key === 'ArrowDown' ? 1 : -1;
       } else if (e.key === 'Enter' && !isPick) {
-        if (e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) {   // 줄바꿈
+        if (e.ctrlKey || e.altKey || e.metaKey) { e.preventDefault(); return; }   // Ctrl/Alt/Cmd + Enter: 아무 동작도 하지 않음
+        if (e.shiftKey) {   // Shift + Enter: 줄바꿈
           if (!canEdit() || el.readOnly) return;
           e.preventDefault();
           if (el.maxLength > 0 && el.value.length - (el.selectionEnd - el.selectionStart) >= el.maxLength) return;
