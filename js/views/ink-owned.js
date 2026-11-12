@@ -585,8 +585,7 @@
   }
 
   function syncUndo() {
-    const b = root && root.querySelector('.sort-undo');
-    if (b) b.hidden = !(prevOrder && canEdit());
+    if (undoTopBtn) undoTopBtn.hidden = !(prevOrder && canEdit());
   }
 
   function sortRows() {
@@ -632,12 +631,18 @@
 
   let exportTopBtn = null;   // 잉팔잉사 상단 바의 이미지 저장 버튼
   let helpTopBtn = null;     // 잉팔잉사 상단 바의 안내(알림창 다시 보기) 버튼
+  let sortTopBtn = null;     // 보유 잉크 상단 바의 정렬 버튼 (저장됨 문구 오른쪽, 관리자 모드에서만)
+  let undoTopBtn = null;     // 정렬 직후에만 보이는 되돌리기 버튼
 
   function teardownBrandDrawer() {
     if (exportTopBtn) exportTopBtn.remove();
     exportTopBtn = null;
     if (helpTopBtn) helpTopBtn.remove();
     helpTopBtn = null;
+    if (sortTopBtn) sortTopBtn.remove();
+    sortTopBtn = null;
+    if (undoTopBtn) undoTopBtn.remove();
+    undoTopBtn = null;
     if (brandToggleBtn) brandToggleBtn.remove();
     if (brandBackdrop) brandBackdrop.remove();
     brandToggleBtn = null;
@@ -668,6 +673,25 @@
       topbar.appendChild(exportTopBtn);
       return;
     }
+    // 보유 잉크: 상단 바 오른쪽에 "저장됨" 문구 다음으로 [되돌리기] [정렬], 폰에서는 그 오른쪽에 브랜드 사이드바 버튼 (만드는 순서가 곧 늘어서는 순서)
+    undoTopBtn = document.createElement('button');
+    undoTopBtn.className = 'sort-undo';
+    undoTopBtn.type = 'button';
+    undoTopBtn.hidden = true;
+    undoTopBtn.title = '정렬 되돌리기';
+    undoTopBtn.setAttribute('aria-label', '정렬 되돌리기');
+    undoTopBtn.innerHTML = UNDO_ICON + '<span class="lbl">되돌리기</span>';
+    undoTopBtn.addEventListener('click', undoSort);
+    topbar.appendChild(undoTopBtn);
+    sortTopBtn = document.createElement('button');
+    sortTopBtn.className = 'sort-btn';
+    sortTopBtn.type = 'button';
+    sortTopBtn.hidden = true;
+    sortTopBtn.title = '브랜드 → 잉크명 가나다순으로 정렬';
+    sortTopBtn.setAttribute('aria-label', '브랜드, 잉크명 가나다순으로 정렬');
+    sortTopBtn.innerHTML = SORT_ICON + '<span class="lbl">정렬</span>';
+    sortTopBtn.addEventListener('click', sortRows);
+    topbar.appendChild(sortTopBtn);
     brandToggleBtn = document.createElement('button');
     brandToggleBtn.className = 'icon-btn brand-toggle';
     brandToggleBtn.type = 'button';
@@ -1098,7 +1122,7 @@
     });
     root.querySelectorAll('.pick').forEach((p) => { p.tabIndex = edit ? 0 : -1; });
     root.classList.toggle('is-editable', edit);
-    root.querySelector('.sort-btn').hidden = !edit;     // 정렬은 관리자 모드에서만
+    if (sortTopBtn) sortTopBtn.hidden = !edit;          // 정렬은 관리자 모드에서만 (상단 바)
     if (exportTopBtn) exportTopBtn.hidden = !edit;
     if (isTrade() && window.INKNOTICE) window.INKNOTICE.setEditable(noticeEditable());   // 알림글 수정(연필)은 관리자 모드에서만     // 이미지 저장은 관리자 모드의 잉팔잉사에서만 (상단 바 오른쪽 버튼)
     if (zoomRefresh) zoomRefresh();                      // 배치가 바뀌면 확대·축소 범위도 다시 계산
@@ -1563,6 +1587,8 @@
   const ROW_ADD_ICON = '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 17a2 2 0 0 1-2 2H7.2l-5.2 2L4 15.8V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M13 8v6"/><path d="M10 11h6"/></svg>';
   const ROW_ADD_SIZE = 19;
   // Lucide "arrow-down-a-z" (정렬 버튼)
+  // Lucide "undo-2" (정렬 되돌리기)
+  const UNDO_ICON = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"/></svg>';
   const SORT_ICON = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M20 8h-5"/><path d="M15 10V6.5a2.5 2.5 0 0 1 5 0V10"/><path d="M15 14h5l-5 6h5"/></svg>';
   const TAIL_Y = (22 / 24) * ROW_ADD_SIZE; // 아이콘 맨 아래(꼬리 끝, 선 굵기 포함)의 높이
   const NEAR = 12;                         // 선에서 이 거리(px) 안이면 "행과 행 사이"로 본다
@@ -1631,10 +1657,6 @@
       <aside class="brand-panel" aria-label="브랜드별 잉크 개수">
         <div class="brand-panel__head">
           <span class="brand-panel__title">브랜드</span><span class="brand-panel__sum"></span>
-          <span class="brand-panel__tools">
-            <button class="sort-undo" type="button" hidden>되돌리기</button>
-            <button class="sort-btn" type="button" hidden title="브랜드 → 잉크명 가나다순으로 정렬">${SORT_ICON}정렬</button>
-          </span>
         </div>
         <ul class="brand-list"></ul>
       </aside>
@@ -1662,8 +1684,6 @@
     setupZoom(container);
     setupBrandDrawer();
     maybeShowNotice();
-    container.querySelector('.sort-btn').addEventListener('click', sortRows);
-    container.querySelector('.sort-undo').addEventListener('click', undoSort);
     container.querySelector('.brand-list').addEventListener('click', (e) => {
       const b = e.target.closest('button[data-id]');
       if (b) { scrollToRow(b.dataset.id); setBrandDrawer(false); }
