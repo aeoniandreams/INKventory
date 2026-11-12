@@ -1039,8 +1039,9 @@
     if (!edit) closeCtx();
     if (!edit) root.querySelector('.row-add').classList.remove('is-on');
     root.querySelectorAll('.cell').forEach((input) => {
-      input.readOnly = !edit;
-      input.tabIndex = edit ? 0 : -1;
+      const ok = edit && columnEditable(input.dataset.f);
+      input.readOnly = !ok;
+      input.tabIndex = ok ? 0 : -1;
     });
     root.querySelectorAll('.pick').forEach((p) => { p.tabIndex = edit ? 0 : -1; });
     root.classList.toggle('is-editable', edit);
@@ -1239,15 +1240,20 @@
     handle.style.top = Math.min(y + height, table.offsetHeight * zz - 5) + 'px';
   }
 
+  // 잉팔잉사에서는 소분 가능·가격만 고칠 수 있다 (나머지는 보유 잉크에서 고치면 여기에도 바로 반영됨)
+  const TRADE_EDITABLE = ['portions', 'price'];
+  const columnEditable = (key) => !isTrade() || TRADE_EDITABLE.includes(key);
+
   function selectCell(td) {
     if (!canEdit() || !td || !td.parentElement) return;
+    if (!columnEditable(COLUMNS[td.cellIndex] && COLUMNS[td.cellIndex].key)) { clearSelection(); return; }
     sel = { c: td.cellIndex, r0: td.parentElement.sectionRowIndex, r1: td.parentElement.sectionRowIndex };
     positionSelection();
   }
 
   function applyFill(c, s, t) {
     const key = COLUMNS[c].key;
-    if (key === 'level') return;   // 잔량 칸은 채우기 제외
+    if (key === 'level' || !columnEditable(key)) return;   // 잔량 칸은 채우기 제외, 잉팔잉사에서는 소분 가능·가격만
     const val = valueAt(s, c);
     const tbody = tbodyEl();
     for (let i = s + 1; i <= t; i++) {
@@ -1744,7 +1750,7 @@
     // 잉크명 칸의 ✦ 버튼: 펄 잉크 표시 켜기/끄기
     tbody.addEventListener('click', (e) => {
       const btn = e.target.closest('.pearl-btn');
-      if (!btn || !canEdit()) return;
+      if (!btn || !canEdit() || isTrade()) return;
       const tr = btn.closest('tr');
       const id = tr.dataset.id;
       queueSave(id, 'pearl', !(data[id] && data[id].pearl));

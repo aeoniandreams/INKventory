@@ -577,6 +577,8 @@ html[data-layout="normal"] .table-wrap { width: auto; max-width: 100%; }
 .is-trade .row-add { display: none; }
 /* 잉팔잉사에는 브랜드 목록(패널·폰의 오른쪽 사이드바)이 없다 → 표를 가운데에 */
 .is-trade .brand-panel { display: none; }
+.main--table.is-trade { --main-pl: clamp(12px, 3vw, 32px); }   /* 행 추가 아이콘 자리가 필요 없으니 좌우 여백을 같게 */
+.is-trade .pearl-btn { display: none !important; }              /* 펄 표시도 보유 잉크에서만 고침 */
 .is-trade .ink-layout { max-width: none; }
 .is-trade .table-area, html[data-layout="normal"] .is-trade .table-area { justify-content: center; }
 html[data-layout="normal"] .is-trade .ink-layout { max-width: none; }
