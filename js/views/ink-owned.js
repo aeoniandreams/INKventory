@@ -631,10 +631,13 @@
   }
 
   let exportTopBtn = null;   // 잉팔잉사 상단 바의 이미지 저장 버튼
+  let helpTopBtn = null;     // 잉팔잉사 상단 바의 안내(알림창 다시 보기) 버튼
 
   function teardownBrandDrawer() {
     if (exportTopBtn) exportTopBtn.remove();
     exportTopBtn = null;
+    if (helpTopBtn) helpTopBtn.remove();
+    helpTopBtn = null;
     if (brandToggleBtn) brandToggleBtn.remove();
     if (brandBackdrop) brandBackdrop.remove();
     brandToggleBtn = null;
@@ -645,7 +648,16 @@
     teardownBrandDrawer();
     const topbar = document.querySelector('.topbar');
     if (!topbar) return;
-    if (isTrade()) {                       // 잉팔잉사에는 브랜드 목록이 없다. 대신 관리자 모드에서 이미지 저장 버튼만 상단 바에 둔다
+    if (isTrade()) {                       // 잉팔잉사에는 브랜드 목록이 없다. 상단 바 오른쪽에 안내(?) 버튼, 관리자 모드에서는 그 오른쪽에 이미지 저장 버튼
+      helpTopBtn = document.createElement('button');
+      helpTopBtn.className = 'icon-btn';
+      helpTopBtn.type = 'button';
+      helpTopBtn.hidden = true;                // 알림글이 비어 있지 않을 때만 보임 (syncHelpBtn)
+      helpTopBtn.title = '안내 다시 보기';
+      helpTopBtn.setAttribute('aria-label', '안내 다시 보기');
+      helpTopBtn.innerHTML = HELP_ICON;
+      helpTopBtn.addEventListener('click', showNoticeNow);
+      topbar.appendChild(helpTopBtn);
       exportTopBtn = document.createElement('button');
       exportTopBtn.className = 'icon-btn';
       exportTopBtn.type = 'button';
@@ -782,19 +794,28 @@
   const noticeHtml = () => (saleNotice === null ? window.INKNOTICE.defaultHtml() : saleNotice);
   const noticeEditable = () => isAdminMode() && loadState === 'ready';
 
-  async function maybeShowNotice() {
-    if (!isTrade() || !window.INKNOTICE) return;
-    try { if (sessionStorage.getItem(NOTICE_SEEN)) return; } catch (err) { /* 저장소를 못 써도 한 번은 보여 줌 */ }
-    for (let t = 0; t < 30 && loadState !== 'ready' && loadState !== 'error'; t++) await new Promise((r) => setTimeout(r, 100));   // 저장된 글이 도착할 때까지 잠깐(최대 3초) 기다림
-    if (!root || !isTrade()) return;                                   // 그 사이 다른 화면으로 옮겼으면 그만
-    const html = noticeHtml();
-    if (!window.INKNOTICE.sanitize(html)) return;                       // 내용이 비어 있으면 띄우지 않음
+  // Lucide "circle-question-mark" (안내 다시 보기 버튼)
+  const HELP_ICON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>';
+  const noticeNonEmpty = () => !!(window.INKNOTICE && window.INKNOTICE.sanitize(noticeHtml()));
+  const syncHelpBtn = () => { if (helpTopBtn) helpTopBtn.hidden = !noticeNonEmpty(); };
+
+  function showNoticeNow() {
+    if (!isTrade() || !window.INKNOTICE || !noticeNonEmpty()) return;     // 내용이 비어 있으면 띄우지 않음
     window.INKNOTICE.open({
-      html,
+      html: noticeHtml(),
       editable: noticeEditable(),
-      onSave: (h) => queueNotice(h),
+      onSave: (h) => { queueNotice(h); syncHelpBtn(); },
       onClose: () => { try { sessionStorage.setItem(NOTICE_SEEN, '1'); } catch (err) { /* 무시 */ } },
     });
+  }
+
+  async function maybeShowNotice() {
+    if (!isTrade() || !window.INKNOTICE) return;
+    for (let t = 0; t < 30 && loadState !== 'ready' && loadState !== 'error'; t++) await new Promise((r) => setTimeout(r, 100));   // 저장된 글이 도착할 때까지 잠깐(최대 3초) 기다림
+    if (!root || !isTrade()) return;                                   // 그 사이 다른 화면으로 옮겼으면 그만
+    syncHelpBtn();
+    try { if (sessionStorage.getItem(NOTICE_SEEN)) return; } catch (err) { /* 저장소를 못 써도 한 번은 보여 줌 */ }
+    showNoticeNow();
   }
 
   // ── 이미지 저장 (잉팔잉사, 관리자 모드) — 그리는 일은 ink-export.js ──
