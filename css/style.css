@@ -718,9 +718,9 @@ html[data-layout="normal"] .ink-layout {
 .notice-editor:focus { border-color: var(--accent); }
 .notice-editor > div { min-height: 1.75em; }
 
-/* 폰: 알림창은 좌우 여백 15px씩(375px 폰에서 가로 345px), 글자 13px */
+/* 폰: 알림창 가로는 화면 폭의 92%(좌우 여백 4%씩 — 375px 폰에서 345px, 여백 15px). 폰마다 비슷한 비율로 보이게. 글자는 13px */
 @media (max-width: 800px) {
-  .notice-dialog { width: calc(100vw - 30px); max-width: calc(100vw - 30px); max-height: 88vh; }
+  .notice-dialog { width: 92vw; max-width: 92vw; max-height: 88vh; }
   .notice-body { padding: 20px 20px 4px; font-size: 13px; line-height: 1.65; }
   .notice-view:has(.notice-edit-btn:not([hidden])) .notice-body { padding-right: 46px; }
   .notice-actions { padding: 12px 16px 16px; }
