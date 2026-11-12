@@ -86,10 +86,12 @@
   ];
 
   let dlg = null;
-  let ctx = { html: '', editable: false, onSave: null, onClose: null };
+  let ctx = { html: '', editable: false, emptyMessage: '', onSave: null, onClose: null };
 
-  function render(el, html) {
-    el.innerHTML = sanitize(html);
+  function render(el, html, emptyMessage) {
+    const clean = sanitize(html);
+    if (!clean && emptyMessage) { el.innerHTML = `<div class="gray">${esc(emptyMessage)}</div>`; return; }   // 비어 있을 때 안내 문구 (저장되는 내용이 아님)
+    el.innerHTML = clean;
     el.querySelectorAll(':scope > div').forEach((d) => { if (d.textContent.startsWith('- ')) d.classList.add('bullet'); });   // "- " 로 시작하는 줄은 걸어 들여쓰기
   }
 
@@ -134,7 +136,7 @@
       const html = sanitize(editor.innerHTML);
       ctx.html = html;
       if (ctx.onSave) ctx.onSave(html);
-      render(q('.notice-body'), html);
+      render(q('.notice-body'), html, ctx.emptyMessage);
       back();
     });
 
@@ -178,11 +180,11 @@
     sanitize,
     defaultHtml: () => linesToHtml(DEFAULT_LINES),
     open(c) {
-      ctx = Object.assign({ html: '', editable: false, onSave: null, onClose: null }, c);
+      ctx = Object.assign({ html: '', editable: false, emptyMessage: '', onSave: null, onClose: null }, c);
       const d = ensure();
       d.querySelector('.notice-edit').hidden = true;
       d.querySelector('.notice-view').hidden = false;
-      render(d.querySelector('.notice-body'), ctx.html);
+      render(d.querySelector('.notice-body'), ctx.html, ctx.emptyMessage);
       d.querySelector('.notice-edit-btn').hidden = !ctx.editable;
       if (!d.open) d.showModal();
       d.querySelector('[data-ok]').focus();

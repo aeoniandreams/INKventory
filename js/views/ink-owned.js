@@ -652,7 +652,6 @@
       helpTopBtn = document.createElement('button');
       helpTopBtn.className = 'icon-btn';
       helpTopBtn.type = 'button';
-      helpTopBtn.hidden = true;                // 알림글이 비어 있지 않을 때만 보임 (syncHelpBtn)
       helpTopBtn.title = '안내 다시 보기';
       helpTopBtn.setAttribute('aria-label', '안내 다시 보기');
       helpTopBtn.innerHTML = HELP_ICON;
@@ -797,14 +796,15 @@
   // Lucide "circle-question-mark" (안내 다시 보기 버튼)
   const HELP_ICON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>';
   const noticeNonEmpty = () => !!(window.INKNOTICE && window.INKNOTICE.sanitize(noticeHtml()));
-  const syncHelpBtn = () => { if (helpTopBtn) helpTopBtn.hidden = !noticeNonEmpty(); };
 
   function showNoticeNow() {
-    if (!isTrade() || !window.INKNOTICE || !noticeNonEmpty()) return;     // 내용이 비어 있으면 띄우지 않음
+    if (!isTrade() || !window.INKNOTICE) return;
+    // 물음표 버튼은 알림글이 비어 있어도 늘 보인다(관리자가 새로 적을 수 있게). 비어 있으면 관리자에게는 적으라는 안내, 방문자에게는 "없음" 문구
     window.INKNOTICE.open({
       html: noticeHtml(),
       editable: noticeEditable(),
-      onSave: (h) => { queueNotice(h); syncHelpBtn(); },
+      emptyMessage: noticeEditable() ? '알림글이 비어 있습니다. 오른쪽 위 연필 버튼으로 새로 적어 주세요.' : '등록된 안내가 없습니다.',
+      onSave: (h) => { queueNotice(h); },
       onClose: () => { try { sessionStorage.setItem(NOTICE_SEEN, '1'); } catch (err) { /* 무시 */ } },
     });
   }
@@ -813,7 +813,7 @@
     if (!isTrade() || !window.INKNOTICE) return;
     for (let t = 0; t < 30 && loadState !== 'ready' && loadState !== 'error'; t++) await new Promise((r) => setTimeout(r, 100));   // 저장된 글이 도착할 때까지 잠깐(최대 3초) 기다림
     if (!root || !isTrade()) return;                                   // 그 사이 다른 화면으로 옮겼으면 그만
-    syncHelpBtn();
+    if (!noticeNonEmpty()) return;                                      // 알림글이 비어 있으면 처음 접속 때는 띄우지 않음 (물음표 버튼은 늘 보임)
     try { if (sessionStorage.getItem(NOTICE_SEEN)) return; } catch (err) { /* 저장소를 못 써도 한 번은 보여 줌 */ }
     showNoticeNow();
   }
