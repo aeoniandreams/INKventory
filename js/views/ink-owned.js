@@ -74,6 +74,7 @@
   let root = null;              // 현재 화면 컨테이너
   // 같은 표 코드를 두 화면이 나눠 쓴다. 'owned' = 보유 잉크(전체), 'trade' = 잉팔잉사(소분 가능이 적힌 행만, 같은 데이터를 그대로 보여 줌)
   let variant = 'owned';
+  let saleNotice = null;        // 잉팔잉사 알림글 (공개 문서의 saleNotice 필드, 안전한 HTML). 없으면(null) 기본 글
   const isTrade = () => variant === 'trade';
   // 지금 화면에 나오는 행 id (순서대로). 잉팔잉사는 소분 가능이 적혀 있는 행만.
   const shownIds = () => (isTrade() ? order.filter((id) => data[id] && data[id].hasPortions) : order);
@@ -126,6 +127,13 @@
     scheduleFlush(0);
   }
 
+  function queueNotice(html) {
+    saleNotice = html;
+    pending.set('@notice', { notice: html });
+    setStatus('saving');
+    scheduleFlush(0);
+  }
+
   function scheduleFlush(delay) {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(flush, delay);
@@ -145,13 +153,14 @@
       const privDel = {};   // 공개 문서로 옮긴 뒤에 관리자 전용 문서에서 지울 예전 값 (공개 저장이 성공한 다음에만 지움)
       batch.forEach(([, e]) => {
         if (e.order) { pub.order = e.order; return; }
+        if (e.notice !== undefined) { pub.saleNotice = e.notice; return; }
         if (e.pdel) { (privDel[e.pdel] = privDel[e.pdel] || {})[e.field] = deleteField(); return; }
         if (e.del) { (pub.rows = pub.rows || {})[e.del] = deleteField(); priv[e.del] = deleteField(); return; }   // 행 삭제: 공개·관리자 전용 문서에서 모두 지움
         const target = PRIVATE_FIELDS.includes(e.field) ? priv : (pub.rows = pub.rows || {});
         (target[e.id] = target[e.id] || {})[e.field] = e.value;
       });
       const jobs = [];
-      if (pub.order || pub.rows) jobs.push(setDoc(doc(db, ...DOC_PATH), pub, { merge: true }));
+      if (pub.order || pub.rows || pub.saleNotice !== undefined) jobs.push(setDoc(doc(db, ...DOC_PATH), pub, { merge: true }));
       if (Object.keys(priv).length) jobs.push(setDoc(doc(db, ...PRIVATE_PATH), { rows: priv }, { merge: true }));
       await Promise.all(jobs);
       if (Object.keys(privDel).length) await setDoc(doc(db, ...PRIVATE_PATH), { rows: privDel }, { merge: true });
@@ -220,6 +229,7 @@
 
   // 문서 내용(순서 + 행 데이터)을 상태에 반영
   function applyDoc(d) {
+    saleNotice = typeof d.saleNotice === 'string' ? d.saleNotice : null;
     const rows = d.rows || {};
     let loaded = Array.isArray(d.order) ? [...new Set(d.order.filter((x) => typeof x === 'string' && x))] : [];
     if (!loaded.length) loaded = defaultOrder();
@@ -765,6 +775,28 @@
     wrap.addEventListener('touchcancel', end, { passive: true });
   }
 
+  // ── 잉팔잉사 처음 접속 알림창 (ink-notice.js) ──
+  // 이 탭(브라우저 세션)에서 처음 들어왔을 때 한 번 보여 준다. 내용은 공개 문서의 saleNotice, 없으면 기본 글.
+  // 관리자 모드에서만 연필 버튼으로 고칠 수 있고, 저장하면 모두에게 바뀐 글이 보인다. 내용을 모두 지우고 저장하면 알림창은 뜨지 않는다.
+  const NOTICE_SEEN = 'inkventory.saleNotice.seen';
+  const noticeHtml = () => (saleNotice === null ? window.INKNOTICE.defaultHtml() : saleNotice);
+  const noticeEditable = () => isAdminMode() && loadState === 'ready';
+
+  async function maybeShowNotice() {
+    if (!isTrade() || !window.INKNOTICE) return;
+    try { if (sessionStorage.getItem(NOTICE_SEEN)) return; } catch (err) { /* 저장소를 못 써도 한 번은 보여 줌 */ }
+    for (let t = 0; t < 30 && loadState !== 'ready' && loadState !== 'error'; t++) await new Promise((r) => setTimeout(r, 100));   // 저장된 글이 도착할 때까지 잠깐(최대 3초) 기다림
+    if (!root || !isTrade()) return;                                   // 그 사이 다른 화면으로 옮겼으면 그만
+    const html = noticeHtml();
+    if (!window.INKNOTICE.sanitize(html)) return;                       // 내용이 비어 있으면 띄우지 않음
+    window.INKNOTICE.open({
+      html,
+      editable: noticeEditable(),
+      onSave: (h) => queueNotice(h),
+      onClose: () => { try { sessionStorage.setItem(NOTICE_SEEN, '1'); } catch (err) { /* 무시 */ } },
+    });
+  }
+
   // ── 이미지 저장 (잉팔잉사, 관리자 모드) — 그리는 일은 ink-export.js ──
   const IMAGE_ICON = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>';
 
@@ -1046,7 +1078,8 @@
     root.querySelectorAll('.pick').forEach((p) => { p.tabIndex = edit ? 0 : -1; });
     root.classList.toggle('is-editable', edit);
     root.querySelector('.sort-btn').hidden = !edit;     // 정렬은 관리자 모드에서만
-    if (exportTopBtn) exportTopBtn.hidden = !edit;     // 이미지 저장은 관리자 모드의 잉팔잉사에서만 (상단 바 오른쪽 버튼)
+    if (exportTopBtn) exportTopBtn.hidden = !edit;
+    if (isTrade() && window.INKNOTICE) window.INKNOTICE.setEditable(noticeEditable());   // 알림글 수정(연필)은 관리자 모드에서만     // 이미지 저장은 관리자 모드의 잉팔잉사에서만 (상단 바 오른쪽 버튼)
     if (zoomRefresh) zoomRefresh();                      // 배치가 바뀌면 확대·축소 범위도 다시 계산
     if (barFit) barFit();                                // 잔량 막대 길이도 다시 맞춤
     syncUndo();
@@ -1588,6 +1621,7 @@
     renderBrands();
     setupZoom(container);
     setupBrandDrawer();
+    maybeShowNotice();
     container.querySelector('.sort-btn').addEventListener('click', sortRows);
     container.querySelector('.sort-undo').addEventListener('click', undoSort);
     container.querySelector('.brand-list').addEventListener('click', (e) => {

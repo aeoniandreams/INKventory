@@ -174,6 +174,7 @@ button { font: inherit; color: inherit; }
   background: none; border: 0; border-radius: 10px; cursor: pointer;
 }
 .icon-btn:hover { background: var(--accent-soft); }
+.icon-btn[hidden] { display: none; }   /* hidden 속성이 display:grid 에 가려지지 않게 (관리자 전용 버튼이 일반 모드에 보이던 문제) */
 
 .main { padding: 48px clamp(20px, 5vw, 64px) 80px; outline: none; }
 
@@ -679,3 +680,40 @@ html[data-layout="normal"] .ink-layout {
 .exp-fig figcaption { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; font-size: 12px; color: var(--muted); }
 .exp-fig .btn { padding: 4px 12px; font-size: 13px; }
 .exp-dialog .btn[hidden] { display: none; }
+
+/* 잉팔잉사 처음 접속 알림창 (ink-notice.js) */
+.notice-dialog { width: min(560px, calc(100vw - 24px)); max-height: min(86vh, 760px); padding: 0; overflow: hidden; }
+.notice-dialog[open] { display: flex; flex-direction: column; }
+.notice-view, .notice-edit { position: relative; display: flex; flex-direction: column; min-height: 0; max-height: inherit; }
+.notice-view[hidden], .notice-edit[hidden] { display: none; }
+.notice-body { padding: 26px 26px 6px; overflow-y: auto; font-size: 14.5px; line-height: 1.75; color: var(--ink); word-break: keep-all; overflow-wrap: anywhere; }
+.notice-body > div { min-height: 1.75em; }
+.notice-body > div.bullet { padding-left: 1.05em; text-indent: -1.05em; margin-top: 2px; }
+.notice-body .gray, .notice-editor .gray, .notice-editor font { color: #8892ab; }
+.notice-body s, .notice-editor s, .notice-editor strike { text-decoration: line-through; }
+.notice-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px 18px; }
+.notice-edit-btn {
+  position: absolute; top: 10px; right: 10px; z-index: 2; width: 34px; height: 34px;
+  display: grid; place-items: center; background: none; border: 0; border-radius: 8px; cursor: pointer; color: var(--muted);
+}
+.notice-edit-btn[hidden] { display: none; }
+.notice-edit-btn:hover { background: var(--accent-soft); color: var(--accent); }
+.notice-view:has(.notice-edit-btn:not([hidden])) .notice-body { padding-right: 52px; }   /* 연필 버튼과 글이 겹치지 않게 */
+/* 수정창: 위쪽 고정 바 */
+.notice-edit { overflow-y: auto; }
+.notice-bar {
+  position: sticky; top: 0; z-index: 3; display: flex; gap: 6px; padding: 10px 14px;
+  background: #e6e9f1; border-bottom: 1px solid var(--line);
+}
+.notice-tool {
+  width: 36px; height: 34px; display: grid; place-items: center; background: var(--surface); border: 1px solid var(--line);
+  border-radius: 8px; cursor: pointer; color: var(--ink);
+}
+.notice-tool:hover { background: var(--accent-soft); }
+.notice-tool[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff !important; }
+.notice-editor {
+  flex: none; min-height: 260px; margin: 16px 20px 0; padding: 12px 14px; font-size: 14.5px; line-height: 1.75; color: var(--ink);
+  background: #fff; border: 1px solid var(--line); border-radius: 10px; outline: none; word-break: keep-all; overflow-wrap: anywhere;
+}
+.notice-editor:focus { border-color: var(--accent); }
+.notice-editor > div { min-height: 1.75em; }
