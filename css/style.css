@@ -293,6 +293,8 @@ button { font: inherit; color: inherit; }
   background: var(--surface);
   border: 1px solid var(--line); border-radius: 12px;
 }
+/* 표 맨 아래 칸이 스크롤 영역의 아랫변에 딱 붙어 잘려 보이지 않게, 표 아래에 12px 여유 */
+.table-wrap::after { content: ''; display: block; height: 12px; }
 .table-wrap:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; } /* 키보드로 표에 들어왔을 때 */
 .grid {
   /* 최소 너비는 JS가 열 너비의 합으로 지정(인라인). 잔량 열(<col> 너비 없음)만 남는 너비를 가져간다. */

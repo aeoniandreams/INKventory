@@ -1310,8 +1310,11 @@
     const top = head ? head.getBoundingClientRect().bottom : w.top + wrap.clientTop;      // 고정된 제목 줄 아래부터가 보이는 영역
     const bottom = w.top + wrap.clientTop + wrap.clientHeight;                              // 가로 스크롤 막대 위까지
     const r = tr.getBoundingClientRect();                                                   // 화면에 보이는 위치 (폰의 확대·축소 상태에서도 같은 기준)
-    if (r.bottom > bottom) wrap.scrollTop += r.bottom - bottom;
-    else if (r.top < top) wrap.scrollTop -= top - r.top;
+    // 화면 배율(예: 125%)에서는 칸 위치가 소수점이라 딱 맞추면 1px 미만이 가려져 보일 수 있어, 아래는 2px, 위는 1px 여유를 둔다
+    if (r.bottom > bottom - 2) wrap.scrollTop += Math.ceil(r.bottom - (bottom - 2));
+    else if (r.top < top + 1) wrap.scrollTop -= Math.ceil(top + 1 - r.top);
+    if (!tr.nextElementSibling) wrap.scrollTop = wrap.scrollHeight;     // 맨 아래 행이면 표 끝(아래 여유 12px 포함)까지
+    else if (!tr.previousElementSibling) wrap.scrollTop = 0;            // 맨 위 행이면 표 맨 위까지
   }
 
   function selectCell(td) {
