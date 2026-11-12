@@ -1278,9 +1278,10 @@
     const i = order.indexOf(id);
     if (i < 0) return;
     const d = data[id] || {};
-    const label = [cleanBrand(d.brand), String(d.name || '').trim()].filter(Boolean).join(' ') || '빈 행';
-    if (!window.confirm(`"${label}" 행을 삭제할까요?
-삭제하면 되돌릴 수 없습니다.`)) return;
+    const label = [cleanBrand(d.brand), String(d.name || '').trim()].filter(Boolean).join(' ');
+    // 내용이 하나도 없는 빈 행은 물어보지 않고 바로 지운다. 내용이 있으면 한 번 확인.
+    const empty = !['brand', 'name', 'note', 'kind', 'portions', 'price'].some((k) => hasText(d[k])) && !d.pearl && !getLevels(id).some((v) => v > 0);
+    if (!empty && !window.confirm(`"${label || '이름 없는'}" 행을 삭제할까요?\n삭제하면 되돌릴 수 없습니다.`)) return;
     order.splice(i, 1);
     delete data[id];
     if (privData && privData.rows) delete privData.rows[id];
