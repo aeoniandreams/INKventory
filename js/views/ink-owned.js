@@ -1298,6 +1298,22 @@
   const TRADE_EDITABLE = ['portions', 'price'];
   const columnEditable = (key) => !isTrade() || TRADE_EDITABLE.includes(key);
 
+  // 방향키·Enter 로 옆 행의 칸으로 옮길 때: 브라우저 기본 동작(focus)은 칸이 화면 밖이면 표 가운데로 휙 옮겨 버린다.
+  // 스프레드시트처럼 focus 는 스크롤 없이 하고, 새 칸이 보일 만큼만(맨 아래 칸이면 표 바닥에, 맨 위면 제목 줄 바로 아래에) 스크롤한다.
+  function focusCellNearest(el) {
+    el.focus({ preventScroll: true });
+    const wrap = root && root.querySelector('.table-wrap');
+    const tr = el.closest('tr');
+    if (!wrap || !tr) return;
+    const w = wrap.getBoundingClientRect();
+    const head = wrap.querySelector('thead th');
+    const top = head ? head.getBoundingClientRect().bottom : w.top + wrap.clientTop;      // 고정된 제목 줄 아래부터가 보이는 영역
+    const bottom = w.top + wrap.clientTop + wrap.clientHeight;                              // 가로 스크롤 막대 위까지
+    const r = tr.getBoundingClientRect();                                                   // 화면에 보이는 위치 (폰의 확대·축소 상태에서도 같은 기준)
+    if (r.bottom > bottom) wrap.scrollTop += r.bottom - bottom;
+    else if (r.top < top) wrap.scrollTop -= top - r.top;
+  }
+
   function selectCell(td) {
     if (!canEdit() || !td || !td.parentElement) return;
     if (!columnEditable(COLUMNS[td.cellIndex] && COLUMNS[td.cellIndex].key)) { clearSelection(); return; }
@@ -1713,7 +1729,7 @@
         tr = dir > 0 ? tr.nextElementSibling : tr.previousElementSibling;
         if (!tr) return;
         const next = tr.querySelector(`[data-f="${el.dataset.f}"]`);
-        if (next && !next.disabled) { next.focus(); return; }
+        if (next && !next.disabled) { focusCellNearest(next); return; }
       }
     });
 
