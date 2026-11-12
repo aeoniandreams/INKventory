@@ -222,14 +222,14 @@ button { font: inherit; color: inherit; }
 }
 .brand-panel__sum { font-weight: 500; font-size: 12px; font-variant-numeric: tabular-nums; }
 .brand-panel__tools { margin-left: auto; display: flex; align-items: center; gap: 4px; }
-.sort-btn, .sort-undo {
+.sort-btn, .sort-undo, .export-btn {
   display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 9px;
   background: var(--surface); border: 1px solid var(--line); border-radius: 8px; cursor: pointer;
   font-size: 12px; font-weight: 600; color: var(--accent); white-space: nowrap;
 }
-.sort-btn[hidden], .sort-undo[hidden] { display: none; }
+.sort-btn[hidden], .sort-undo[hidden], .export-btn[hidden] { display: none; }
 .sort-undo { background: none; border-color: transparent; color: var(--muted); font-weight: 500; }
-.sort-btn:hover, .sort-undo:hover { background: var(--accent-soft); }
+.sort-btn:hover, .sort-undo:hover, .export-btn:hover { background: var(--accent-soft); }
 .brand-list { flex: 1 1 auto; min-height: 0; margin: 0; padding: 4px 0; list-style: none; overflow-y: auto; }
 .brand-list button {
   width: 100%; display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
@@ -660,3 +660,18 @@ html[data-layout="normal"] .ink-layout {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
+
+/* 이미지 저장 창 (ink-export.js) */
+.exp-dialog { width: min(760px, calc(100vw - 24px)); max-height: 92vh; overflow: auto; }
+.exp-form { display: grid; gap: 8px; font-size: 14px; }
+.exp-form label { display: flex; align-items: center; gap: 8px; }
+.exp-hint { color: var(--muted); font-size: 12px; }
+.exp-row { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 4px; }
+.exp-row select { margin-left: 6px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font: inherit; }
+.exp-info { margin: 14px 0 6px; min-height: 22px; font-size: 13px; color: var(--muted); }
+.exp-out { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; margin-top: 8px; }
+.exp-fig { margin: 0; }
+.exp-fig img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.exp-fig figcaption { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; font-size: 12px; color: var(--muted); }
+.exp-fig .btn { padding: 4px 12px; font-size: 13px; }
+.exp-dialog .btn[hidden] { display: none; }

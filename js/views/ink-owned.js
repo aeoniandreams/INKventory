@@ -744,6 +744,28 @@
     wrap.addEventListener('touchcancel', end, { passive: true });
   }
 
+  // ── 이미지 저장 (잉팔잉사, 관리자 모드) — 그리는 일은 ink-export.js ──
+  const IMAGE_ICON = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>';
+
+  function openExport() {
+    if (!root || !canEdit() || !isTrade()) return;
+    if (!window.INKEXPORT) { showNotice('이미지 저장 기능을 불러오지 못했습니다. 새로고침해 주세요.'); setTimeout(() => showNotice(''), 4000); return; }
+    const items = [...tbodyEl().rows].map((tr) => {
+      const d = data[tr.dataset.id] || {};
+      const sw = swatchFor(tr);
+      return {
+        brand: cleanBrand(d.brand),
+        name: String(d.name || '').trim(),
+        pearl: !!d.pearl,
+        note: String(d.note || ''),
+        portions: String(d.portions || ''),
+        price: String(d.price || ''),
+        src: sw ? sw.exp : '',
+      };
+    });
+    window.INKEXPORT.open({ items });
+  }
+
   // 브랜드 이름을 누르면 표를 그 브랜드의 첫 행으로 이동
   function scrollToRow(id) {
     const wrap = root && root.querySelector('.table-wrap');
@@ -864,7 +886,7 @@
   function swatchFor(tr) {
     const id = tr.dataset.id;
     const repo = swatchMap && swatchMap[id];
-    if (repo) return { thumb: repo, full: fullSrc(repo) };
+    if (repo) return { thumb: repo, full: fullSrc(repo), exp: fullSrc(repo) };
     const d = data[id];
     // 콜라보 브랜드("나가사와 고베 X 큐포도")는 가장 앞의 이름("나가사와 고베")만 써도 찾는다. 전체 이름으로 지어도 된다.
     const brand = (d && d.brand) || '';
@@ -872,7 +894,8 @@
     const fid = d && (driveMap[normName(brand + (d.name || ''))] || (lead !== brand && driveMap[normName(lead + (d.name || ''))]));
     if (fid) {
       const u = 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(fid) + '&sz=w';
-      return { thumb: u + '96', full: u + '1600' };
+      // exp: 이미지로 합쳐 저장할 때 쓰는 주소. drive.google.com/thumbnail 은 한 번 넘겨 주는 과정에서 CORS 허용이 빠져서, 최종 주소(lh3)를 직접 쓴다
+      return { thumb: u + '96', full: u + '1600', exp: 'https://lh3.googleusercontent.com/d/' + encodeURIComponent(fid) + '=w1000' };
     }
     return null;
   }
@@ -998,6 +1021,7 @@
     root.querySelectorAll('.pick').forEach((p) => { p.tabIndex = edit ? 0 : -1; });
     root.classList.toggle('is-editable', edit);
     root.querySelector('.sort-btn').hidden = !edit;     // 정렬은 관리자 모드에서만
+    root.querySelector('.export-btn').hidden = !(edit && isTrade());   // 이미지 저장은 관리자 모드의 잉팔잉사에서만
     if (zoomRefresh) zoomRefresh();                      // 배치가 바뀌면 확대·축소 범위도 다시 계산
     if (barFit) barFit();                                // 잔량 막대 길이도 다시 맞춤
     syncUndo();
@@ -1505,6 +1529,7 @@
           <span class="brand-panel__title">브랜드</span><span class="brand-panel__sum"></span>
           <span class="brand-panel__tools">
             <button class="sort-undo" type="button" hidden>되돌리기</button>
+            <button class="export-btn" type="button" hidden title="잉팔잉사 표·발색을 이미지로 저장">${IMAGE_ICON}이미지</button>
             <button class="sort-btn" type="button" hidden title="브랜드 → 잉크명 가나다순으로 정렬">${SORT_ICON}정렬</button>
           </span>
         </div>
@@ -1534,6 +1559,7 @@
     setupZoom(container);
     setupBrandDrawer();
     container.querySelector('.sort-btn').addEventListener('click', sortRows);
+    container.querySelector('.export-btn').addEventListener('click', openExport);
     container.querySelector('.sort-undo').addEventListener('click', undoSort);
     container.querySelector('.brand-list').addEventListener('click', (e) => {
       const b = e.target.closest('button[data-id]');
