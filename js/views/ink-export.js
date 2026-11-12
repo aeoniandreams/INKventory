@@ -1,13 +1,15 @@
 // 잉팔잉사 이미지 저장 (관리자 모드 전용). ink-owned.js 의 "이미지" 버튼이 INKEXPORT.open({ items }) 로 연다.
 //   · 발색 모음: 발색 사진을 4열 × 5행(한 장에 20개)으로 이어 붙인 이미지. 사진 사이 여백 없음. 사진 위에 브랜드·잉크명을 쓰고,
 //     글자색은 그 자리의 사진 밝기를 재서 어두우면 흰색, 밝으면 검은색(가장자리에 반대색 테두리를 얇게 둘러 읽기 쉽게).
-//   · 표: 잉팔잉사 표를 20행씩 나눠 그린 이미지 (발색 모음의 장 순서와 같은 묶음).
-// items: [{ brand, name, pearl, note, portions, price, src }]  (src = 사진 주소, 없으면 '')
+//   · 표: 잉팔잉사 표 전체를 되도록 한 장으로. 한 장에 TABLE_MAX(30)행을 넘으면 여러 장으로 나누되,
+//     ① 브랜드 묶음(group)을 쪼개지 않는 것이 가장 우선, ② 그다음으로 장마다 행 수가 비슷하게. (splitRows)
+// items: [{ brand, group, name, pearl, note, portions, price, src }]  (group = 브랜드 묶음 이름, src = 사진 주소, 없으면 '')
 // 사진은 CORS 를 허용하는 주소여야 캔버스로 합쳐서 저장할 수 있다 (저장소 사진은 같은 사이트, 드라이브 사진은 lh3.googleusercontent.com).
 (() => {
   'use strict';
 
   const PER_PAGE = 20;      // 한 이미지에 넣는 최대 개수
+  const TABLE_MAX = 30;     // 표 한 장에 넣는 행 수의 마지노선 (넘으면 여러 장)
   const GRID_COLS = 4;      // 발색 모음: 4열 × 5행
   const TILE_H = 500;       // 발색 한 칸의 높이(px). 1:1 이면 500×500, 3:4 이면 375×500
   const FONT = '"Pretendard JP Variable", Pretendard, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif';
@@ -28,6 +30,47 @@
     for (let i = 0; i < list.length; i += PER_PAGE) out.push(list.slice(i, i + PER_PAGE));
     return out;
   };
+
+  // 표 나누기: 한 장이면 그대로. 아니면 브랜드 묶음 경계에서만 잘라, 모든 장이 TABLE_MAX 이하가 되는 가장 적은 장 수를 찾고,
+  // 그중 장마다 행 수 차이(가장 큰 장 − 가장 작은 장)가 가장 작은 자르기를 고른다.
+  // 한 브랜드가 TABLE_MAX 를 넘는 등 브랜드 경계로는 불가능하면 행 수가 같도록 나눈다.
+  function splitRows(list, groupOf) {
+    const n = list.length;
+    if (n <= TABLE_MAX) return [list];
+    const runs = [];                                   // 같은 브랜드 묶음이 이어지는 구간
+    list.forEach((x, i) => {
+      const g = groupOf(x);
+      if (!runs.length || runs[runs.length - 1].g !== g) runs.push({ g, start: i, len: 0 });
+      runs[runs.length - 1].len++;
+    });
+    const R = runs.length;
+    for (let k = Math.ceil(n / TABLE_MAX); k <= Math.min(R, 6); k++) {
+      let best = null;
+      const walk = (from, left, cuts) => {              // from 번째 구간부터 left 장을 채움
+        if (left === 1) {
+          const sizes = [];
+          let prev = 0;
+          [...cuts, R].forEach((c) => { let sum = 0; for (let r = prev; r < c; r++) sum += runs[r].len; sizes.push(sum); prev = c; });
+          if (Math.max(...sizes) > TABLE_MAX) return;
+          const diff = Math.max(...sizes) - Math.min(...sizes);
+          if (!best || diff < best.diff) best = { diff, cuts: [...cuts] };
+          return;
+        }
+        for (let c = from + 1; c <= R - (left - 1); c++) walk(c, left - 1, [...cuts, c]);
+      };
+      walk(0, k, []);
+      if (best) {
+        const out = [];
+        let prev = 0;
+        [...best.cuts, R].forEach((c) => { out.push(list.slice(runs[prev].start, c < R ? runs[c].start : n)); prev = c; });
+        return out;
+      }
+    }
+    const k = Math.ceil(n / TABLE_MAX);                // 브랜드 경계로는 안 될 때: 행 수만 맞춰 나눔
+    const out = [];
+    for (let i = 0, from = 0; i < k; i++) { const to = Math.round(((i + 1) * n) / k); out.push(list.slice(from, to)); from = to; }
+    return out;
+  }
 
   function loadImage(src) {
     return new Promise((resolve) => {
@@ -111,12 +154,12 @@
       const padX = 16 * k;
       const maxW = tileW - padX * 2;
       ctx.textBaseline = 'alphabetic';
-      ctx.font = `700 ${Math.round(32 * k)}px ${FONT}`;
+      ctx.font = `700 ${Math.round(38 * k)}px ${FONT}`;
       const nameLines = wrapText(ctx, it.name, maxW, 2);
-      ctx.font = `500 ${Math.round(22 * k)}px ${FONT}`;
+      ctx.font = `500 ${Math.round(26 * k)}px ${FONT}`;
       const brand = ellipsize(ctx, it.brand, maxW);
-      const nameLH = 38 * k;
-      const brandLH = 28 * k;
+      const nameLH = 45 * k;
+      const brandLH = 33 * k;
       const textH = nameLines.length * nameLH + brandLH;
       const regionH = Math.min(TILE_H, Math.ceil(textH + 32 * k));
       const lum = img ? brightness(ctx, x, y + TILE_H - regionH, tileW, regionH) : null;
@@ -134,8 +177,8 @@
         ctx.fillText(text, x + padX, ty);
         ty -= lh;
       };
-      for (let j = nameLines.length - 1; j >= 0; j--) put(nameLines[j], `700 ${Math.round(32 * k)}px ${FONT}`, nameLH, 5 * k);
-      put(brand, `500 ${Math.round(22 * k)}px ${FONT}`, brandLH, 4 * k);
+      for (let j = nameLines.length - 1; j >= 0; j--) put(nameLines[j], `700 ${Math.round(38 * k)}px ${FONT}`, nameLH, 6 * k);
+      put(brand, `500 ${Math.round(26 * k)}px ${FONT}`, brandLH, 5 * k);
     });
     return cv;
   }
@@ -231,7 +274,7 @@
     ctx.fillStyle = '#6f7380';
     ctx.font = `500 12px ${FONT}`;
     ctx.textAlign = 'right';
-    ctx.fillText(`INKventory · 잉팔잉사 ${pageNo}/${pageCount}`, PAD + W, PAD + H + 18);
+    ctx.fillText(pageCount > 1 ? `INKventory · 잉팔잉사 ${pageNo}/${pageCount}` : 'INKventory · 잉팔잉사', PAD + W, PAD + H + 18);
     ctx.textAlign = 'left';
     void meas;
     return cv;
@@ -247,10 +290,10 @@
         <h2 class="dialog__title">이미지 저장</h2>
         <div class="exp-form">
           <label><input type="radio" name="expKind" value="swatch" checked> 발색 모음 <span class="exp-hint">(한 장에 최대 ${PER_PAGE}개, 4열 × 5행)</span></label>
-          <label><input type="radio" name="expKind" value="table"> 표 <span class="exp-hint">(${PER_PAGE}행씩 나눔)</span></label>
+          <label><input type="radio" name="expKind" value="table"> 표 <span class="exp-hint">(되도록 한 장. ${TABLE_MAX}행을 넘으면 브랜드 단위로 나눔)</span></label>
           <div class="exp-row">
             <label class="exp-ratio">발색 사진 비율
-              <select name="expRatio"><option value="1:1">1:1</option><option value="3:4">3:4</option></select></label>
+              <select name="expRatio"><option value="3:4" selected>3:4</option><option value="1:1">1:1</option></select></label>
             <label>형식
               <select name="expFmt"><option value="png">PNG</option><option value="jpg">JPG</option></select></label>
           </div>
@@ -293,7 +336,10 @@
     const skipped = current.items.length - withPhoto.length;
     const info = dialog.querySelector('.exp-info');
     if (!n) info.textContent = swatch ? '사진이 있는 잉크가 없습니다.' : '표에 행이 없습니다.';
-    else info.textContent = `${n}개 → ${Math.ceil(n / PER_PAGE)}장${swatch && skipped ? ` (사진 없는 ${skipped}곳은 제외)` : ''}`;
+    else {
+      const sizes = swatch ? pages(withPhoto).map((g) => g.length) : splitRows(current.items, (it) => it.group || it.brand).map((g) => g.length);
+      info.textContent = `${n}개 → ${sizes.length}장${sizes.length > 1 ? ` (${sizes.join(' + ')})` : ''}${swatch && skipped ? ` · 사진 없는 ${skipped}곳은 제외` : ''}`;
+    }
     dialog.querySelector('[data-make]').disabled = !n;
   }
 
@@ -315,7 +361,8 @@
       try { await Promise.all(['400', '500', '700'].map((w) => document.fonts.load(`${w} 16px "Pretendard JP Variable"`, text))); } catch (err) { /* 글꼴을 못 받아도 기본 글꼴로 그림 */ }
       const imgs = await Promise.all(list.map((it) => loadImage(it.src)));
       const failed = imgs.filter((im, i) => list[i].src && !im).length;
-      const groups = pages(list.map((it, i) => ({ it, img: imgs[i] })));
+      const objs = list.map((it, i) => ({ it, img: imgs[i] }));
+      const groups = swatch ? pages(objs) : splitRows(objs, (o) => o.it.group || o.it.brand);
       const mime = fmt === 'jpg' ? 'image/jpeg' : 'image/png';
       let k = 0;
       for (const g of groups) {

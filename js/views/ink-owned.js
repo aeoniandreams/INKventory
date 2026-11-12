@@ -461,6 +461,20 @@
   ];
   const cleanBrand = (s) => String(s || '').normalize('NFC').replace(/\s+/g, ' ').trim();
 
+  // 브랜드 글자 목록(brands)에서 "묶는 기준 이름"을 정하고, 브랜드 글자를 묶음 이름으로 바꿔 주는 함수를 돌려준다.
+  // 묶는 기준 이름: BRAND_NAMES + 다른 브랜드 글자의 앞부분(단어 경계)이 되는 브랜드
+  function brandGrouper(brands) {
+    const present = [...new Set(brands.filter(Boolean))];
+    const keys = new Set(BRAND_NAMES.map(cleanBrand));
+    present.forEach((s) => { if (present.some((t) => t !== s && t.startsWith(s + ' '))) keys.add(s); });
+    const keyList = [...keys].sort((x, y) => x.length - y.length);   // 가장 짧은(가장 앞) 이름을 우선
+    return (b) => {
+      if (!b) return '(브랜드 없음)';
+      const k = keyList.find((c) => b === c || b.startsWith(c + ' '));
+      return k || b;
+    };
+  }
+
   function renderBrands() {
     const list = root && root.querySelector('.brand-list');
     if (!list) return;
@@ -470,16 +484,7 @@
       if (!String(d.name || '').trim()) return;
       rows.push({ id, b: cleanBrand(d.brand) });
     });
-    // 묶는 기준 이름: 목록 + 다른 브랜드 글자의 앞부분(단어 경계)이 되는 브랜드
-    const present = [...new Set(rows.map((r) => r.b).filter(Boolean))];
-    const keys = new Set(BRAND_NAMES.map(cleanBrand));
-    present.forEach((s) => { if (present.some((t) => t !== s && t.startsWith(s + ' '))) keys.add(s); });
-    const keyList = [...keys].sort((x, y) => x.length - y.length);   // 가장 짧은(가장 앞) 이름을 우선
-    const groupOf = (b) => {
-      if (!b) return '(브랜드 없음)';
-      const k = keyList.find((c) => b === c || b.startsWith(c + ' '));
-      return k || b;
-    };
+    const groupOf = brandGrouper(rows.map((r) => r.b));
     const groups = [];
     const byName = new Map();
     let total = 0;
@@ -750,11 +755,14 @@
   function openExport() {
     if (!root || !canEdit() || !isTrade()) return;
     if (!window.INKEXPORT) { showNotice('이미지 저장 기능을 불러오지 못했습니다. 새로고침해 주세요.'); setTimeout(() => showNotice(''), 4000); return; }
-    const items = [...tbodyEl().rows].map((tr) => {
+    const rowsNow = [...tbodyEl().rows];
+    const groupOf = brandGrouper(rowsNow.map((tr) => cleanBrand((data[tr.dataset.id] || {}).brand)));
+    const items = rowsNow.map((tr) => {
       const d = data[tr.dataset.id] || {};
       const sw = swatchFor(tr);
       return {
         brand: cleanBrand(d.brand),
+        group: groupOf(cleanBrand(d.brand)),
         name: String(d.name || '').trim(),
         pearl: !!d.pearl,
         note: String(d.note || ''),
