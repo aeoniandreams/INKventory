@@ -454,7 +454,6 @@
     clearSelection();
     root.querySelector('tbody').innerHTML = rowsHtml();
     fillAll();
-    prevOrder = null;
     renderBrands();
   }
 
@@ -514,7 +513,6 @@
   // 브랜드 가나다순 → 같은 브랜드 안에서 잉크명 가나다순. 숫자는 크기순(No.22 < No.79), 영문은 대소문자 무시.
   // 글자 종류 순서: 기호 → 숫자 → 한글 → 영문 → 그 밖(그리스 문자 등). 한글이 있는 이름에서는 한자를 무시(한자 뒤의 한글 읽기로 정렬).
   // 그래서 "글입다" → "글입다 만우절 에디션" → "글입다 X 민음사" 처럼 기본 브랜드가 앞, 한글 변형, 콜라보(X) 순이 된다.
-  let prevOrder = null;   // 정렬 직전 순서 (되돌리기용)
 
   function sortText(s) {
     let t = String(s == null ? '' : s).normalize('NFC').toLowerCase();
@@ -584,10 +582,6 @@
     clearSelection();
   }
 
-  function syncUndo() {
-    if (undoTopBtn) undoTopBtn.hidden = !(prevOrder && canEdit());
-  }
-
   function sortRows() {
     if (!root || !canEdit()) return;
     const next = sortedOrder();
@@ -596,22 +590,10 @@
       setTimeout(() => showNotice(''), 2500);
       return;
     }
-    prevOrder = order.slice();
     order = next;
     queueOrder();
     reorderRows();
     renderBrands();
-    syncUndo();
-  }
-
-  function undoSort() {
-    if (!root || !canEdit() || !prevOrder) return;
-    order = prevOrder;
-    prevOrder = null;
-    queueOrder();
-    reorderRows();
-    renderBrands();
-    syncUndo();
   }
 
   // ── 폰(800px 이하): 브랜드 패널을 오른쪽 사이드바로 ──
@@ -632,7 +614,6 @@
   let exportTopBtn = null;   // 잉팔잉사 상단 바의 이미지 저장 버튼
   let helpTopBtn = null;     // 잉팔잉사 상단 바의 안내(알림창 다시 보기) 버튼
   let sortTopBtn = null;     // 보유 잉크 상단 바의 정렬 버튼 (저장됨 문구 오른쪽, 관리자 모드에서만)
-  let undoTopBtn = null;     // 정렬 직후에만 보이는 되돌리기 버튼
 
   function teardownBrandDrawer() {
     if (exportTopBtn) exportTopBtn.remove();
@@ -641,8 +622,6 @@
     helpTopBtn = null;
     if (sortTopBtn) sortTopBtn.remove();
     sortTopBtn = null;
-    if (undoTopBtn) undoTopBtn.remove();
-    undoTopBtn = null;
     if (brandToggleBtn) brandToggleBtn.remove();
     if (brandBackdrop) brandBackdrop.remove();
     brandToggleBtn = null;
@@ -673,16 +652,7 @@
       topbar.appendChild(exportTopBtn);
       return;
     }
-    // 보유 잉크: 상단 바 오른쪽에 "저장됨" 문구 다음으로 [되돌리기] [정렬], 폰에서는 그 오른쪽에 브랜드 사이드바 버튼 (만드는 순서가 곧 늘어서는 순서)
-    undoTopBtn = document.createElement('button');
-    undoTopBtn.className = 'sort-undo';
-    undoTopBtn.type = 'button';
-    undoTopBtn.hidden = true;
-    undoTopBtn.title = '정렬 되돌리기';
-    undoTopBtn.setAttribute('aria-label', '정렬 되돌리기');
-    undoTopBtn.innerHTML = UNDO_ICON + '<span class="lbl">되돌리기</span>';
-    undoTopBtn.addEventListener('click', undoSort);
-    topbar.appendChild(undoTopBtn);
+    // 보유 잉크: 상단 바 오른쪽에 "저장됨" 문구 다음으로 [정렬], 폰에서는 그 오른쪽에 브랜드 사이드바 버튼 (만드는 순서가 곧 늘어서는 순서)
     sortTopBtn = document.createElement('button');
     sortTopBtn.className = 'sort-btn';
     sortTopBtn.type = 'button';
@@ -1127,7 +1097,6 @@
     if (isTrade() && window.INKNOTICE) window.INKNOTICE.setEditable(noticeEditable());   // 알림글 수정(연필)은 관리자 모드에서만     // 이미지 저장은 관리자 모드의 잉팔잉사에서만 (상단 바 오른쪽 버튼)
     if (zoomRefresh) zoomRefresh();                      // 배치가 바뀌면 확대·축소 범위도 다시 계산
     if (barFit) barFit();                                // 잔량 막대 길이도 다시 맞춤
-    syncUndo();
     if (!edit) { closeMenu(false); clearSelection(); }
     if (isAdminMode()) INKFB.db().catch(() => {});   // 관리자 모드가 되면 저장용 SDK 를 미리 받아 둠 (첫 저장이 빠르게)
     showStatus();
@@ -1390,8 +1359,6 @@
     relabel(0);
     clearSelection();
     closeMenu(false);
-    prevOrder = null;     // 정렬 되돌리기는 더 이상 쓸 수 없음
-    syncUndo();
     renderBrands();
     emitStats();
   }
@@ -1568,8 +1535,6 @@
     const id = newId();
     order.splice(b, 0, id);
     queueOrder();
-    prevOrder = null;     // 새 행이 생기면 정렬 되돌리기는 더 이상 쓸 수 없음
-    syncUndo();
 
     const tbody = tbodyEl();
     tbody.rows[b].insertAdjacentHTML('beforebegin', rowHtml(id, b + 1));
@@ -1587,8 +1552,6 @@
   const ROW_ADD_ICON = '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 17a2 2 0 0 1-2 2H7.2l-5.2 2L4 15.8V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M13 8v6"/><path d="M10 11h6"/></svg>';
   const ROW_ADD_SIZE = 19;
   // Lucide "arrow-down-a-z" (정렬 버튼)
-  // Lucide "undo-2" (정렬 되돌리기)
-  const UNDO_ICON = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"/></svg>';
   const SORT_ICON = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M20 8h-5"/><path d="M15 10V6.5a2.5 2.5 0 0 1 5 0V10"/><path d="M15 14h5l-5 6h5"/></svg>';
   const TAIL_Y = (22 / 24) * ROW_ADD_SIZE; // 아이콘 맨 아래(꼬리 끝, 선 굵기 포함)의 높이
   const NEAR = 12;                         // 선에서 이 거리(px) 안이면 "행과 행 사이"로 본다
@@ -1679,7 +1642,6 @@
     const tbody = container.querySelector('tbody');
     menuEl = container.querySelector('.menu');
     menuFor = null;
-    prevOrder = null;
     renderBrands();
     setupZoom(container);
     setupBrandDrawer();
@@ -1874,7 +1836,6 @@
     teardownBrandDrawer();
     zoomRefresh = null;
     barFit = null;
-    prevOrder = null;
     closeLightbox();
     closeMenu(false);
     closeCtx();

@@ -222,17 +222,15 @@ button { font: inherit; color: inherit; }
   font-size: 13px; font-weight: 700; color: var(--muted);
 }
 .brand-panel__sum { font-weight: 500; font-size: 12px; font-variant-numeric: tabular-nums; }
-.sort-btn, .sort-undo {
+.sort-btn {
   display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 9px;
   background: var(--surface); border: 1px solid var(--line); border-radius: 8px; cursor: pointer;
   font-size: 12px; font-weight: 600; color: var(--accent); white-space: nowrap;
 }
-.sort-btn[hidden], .sort-undo[hidden] { display: none; }
-.topbar .sort-btn, .topbar .sort-undo { flex: none; }
-@media (max-width: 800px) { .topbar .sort-undo .lbl { display: none; } .topbar .sort-undo { padding: 0 8px; } }   /* 폰: 되돌리기는 아이콘만 */
+.sort-btn[hidden] { display: none; }
+.topbar .sort-btn { flex: none; }
 @media (max-width: 360px) { .topbar .sort-btn .lbl { display: none; } .topbar .sort-btn { padding: 0 8px; } }       /* 아주 좁은 폰: 정렬도 아이콘만 */
-.sort-undo { background: none; border-color: transparent; color: var(--muted); font-weight: 500; }
-.sort-btn:hover, .sort-undo:hover { background: var(--accent-soft); }
+.sort-btn:hover { background: var(--accent-soft); }
 .brand-list { flex: 1 1 auto; min-height: 0; margin: 0; padding: 4px 0; list-style: none; overflow-y: auto; }
 .brand-list button {
   width: 100%; display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
