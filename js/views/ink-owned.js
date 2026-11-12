@@ -620,7 +620,11 @@
     if (brandToggleBtn) brandToggleBtn.setAttribute('aria-expanded', String(open));
   }
 
+  let exportTopBtn = null;   // 잉팔잉사 상단 바의 이미지 저장 버튼
+
   function teardownBrandDrawer() {
+    if (exportTopBtn) exportTopBtn.remove();
+    exportTopBtn = null;
     if (brandToggleBtn) brandToggleBtn.remove();
     if (brandBackdrop) brandBackdrop.remove();
     brandToggleBtn = null;
@@ -631,6 +635,18 @@
     teardownBrandDrawer();
     const topbar = document.querySelector('.topbar');
     if (!topbar) return;
+    if (isTrade()) {                       // 잉팔잉사에는 브랜드 목록이 없다. 대신 관리자 모드에서 이미지 저장 버튼만 상단 바에 둔다
+      exportTopBtn = document.createElement('button');
+      exportTopBtn.className = 'icon-btn';
+      exportTopBtn.type = 'button';
+      exportTopBtn.hidden = true;
+      exportTopBtn.title = '표·발색을 이미지로 저장';
+      exportTopBtn.setAttribute('aria-label', '표·발색을 이미지로 저장');
+      exportTopBtn.innerHTML = IMAGE_ICON.replace('width="15" height="15"', 'width="20" height="20"');
+      exportTopBtn.addEventListener('click', openExport);
+      topbar.appendChild(exportTopBtn);
+      return;
+    }
     brandToggleBtn = document.createElement('button');
     brandToggleBtn.className = 'icon-btn brand-toggle';
     brandToggleBtn.type = 'button';
@@ -1029,7 +1045,7 @@
     root.querySelectorAll('.pick').forEach((p) => { p.tabIndex = edit ? 0 : -1; });
     root.classList.toggle('is-editable', edit);
     root.querySelector('.sort-btn').hidden = !edit;     // 정렬은 관리자 모드에서만
-    root.querySelector('.export-btn').hidden = !(edit && isTrade());   // 이미지 저장은 관리자 모드의 잉팔잉사에서만
+    if (exportTopBtn) exportTopBtn.hidden = !edit;     // 이미지 저장은 관리자 모드의 잉팔잉사에서만 (상단 바 오른쪽 버튼)
     if (zoomRefresh) zoomRefresh();                      // 배치가 바뀌면 확대·축소 범위도 다시 계산
     if (barFit) barFit();                                // 잔량 막대 길이도 다시 맞춤
     syncUndo();
@@ -1537,7 +1553,6 @@
           <span class="brand-panel__title">브랜드</span><span class="brand-panel__sum"></span>
           <span class="brand-panel__tools">
             <button class="sort-undo" type="button" hidden>되돌리기</button>
-            <button class="export-btn" type="button" hidden title="잉팔잉사 표·발색을 이미지로 저장">${IMAGE_ICON}이미지</button>
             <button class="sort-btn" type="button" hidden title="브랜드 → 잉크명 가나다순으로 정렬">${SORT_ICON}정렬</button>
           </span>
         </div>
@@ -1567,7 +1582,6 @@
     setupZoom(container);
     setupBrandDrawer();
     container.querySelector('.sort-btn').addEventListener('click', sortRows);
-    container.querySelector('.export-btn').addEventListener('click', openExport);
     container.querySelector('.sort-undo').addEventListener('click', undoSort);
     container.querySelector('.brand-list').addEventListener('click', (e) => {
       const b = e.target.closest('button[data-id]');

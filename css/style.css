@@ -222,14 +222,14 @@ button { font: inherit; color: inherit; }
 }
 .brand-panel__sum { font-weight: 500; font-size: 12px; font-variant-numeric: tabular-nums; }
 .brand-panel__tools { margin-left: auto; display: flex; align-items: center; gap: 4px; }
-.sort-btn, .sort-undo, .export-btn {
+.sort-btn, .sort-undo {
   display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 9px;
   background: var(--surface); border: 1px solid var(--line); border-radius: 8px; cursor: pointer;
   font-size: 12px; font-weight: 600; color: var(--accent); white-space: nowrap;
 }
-.sort-btn[hidden], .sort-undo[hidden], .export-btn[hidden] { display: none; }
+.sort-btn[hidden], .sort-undo[hidden] { display: none; }
 .sort-undo { background: none; border-color: transparent; color: var(--muted); font-weight: 500; }
-.sort-btn:hover, .sort-undo:hover, .export-btn:hover { background: var(--accent-soft); }
+.sort-btn:hover, .sort-undo:hover { background: var(--accent-soft); }
 .brand-list { flex: 1 1 auto; min-height: 0; margin: 0; padding: 4px 0; list-style: none; overflow-y: auto; }
 .brand-list button {
   width: 100%; display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
@@ -575,8 +575,11 @@ html[data-layout="normal"] .table-wrap { width: auto; max-width: 100%; }
 .is-trade .table-area { padding-left: 0; display: flex; justify-content: flex-end; }
 .is-trade .table-wrap { width: auto; max-width: 100%; }
 .is-trade .row-add { display: none; }
-.is-trade .ink-layout { --table-gap: 150px; max-width: calc(var(--sidebar-w) - var(--main-pl) + var(--table-gap) + var(--admin-w, 865px) + 12px); }
-@media (max-width: 800px) { .is-trade .ink-layout { max-width: none; } }
+/* 잉팔잉사에는 브랜드 목록(패널·폰의 오른쪽 사이드바)이 없다 → 표를 가운데에 */
+.is-trade .brand-panel { display: none; }
+.is-trade .ink-layout { max-width: none; }
+.is-trade .table-area, html[data-layout="normal"] .is-trade .table-area { justify-content: center; }
+html[data-layout="normal"] .is-trade .ink-layout { max-width: none; }
 
 /* 일반 모드에서 패널과 표 사이가 너무 멀어지지 않게: 묶음 전체의 너비를 "패널 + 표 + 사이 간격(--table-gap)"까지만 */
 html[data-layout="normal"] .ink-layout {

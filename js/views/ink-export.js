@@ -294,8 +294,6 @@
           <div class="exp-row">
             <label class="exp-ratio">발색 사진 비율
               <select name="expRatio"><option value="3:4" selected>3:4</option><option value="1:1">1:1</option></select></label>
-            <label>형식
-              <select name="expFmt"><option value="png">PNG</option><option value="jpg">JPG</option></select></label>
           </div>
         </div>
         <p class="exp-info" aria-live="polite"></p>
@@ -350,7 +348,6 @@
     const makeBtn = d.querySelector('[data-make]');
     const swatch = kindOf() === 'swatch';
     const ratio = d.querySelector('select[name="expRatio"]').value;
-    const fmt = d.querySelector('select[name="expFmt"]').value;
     const list = swatch ? current.items.filter((it) => it.src) : current.items;
     if (!list.length) return;
     cleanup();
@@ -363,7 +360,7 @@
       const failed = imgs.filter((im, i) => list[i].src && !im).length;
       const objs = list.map((it, i) => ({ it, img: imgs[i] }));
       const groups = swatch ? pages(objs) : splitRows(objs, (o) => o.it.group || o.it.brand);
-      const mime = fmt === 'jpg' ? 'image/jpeg' : 'image/png';
+      const mime = 'image/png';   // 형식은 PNG 로 고정
       let k = 0;
       for (const g of groups) {
         k++;
@@ -372,11 +369,11 @@
         const its = g.map((x) => x.it);
         const ims = g.map((x) => x.img);
         const cv = swatch ? drawCollage(its, ims, ratio) : drawTable(its, ims, k, groups.length);
-        const blob = await new Promise((res) => cv.toBlob(res, mime, 0.92));
+        const blob = await new Promise((res) => cv.toBlob(res, mime));
         if (!blob) throw new Error('blob');
         const url = URL.createObjectURL(blob);
         urls.push(url);
-        const name = `잉팔잉사-${swatch ? '발색' : '표'}-${k}.${fmt}`;
+        const name = `잉팔잉사-${swatch ? '발색' : '표'}-${k}.png`;
         const fig = document.createElement('figure');
         fig.className = 'exp-fig';
         fig.innerHTML = '<img alt=""><figcaption><span></span><a class="btn" download>저장</a></figcaption>';
