@@ -128,20 +128,31 @@
     return h + '</tr>';
   }
 
-  // 관리자: 행 추가/삭제 버튼 없이, 표 맨 아래에 늘 빈 행이 하나 있다. 거기에 쓰기 시작하면 다음 빈 행이 생기고,
+  // 관리자: 표 아래의 "+ 행 추가" 버튼으로 행을 더한다 (일반 모드에는 버튼이 없다). 행 삭제 버튼(×)은 없고,
   // 한 행의 칸을 모두 지우고 다른 곳으로 옮기면 그 행이 없어진다. (완전히 빈 행은 저장하지 않는다)
   function renderExchange() {
     const box = dlg.querySelector('.notice-exch');
     const admin = !!ctx.editable;
-    if (admin) {
-      while (ctx.exchange.length > 1 && isBlank(ctx.exchange[ctx.exchange.length - 1]) && isBlank(ctx.exchange[ctx.exchange.length - 2])) ctx.exchange.pop();
-      if (!ctx.exchange.length || !isBlank(ctx.exchange[ctx.exchange.length - 1])) { if (ctx.exchange.length < EX_MAX_ROWS) ctx.exchange.push(BLANK()); }
-    }
     const shown = admin ? ctx.exchange : ctx.exchange.filter((r) => !isBlank(r));
     if (!admin && !shown.length) { box.innerHTML = '<div class="exch-empty">등록된 교환 목록이 없습니다.</div>'; return; }
     const total = EX_COLS.reduce((n, c) => n + c.w, 0);
     const pct = (w) => `${((w / total) * 100).toFixed(2)}%`;
-    box.innerHTML = `<table class="exch-table"><thead><tr>${EX_COLS.map((c) => `<th style="width:${pct(c.w)}">${esc(c.label)}</th>`).join('')}</tr></thead><tbody>${shown.map((r, i) => exRowHtml(r, i, admin)).join('')}</tbody></table>`;
+    box.innerHTML = `<table class="exch-table"><thead><tr>${EX_COLS.map((c) => `<th style="width:${pct(c.w)}">${esc(c.label)}</th>`).join('')}</tr></thead><tbody>${shown.map((r, i) => exRowHtml(r, i, admin)).join('')}</tbody></table>`
+      + (admin ? '<button class="btn x-add" type="button">+ 행 추가</button>' : '');
+  }
+
+  // 맨 아래에 빈 행을 하나 더하고 첫 칸에 커서 (이미 맨 아래가 빈 행이면 거기로 커서만)
+  function addExchangeRow(col) {
+    const ex = dlg.querySelector('.notice-exch');
+    const last = ctx.exchange.length - 1;
+    if (last < 0 || !isBlank(ctx.exchange[last])) {
+      if (ctx.exchange.length >= EX_MAX_ROWS) return;
+      ctx.exchange.push(BLANK());
+      const tb = ex.querySelector('tbody');
+      if (!tb) { renderExchange(); } else tb.insertAdjacentHTML('beforeend', exRowHtml(ctx.exchange[ctx.exchange.length - 1], ctx.exchange.length - 1, true));
+    }
+    const f = ex.querySelector(`textarea[data-i="${ctx.exchange.length - 1}"][data-k="${col || 'brand'}"]`);
+    if (f) f.focus();
   }
 
   // 편집 내용을 잠시 모았다가 저장 요청 (닫을 때는 바로). 완전히 빈 행은 저장하지 않는다.
@@ -203,7 +214,7 @@
     dlg.addEventListener('close', () => { flushExchange(); if (ctx.onClose) ctx.onClose(); });
     q('.notice-tabs').addEventListener('click', (e) => { const b = e.target.closest('.notice-tab'); if (b) setTab(b.dataset.tab); });
     const ex = q('.notice-exch');
-    // 교환 표 편집 (관리자): 입력 → 데이터에 반영 + 잠시 뒤 저장, 맨 아래 빈 행에 쓰면 다음 빈 행 생김, Enter 는 아래 행의 같은 열로
+    // 교환 표 편집 (관리자): 입력 → 데이터에 반영 + 잠시 뒤 저장, 모두 지운 행은 삭제, Enter 는 아래 행의 같은 열로
     ex.addEventListener('input', (e) => {
       const t = e.target.closest('textarea[data-i]');
       if (!t) return;
@@ -211,10 +222,6 @@
       if (!ctx.exchange[i]) return;
       ctx.exchange[i][t.dataset.k] = t.value;
       t.parentNode.dataset.v = t.value;
-      if (i === ctx.exchange.length - 1 && !isBlank(ctx.exchange[i]) && ctx.exchange.length < EX_MAX_ROWS) {   // 맨 아래 빈 행에 쓰기 시작 → 다음 빈 행을 만든다
-        ctx.exchange.push(BLANK());
-        ex.querySelector('tbody').insertAdjacentHTML('beforeend', exRowHtml(ctx.exchange[i + 1], i + 1, true));
-      }
       scheduleExchange();
     });
     ex.addEventListener('keydown', (e) => {
@@ -224,13 +231,15 @@
       const i = Number(t.dataset.i);
       const next = ex.querySelector(`textarea[data-i="${i + 1}"][data-k="${t.dataset.k}"]`);
       if (next) next.focus();
+      else addExchangeRow(t.dataset.k);                                      // 맨 아래 행에서 Enter → 새 행의 같은 열
     });
-    // 모두 지운 행은 포커스가 다른 칸으로 옮겨 간 뒤에 없앤다 (마지막 빈 행은 남김)
+    ex.addEventListener('click', (e) => { if (e.target.closest('.x-add')) addExchangeRow(); });
+    // 모두 지운 행은 포커스가 다른 칸으로 옮겨 간 뒤에 없앤다
     ex.addEventListener('focusout', () => {
       setTimeout(() => {
         if (!dlg.open || q('.notice-exch').hidden || !ctx.editable) return;
         const active = document.activeElement;
-        for (let i = ctx.exchange.length - 2; i >= 0; i--) {
+        for (let i = ctx.exchange.length - 1; i >= 0; i--) {
           if (!isBlank(ctx.exchange[i])) continue;
           const tr = ex.querySelector(`tr[data-i="${i}"]`);
           if (tr && active && tr.contains(active)) continue;               // 아직 그 행에서 입력 중
