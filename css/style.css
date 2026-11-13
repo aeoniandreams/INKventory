@@ -9,6 +9,11 @@
 
   --sidebar-w: 264px;
   --topbar-h: 56px;
+  /* 표 화면의 여백: 화면 폭에 비례(정수 px 로 맞춰서 1px 선이 흐려지지 않게 — 아래 @supports).
+     --edge: 좌우 같은 여백(잉팔잉사·폰). --edge-l / --edge-r: 보유 잉크 데스크톱은 표를 오른쪽으로 조금 밀어 왼쪽은 넓게(3.2%), 오른쪽은 좁게(1.6%) */
+  --edge: clamp(12px, 2.4vw, 44px);
+  --edge-l: clamp(12px, 3.2vw, 56px);
+  --edge-r: clamp(10px, 1.6vw, 28px);
   --ease: cubic-bezier(.4, 0, .2, 1);
   --dur: 260ms;
 
@@ -199,7 +204,9 @@ button { font: inherit; color: inherit; }
 .placeholder p { margin: 0; color: var(--muted); }
 
 /* ── 표 화면 (보유 잉크) ─────────────────── */
-.main--table { --main-pl: 6px; padding: 20px clamp(12px, 3vw, 32px) 24px var(--main-pl); }  /* 왼쪽은 정수 px (선이 흐릿해지지 않게) */
+.main--table { --main-pl: var(--edge-l); padding: 20px var(--edge-r) 24px var(--main-pl); }   /* 보유 잉크: 왼쪽 넓게, 오른쪽 좁게 (화면 폭 비율) */
+.main--table.is-trade { --main-pl: var(--edge); padding-right: var(--edge); }                  /* 잉팔잉사: 좌우 같은 여백 */
+@media (max-width: 800px) { .main--table { --main-pl: var(--edge); padding-right: var(--edge); } }   /* 폰: 좌우 같은 여백 */
 
 /* 왼쪽에 브랜드별 개수 패널, 오른쪽에 표.
    패널은 사이드바를 열었을 때 사이드바가 통째로 덮는 자리(왼쪽 --sidebar-w 안)에 들어가게 만든다.
@@ -565,7 +572,6 @@ html[data-layout="normal"] main:not(.is-trade) .grid td.col-portions.has-val::af
   content: 'O'; position: absolute; inset: 0; display: grid; place-items: center;
   font-weight: 700; color: var(--accent); pointer-events: none;
 }
-html[data-layout="normal"] .main--table { --main-pl: clamp(12px, 3vw, 32px); }  /* 좌우 여백을 같게 해서 정확히 가운데로 */
 html[data-layout="normal"] .table-area { padding-left: 0; display: flex; justify-content: flex-end; }   /* 표는 오른쪽에 붙임 */
 html[data-layout="normal"] .table-wrap { width: auto; max-width: 100%; }
 
@@ -579,7 +585,6 @@ html[data-layout="normal"] .table-wrap { width: auto; max-width: 100%; }
 .is-trade .row-add { display: none; }
 /* 잉팔잉사에는 브랜드 목록(패널·폰의 오른쪽 사이드바)이 없다 → 표를 가운데에 */
 .is-trade .brand-panel { display: none; }
-.main--table.is-trade { --main-pl: clamp(12px, 3vw, 32px); }   /* 행 추가 아이콘 자리가 필요 없으니 좌우 여백을 같게 */
 .is-trade .pearl-btn { display: none !important; }              /* 펄 표시도 보유 잉크에서만 고침 */
 .is-trade .ink-layout { max-width: none; }
 .is-trade .table-area, html[data-layout="normal"] .is-trade .table-area { justify-content: center; }
@@ -732,4 +737,12 @@ html[data-layout="normal"] .ink-layout {
   .notice-actions { padding: 3.2vw 4.3vw 4.3vw; }
   .notice-bar { padding: 2.7vw 3.7vw; }
   .notice-editor { margin: 4.3vw 5.3vw 0; padding: 3.2vw 3.7vw; min-height: 32vh; }
+}
+
+@supports (width: round(down, 1.5px, 1px)) {
+  :root {
+    --edge: round(down, clamp(12px, 2.4vw, 44px), 1px);
+    --edge-l: round(down, clamp(12px, 3.2vw, 56px), 1px);
+    --edge-r: round(down, clamp(10px, 1.6vw, 28px), 1px);
+  }
 }

@@ -715,11 +715,11 @@
       return area.clientWidth - pad - 2 - scrollbarW();
     };
     const fitFor = (w, withPad) => { const a = availW(withPad); return a > 0 ? Math.min(1, Math.floor((a / w) * 1000) / 1000) : 0.4; };
-    // 시작 배율: 일반 모드에서 표(NORMAL_W)가 화면 너비에 딱 맞는 배율. 화면 너비와 일반 모드의 좌우 여백(CSS clamp(12px,3vw,32px))으로 계산해서
-    // 관리자 모드(여백이 달라 영역 너비가 조금 다름)에서도 같은 값이 나온다.
+    // 시작 배율: 일반 모드에서 표(NORMAL_W)가 화면 너비에 딱 맞는 배율. 화면 너비와 폰의 좌우 여백(CSS --edge = clamp(12px, 2.4vw, 44px))으로 계산해서
+    // 관리자 모드에서도 같은 값이 나온다.
     const startZoom = () => {
       const vw = document.documentElement.clientWidth;
-      const m = Math.max(12, Math.min(32, vw * 0.03));
+      const m = Math.floor(Math.max(12, Math.min(44, vw * 0.024)));
       const a = vw - 2 * m - 2 - scrollbarW();
       return a > 0 ? Math.min(1, Math.floor((a / normalTableW()) * 1000) / 1000) : 0.4;
     };
