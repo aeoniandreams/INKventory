@@ -1,4 +1,4 @@
-// 잉팔잉사 처음 접속 알림창. ink-owned.js 가 INKNOTICE.open({ html, editable, onSave }) 로 연다.
+// 잉팔잉사 처음 접속 알림창. 위쪽의 [안내] [교환] 두 박스로 내용을 바꿔 본다: 안내 = 알림글, 교환 = 교환 희망 잉크 표(작은 표, 관리자는 그 자리에서 고침). ink-owned.js 가 INKNOTICE.open({ html, editable, onSave }) 로 연다.
 //   · 화면 가운데 알림창, 바깥은 어둡게(딤). 오른쪽 아래 "확인"을 눌러야 닫힌다.
 //   · 관리자 모드에서만 오른쪽 위 연필 버튼이 보이고, 누르면 수정창: 위쪽에 고정된 바(회색 글씨 / 굵게 / 취소선) + 글 입력칸.
 //   · 내용은 안전한 HTML 조각으로만 저장한다: <div> 한 줄씩, 그 안에 <b> <s> <span class="gray"> 만 허용 (sanitize). 보여 줄 때도 한 번 더 거른다.
@@ -85,14 +85,103 @@
     '- 교환도 구하고 있습니다. 교환 희망 잉크 목록은 마지막 이미지에서 확인 부탁드립니다. 대략적인 가격대에 맞추어 교환 희망합니다.',
   ];
 
+  // ── 교환 표 ──
+  // 데이터: [{ brand, name, note, portions, price }] (공개 문서의 exchangeRows). 열은 잉팔잉사 표와 같다.
+  // 일반 모드: 비어 있는 열(비고·소분 가능·가격·발색)은 감춰서 표를 작게. 관리자 모드: 모든 열을 보여 주고 칸을 고치거나 행을 더하고 뺄 수 있다.
+  const EX_COLS = [
+    { k: 'brand', label: '브랜드', w: 24, max: 100 },
+    { k: 'name', label: '잉크명', w: 30, max: 100 },
+    { k: 'swatch', label: '발색', w: 9 },
+    { k: 'note', label: '비고', w: 17, max: 300 },
+    { k: 'portions', label: '소분 가능 (5ml)', w: 10, max: 20 },
+    { k: 'price', label: '가격', w: 10, max: 50 },
+  ];
+  const EX_MAX_ROWS = 100;
+
+  function cleanExchange(rows) {
+    const str = (v, n) => String(v == null ? '' : v).slice(0, n);
+    return (Array.isArray(rows) ? rows : []).slice(0, EX_MAX_ROWS).map((r) => {
+      const o = {};
+      EX_COLS.forEach((c) => { if (c.k !== 'swatch') o[c.k] = str(r && r[c.k], c.max); });
+      return o;
+    });
+  }
+
   let dlg = null;
-  let ctx = { html: '', editable: false, emptyMessage: '', onSave: null, onClose: null };
+  let tab = 'info';
+  let exTimer = null;
+  let ctx = { html: '', editable: false, emptyMessage: '', exchange: [], swatchSrc: null, onSave: null, onExchange: null, onClose: null };
 
   function render(el, html, emptyMessage) {
     const clean = sanitize(html);
     if (!clean && emptyMessage) { el.innerHTML = `<div class="gray">${esc(emptyMessage)}</div>`; return; }   // 비어 있을 때 안내 문구 (저장되는 내용이 아님)
     el.innerHTML = clean;
     el.querySelectorAll(':scope > div').forEach((d) => { if (d.textContent.startsWith('- ')) d.classList.add('bullet'); });   // "- " 로 시작하는 줄은 걸어 들여쓰기
+  }
+
+  const photoOf = (r) => (ctx.swatchSrc ? ctx.swatchSrc(r.brand, r.name) : '');
+  const swatchHtml = (src) => (src ? `<span class="swatch has-img"><img src="${esc(src)}" alt="" width="22" height="22" referrerpolicy="no-referrer"></span>` : '<span class="swatch"></span>');
+
+  function refreshSwatchCell(i) {
+    const td = dlg.querySelector(`.notice-exch tr[data-i="${i}"] .x-sw`);
+    if (td && ctx.exchange[i]) td.innerHTML = swatchHtml(photoOf(ctx.exchange[i]));
+  }
+
+  function renderExchange() {
+    const box = dlg.querySelector('.notice-exch');
+    const admin = !!ctx.editable;
+    const rows = ctx.exchange;
+    const shown = admin ? rows : rows.filter((r) => r.brand.trim() || r.name.trim());
+    if (!admin && !shown.length) { box.innerHTML = '<div class="exch-empty">등록된 교환 목록이 없습니다.</div>'; return; }
+    let cols = EX_COLS;
+    if (!admin) cols = EX_COLS.filter((c) => c.k === 'brand' || c.k === 'name' || (c.k === 'swatch' ? shown.some((r) => photoOf(r)) : shown.some((r) => String(r[c.k]).trim())));
+    const total = cols.reduce((n, c) => n + c.w, 0) + (admin ? 5 : 0);
+    const pct = (w) => `${((w / total) * 100).toFixed(2)}%`;
+    let h = `<table class="exch-table"><thead><tr>${cols.map((c) => `<th style="width:${pct(c.w)}">${esc(c.label)}</th>`).join('')}${admin ? `<th class="x-del" style="width:${pct(5)}"></th>` : ''}</tr></thead><tbody>`;
+    shown.forEach((r, i) => {
+      h += `<tr data-i="${i}">`;
+      cols.forEach((c) => {
+        if (c.k === 'swatch') h += `<td class="x-sw">${swatchHtml(photoOf(r))}</td>`;
+        else if (admin) h += `<td><div class="cell-wrap" data-v="${esc(r[c.k])}"><textarea class="cell" rows="1" data-i="${i}" data-k="${c.k}" maxlength="${c.max}" aria-label="${esc(c.label)} ${i + 1}행" autocomplete="off" spellcheck="false">${esc(r[c.k])}</textarea></div></td>`;
+        else h += `<td><div class="xc">${esc(r[c.k])}</div></td>`;
+      });
+      if (admin) h += `<td class="x-del"><button class="x-delbtn" type="button" data-i="${i}" title="이 행 삭제" aria-label="${i + 1}행 삭제">×</button></td>`;
+      h += '</tr>';
+    });
+    h += '</tbody></table>';
+    if (admin) h += '<button class="btn x-add" type="button">+ 행 추가</button>';
+    box.innerHTML = h;
+  }
+
+  function addExchangeRow() {
+    if (ctx.exchange.length >= EX_MAX_ROWS) return;
+    ctx.exchange.push({ brand: '', name: '', note: '', portions: '', price: '' });
+    renderExchange();
+    const f = dlg.querySelector(`.notice-exch textarea[data-i="${ctx.exchange.length - 1}"][data-k="brand"]`);
+    if (f) f.focus();
+  }
+
+  // 편집 내용을 잠시 모았다가 저장 요청 (닫을 때는 바로). 완전히 빈 행은 저장하지 않는다.
+  function scheduleExchange() { clearTimeout(exTimer); exTimer = setTimeout(flushExchange, 600); }
+  function flushExchange() {
+    if (exTimer === null) return;
+    clearTimeout(exTimer);
+    exTimer = null;
+    if (ctx.onExchange) ctx.onExchange(cleanExchange(ctx.exchange).filter((r) => EX_COLS.some((c) => c.k !== 'swatch' && r[c.k].trim())));
+  }
+
+  function updatePencil() {
+    if (dlg) dlg.querySelector('.notice-edit-btn').hidden = !(ctx.editable && tab === 'info');
+  }
+
+  function setTab(t) {
+    tab = t;
+    dlg.querySelectorAll('.notice-tab').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
+    dlg.querySelector('.notice-body').hidden = t !== 'info';
+    dlg.querySelector('.notice-exch').hidden = t !== 'exch';
+    dlg.classList.toggle('is-exch', t === 'exch');
+    if (t === 'exch') renderExchange();
+    updatePencil();
   }
 
   function ensure() {
@@ -103,7 +192,12 @@
     dlg.innerHTML = `
       <div class="notice-view">
         <button class="notice-edit-btn" type="button" title="알림글 수정" aria-label="알림글 수정" hidden>${PENCIL}</button>
-        <div class="notice-body"></div>
+        <div class="notice-tabs" role="tablist" aria-label="안내 / 교환">
+          <button class="notice-tab" type="button" role="tab" data-tab="info" aria-selected="true">안내</button>
+          <button class="notice-tab" type="button" role="tab" data-tab="exch" aria-selected="false">교환</button>
+        </div>
+        <div class="notice-body" role="tabpanel"></div>
+        <div class="notice-exch" role="tabpanel" hidden></div>
         <div class="notice-actions"><button class="btn btn--primary" type="button" data-ok>확인</button></div>
       </div>
       <div class="notice-edit" hidden>
@@ -123,7 +217,34 @@
     const editor = q('.notice-editor');
 
     q('[data-ok]').addEventListener('click', () => dlg.close());
-    dlg.addEventListener('close', () => { if (ctx.onClose) ctx.onClose(); });
+    dlg.addEventListener('close', () => { flushExchange(); if (ctx.onClose) ctx.onClose(); });
+    q('.notice-tabs').addEventListener('click', (e) => { const b = e.target.closest('.notice-tab'); if (b) setTab(b.dataset.tab); });
+    const ex = q('.notice-exch');
+    // 교환 표 편집 (관리자): 입력 → 데이터에 반영 + 잠시 뒤 저장, 행 추가/삭제, Enter 는 아래 행의 같은 열로
+    ex.addEventListener('input', (e) => {
+      const t = e.target.closest('textarea[data-i]');
+      if (!t) return;
+      const i = Number(t.dataset.i);
+      if (!ctx.exchange[i]) return;
+      ctx.exchange[i][t.dataset.k] = t.value;
+      t.parentNode.dataset.v = t.value;
+      if (t.dataset.k === 'brand' || t.dataset.k === 'name') refreshSwatchCell(i);
+      scheduleExchange();
+    });
+    ex.addEventListener('keydown', (e) => {
+      const t = e.target.closest('textarea[data-i]');
+      if (!t || e.key !== 'Enter' || e.shiftKey || e.isComposing || e.keyCode === 229) return;
+      e.preventDefault();
+      const i = Number(t.dataset.i);
+      let next = ex.querySelector(`textarea[data-i="${i + 1}"][data-k="${t.dataset.k}"]`);
+      if (!next) { addExchangeRow(); next = ex.querySelector(`textarea[data-i="${i + 1}"][data-k="${t.dataset.k}"]`); }
+      if (next) next.focus();
+    });
+    ex.addEventListener('click', (e) => {
+      const del = e.target.closest('.x-delbtn');
+      if (del) { ctx.exchange.splice(Number(del.dataset.i), 1); renderExchange(); scheduleExchange(); return; }
+      if (e.target.closest('.x-add')) addExchangeRow();
+    });
     q('.notice-edit-btn').addEventListener('click', () => {
       editor.innerHTML = sanitize(ctx.html);
       q('.notice-view').hidden = true;
@@ -178,20 +299,22 @@
 
   window.INKNOTICE = {
     sanitize,
+    cleanExchange,
     defaultHtml: () => linesToHtml(DEFAULT_LINES),
     open(c) {
-      ctx = Object.assign({ html: '', editable: false, emptyMessage: '', onSave: null, onClose: null }, c);
+      ctx = Object.assign({ html: '', editable: false, emptyMessage: '', exchange: [], swatchSrc: null, onSave: null, onExchange: null, onClose: null }, c);
+      ctx.exchange = cleanExchange(ctx.exchange);
       const d = ensure();
       d.querySelector('.notice-edit').hidden = true;
       d.querySelector('.notice-view').hidden = false;
       render(d.querySelector('.notice-body'), ctx.html, ctx.emptyMessage);
-      d.querySelector('.notice-edit-btn').hidden = !ctx.editable;
+      setTab('info');
       if (!d.open) d.showModal();
       d.querySelector('[data-ok]').focus();
     },
     setEditable(v) {
       if (ctx) ctx.editable = !!v;
-      if (dlg) dlg.querySelector('.notice-edit-btn').hidden = !v;
+      if (dlg) { updatePencil(); if (tab === 'exch') renderExchange(); }
     },
     close() { if (dlg && dlg.open) dlg.close(); },
   };

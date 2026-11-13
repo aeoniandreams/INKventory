@@ -74,6 +74,7 @@
   let root = null;              // 현재 화면 컨테이너
   // 같은 표 코드를 두 화면이 나눠 쓴다. 'owned' = 보유 잉크(전체), 'trade' = 잉팔잉사(소분 가능이 적힌 행만, 같은 데이터를 그대로 보여 줌)
   let variant = 'owned';
+  let exchangeRows = [];        // 잉팔잉사 알림창의 '교환' 표 (공개 문서의 exchangeRows: [{brand,name,note,portions,price}])
   let saleNotice = null;        // 잉팔잉사 알림글 (공개 문서의 saleNotice 필드, 안전한 HTML). 없으면(null) 기본 글
   const isTrade = () => variant === 'trade';
   // 지금 화면에 나오는 행 id (순서대로). 잉팔잉사는 소분 가능이 적혀 있는 행만.
@@ -127,6 +128,13 @@
     scheduleFlush(0);
   }
 
+  function queueExchange(rows) {
+    exchangeRows = rows;
+    pending.set('@exchange', { exchange: rows });
+    setStatus('saving');
+    scheduleFlush(0);
+  }
+
   function queueNotice(html) {
     saleNotice = html;
     pending.set('@notice', { notice: html });
@@ -154,13 +162,14 @@
       batch.forEach(([, e]) => {
         if (e.order) { pub.order = e.order; return; }
         if (e.notice !== undefined) { pub.saleNotice = e.notice; return; }
+        if (e.exchange !== undefined) { pub.exchangeRows = e.exchange; return; }
         if (e.pdel) { (privDel[e.pdel] = privDel[e.pdel] || {})[e.field] = deleteField(); return; }
         if (e.del) { (pub.rows = pub.rows || {})[e.del] = deleteField(); priv[e.del] = deleteField(); return; }   // 행 삭제: 공개·관리자 전용 문서에서 모두 지움
         const target = PRIVATE_FIELDS.includes(e.field) ? priv : (pub.rows = pub.rows || {});
         (target[e.id] = target[e.id] || {})[e.field] = e.value;
       });
       const jobs = [];
-      if (pub.order || pub.rows || pub.saleNotice !== undefined) jobs.push(setDoc(doc(db, ...DOC_PATH), pub, { merge: true }));
+      if (pub.order || pub.rows || pub.saleNotice !== undefined || pub.exchangeRows !== undefined) jobs.push(setDoc(doc(db, ...DOC_PATH), pub, { merge: true }));
       if (Object.keys(priv).length) jobs.push(setDoc(doc(db, ...PRIVATE_PATH), { rows: priv }, { merge: true }));
       await Promise.all(jobs);
       if (Object.keys(privDel).length) await setDoc(doc(db, ...PRIVATE_PATH), { rows: privDel }, { merge: true });
@@ -230,6 +239,7 @@
   // 문서 내용(순서 + 행 데이터)을 상태에 반영
   function applyDoc(d) {
     saleNotice = typeof d.saleNotice === 'string' ? d.saleNotice : null;
+    exchangeRows = window.INKNOTICE ? window.INKNOTICE.cleanExchange(d.exchangeRows) : [];
     const rows = d.rows || {};
     let loaded = Array.isArray(d.order) ? [...new Set(d.order.filter((x) => typeof x === 'string' && x))] : [];
     if (!loaded.length) loaded = defaultOrder();
@@ -798,6 +808,9 @@
       html: noticeHtml(),
       editable: noticeEditable(),
       emptyMessage: noticeEditable() ? '알림글이 비어 있습니다. 오른쪽 위 연필 버튼으로 새로 적어 주세요.' : '등록된 안내가 없습니다.',
+      exchange: exchangeRows,
+      swatchSrc: swatchByName,
+      onExchange: (rows) => queueExchange(rows),
       onSave: (h) => { queueNotice(h); },
       onClose: () => { try { sessionStorage.setItem(NOTICE_SEEN, '1'); } catch (err) { /* 무시 */ } },
     });
@@ -969,6 +982,14 @@
       return { thumb: u + '96', full: u + '1600', exp: 'https://lh3.googleusercontent.com/d/' + encodeURIComponent(fid) + '=w1000' };
     }
     return null;
+  }
+
+  // 브랜드·잉크명으로만 찾는 발색 사진 주소 (알림창 교환 표용). 드라이브 폴더의 "브랜드 잉크명" 사진과 이름이 맞으면 작은 사진 주소를 돌려준다.
+  function swatchByName(brand, name) {
+    const b = brand || '';
+    const lead = b.split(/\s+[xX×]\s+/)[0];
+    const fid = driveMap[normName(b + (name || ''))] || (lead !== b && driveMap[normName(lead + (name || ''))]);
+    return fid ? 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(fid) + '&sz=w96' : '';
   }
 
   function syncSwatch(tr) {
