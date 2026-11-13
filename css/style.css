@@ -761,7 +761,7 @@ html[data-layout="normal"] .ink-layout {
   transition: background-color .15s, color .15s, border-color .15s;
 }
 .notice-tab:hover { background: var(--accent-soft); }
-.notice-tab[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.notice-tab[aria-selected="true"] { background: #dfe7f7; border-color: #dfe7f7; color: var(--accent); }   /* 고른 버튼: 표 제목 행과 같은 색 */
 .notice-dialog.is-exch { width: min(680px, calc(100vw - 24px)); }
 .notice-exch { padding: 14px 16px 4px; overflow-y: auto; min-height: 0; }
 .notice-exch[hidden] { display: none; }
@@ -775,8 +775,6 @@ html[data-layout="normal"] .ink-layout {
 .exch-table .xc { padding: 7px 8px; min-height: 30px; white-space: pre-wrap; word-break: keep-all; overflow-wrap: anywhere; }
 .exch-table .cell, .exch-table .cell-wrap::after { padding: 7px 8px; line-height: 17px; min-height: 30px; font-size: 12px; }
 .exch-table .cell:focus { background: #fff; box-shadow: inset 0 0 0 1px var(--accent); }
-.exch-table .x-sw { text-align: center; }
-.exch-table .swatch { width: 22px; height: 22px; margin: 0 auto; }
 .exch-table th.x-del, .exch-table td.x-del { text-align: center; }
 .x-delbtn { width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--muted); font-size: 17px; line-height: 1; cursor: pointer; }
 .x-delbtn:hover { background: var(--accent-soft); color: #b3261e; }

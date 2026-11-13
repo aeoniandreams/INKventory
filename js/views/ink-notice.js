@@ -1,4 +1,4 @@
-// 잉팔잉사 처음 접속 알림창. 위쪽의 [안내] [교환] 두 박스로 내용을 바꿔 본다: 안내 = 알림글, 교환 = 교환 희망 잉크 표(작은 표, 관리자는 그 자리에서 고침). ink-owned.js 가 INKNOTICE.open({ html, editable, onSave }) 로 연다.
+// 잉팔잉사 처음 접속 알림창. 위쪽의 [안내] [교환] 두 박스로 내용을 바꿔 본다: 안내 = 알림글, 교환 = 교환 희망 잉크 표(브랜드·잉크명·비고 세 열의 작은 표, 관리자는 그 자리에서 고침). ink-owned.js 가 INKNOTICE.open({ html, editable, onSave }) 로 연다.
 //   · 화면 가운데 알림창, 바깥은 어둡게(딤). 오른쪽 아래 "확인"을 눌러야 닫힌다.
 //   · 관리자 모드에서만 오른쪽 위 연필 버튼이 보이고, 누르면 수정창: 위쪽에 고정된 바(회색 글씨 / 굵게 / 취소선) + 글 입력칸.
 //   · 내용은 안전한 HTML 조각으로만 저장한다: <div> 한 줄씩, 그 안에 <b> <s> <span class="gray"> 만 허용 (sanitize). 보여 줄 때도 한 번 더 거른다.
@@ -86,15 +86,12 @@
   ];
 
   // ── 교환 표 ──
-  // 데이터: [{ brand, name, note, portions, price }] (공개 문서의 exchangeRows). 열은 잉팔잉사 표와 같다.
-  // 일반 모드: 비어 있는 열(비고·소분 가능·가격·발색)은 감춰서 표를 작게. 관리자 모드: 모든 열을 보여 주고 칸을 고치거나 행을 더하고 뺄 수 있다.
+  // 데이터: [{ brand, name, note }] (공개 문서의 exchangeRows). 열은 브랜드 / 잉크명 / 비고 세 개뿐.
+  // 관리자 모드: 칸을 고치거나 행을 더하고 뺄 수 있다. 일반 모드: 읽기만.
   const EX_COLS = [
-    { k: 'brand', label: '브랜드', w: 24, max: 100 },
-    { k: 'name', label: '잉크명', w: 30, max: 100 },
-    { k: 'swatch', label: '발색', w: 9 },
-    { k: 'note', label: '비고', w: 17, max: 300 },
-    { k: 'portions', label: '소분 가능 (5ml)', w: 10, max: 20 },
-    { k: 'price', label: '가격', w: 10, max: 50 },
+    { k: 'brand', label: '브랜드', w: 32, max: 100 },
+    { k: 'name', label: '잉크명', w: 40, max: 100 },
+    { k: 'note', label: '비고', w: 28, max: 300 },
   ];
   const EX_MAX_ROWS = 100;
 
@@ -102,7 +99,7 @@
     const str = (v, n) => String(v == null ? '' : v).slice(0, n);
     return (Array.isArray(rows) ? rows : []).slice(0, EX_MAX_ROWS).map((r) => {
       const o = {};
-      EX_COLS.forEach((c) => { if (c.k !== 'swatch') o[c.k] = str(r && r[c.k], c.max); });
+      EX_COLS.forEach((c) => { o[c.k] = str(r && r[c.k], c.max); });
       return o;
     });
   }
@@ -110,7 +107,7 @@
   let dlg = null;
   let tab = 'info';
   let exTimer = null;
-  let ctx = { html: '', editable: false, emptyMessage: '', exchange: [], swatchSrc: null, onSave: null, onExchange: null, onClose: null };
+  let ctx = { html: '', editable: false, emptyMessage: '', exchange: [], onSave: null, onExchange: null, onClose: null };
 
   function render(el, html, emptyMessage) {
     const clean = sanitize(html);
@@ -119,30 +116,20 @@
     el.querySelectorAll(':scope > div').forEach((d) => { if (d.textContent.startsWith('- ')) d.classList.add('bullet'); });   // "- " 로 시작하는 줄은 걸어 들여쓰기
   }
 
-  const photoOf = (r) => (ctx.swatchSrc ? ctx.swatchSrc(r.brand, r.name) : '');
-  const swatchHtml = (src) => (src ? `<span class="swatch has-img"><img src="${esc(src)}" alt="" width="22" height="22" referrerpolicy="no-referrer"></span>` : '<span class="swatch"></span>');
-
-  function refreshSwatchCell(i) {
-    const td = dlg.querySelector(`.notice-exch tr[data-i="${i}"] .x-sw`);
-    if (td && ctx.exchange[i]) td.innerHTML = swatchHtml(photoOf(ctx.exchange[i]));
-  }
-
   function renderExchange() {
     const box = dlg.querySelector('.notice-exch');
     const admin = !!ctx.editable;
     const rows = ctx.exchange;
     const shown = admin ? rows : rows.filter((r) => r.brand.trim() || r.name.trim());
     if (!admin && !shown.length) { box.innerHTML = '<div class="exch-empty">등록된 교환 목록이 없습니다.</div>'; return; }
-    let cols = EX_COLS;
-    if (!admin) cols = EX_COLS.filter((c) => c.k === 'brand' || c.k === 'name' || (c.k === 'swatch' ? shown.some((r) => photoOf(r)) : shown.some((r) => String(r[c.k]).trim())));
-    const total = cols.reduce((n, c) => n + c.w, 0) + (admin ? 5 : 0);
+    const cols = EX_COLS;
+    const total = cols.reduce((n, c) => n + c.w, 0) + (admin ? 6 : 0);
     const pct = (w) => `${((w / total) * 100).toFixed(2)}%`;
-    let h = `<table class="exch-table"><thead><tr>${cols.map((c) => `<th style="width:${pct(c.w)}">${esc(c.label)}</th>`).join('')}${admin ? `<th class="x-del" style="width:${pct(5)}"></th>` : ''}</tr></thead><tbody>`;
+    let h = `<table class="exch-table"><thead><tr>${cols.map((c) => `<th style="width:${pct(c.w)}">${esc(c.label)}</th>`).join('')}${admin ? `<th class="x-del" style="width:${pct(6)}"></th>` : ''}</tr></thead><tbody>`;
     shown.forEach((r, i) => {
       h += `<tr data-i="${i}">`;
       cols.forEach((c) => {
-        if (c.k === 'swatch') h += `<td class="x-sw">${swatchHtml(photoOf(r))}</td>`;
-        else if (admin) h += `<td><div class="cell-wrap" data-v="${esc(r[c.k])}"><textarea class="cell" rows="1" data-i="${i}" data-k="${c.k}" maxlength="${c.max}" aria-label="${esc(c.label)} ${i + 1}행" autocomplete="off" spellcheck="false">${esc(r[c.k])}</textarea></div></td>`;
+        if (admin) h += `<td><div class="cell-wrap" data-v="${esc(r[c.k])}"><textarea class="cell" rows="1" data-i="${i}" data-k="${c.k}" maxlength="${c.max}" aria-label="${esc(c.label)} ${i + 1}행" autocomplete="off" spellcheck="false">${esc(r[c.k])}</textarea></div></td>`;
         else h += `<td><div class="xc">${esc(r[c.k])}</div></td>`;
       });
       if (admin) h += `<td class="x-del"><button class="x-delbtn" type="button" data-i="${i}" title="이 행 삭제" aria-label="${i + 1}행 삭제">×</button></td>`;
@@ -155,7 +142,7 @@
 
   function addExchangeRow() {
     if (ctx.exchange.length >= EX_MAX_ROWS) return;
-    ctx.exchange.push({ brand: '', name: '', note: '', portions: '', price: '' });
+    ctx.exchange.push({ brand: '', name: '', note: '' });
     renderExchange();
     const f = dlg.querySelector(`.notice-exch textarea[data-i="${ctx.exchange.length - 1}"][data-k="brand"]`);
     if (f) f.focus();
@@ -167,7 +154,7 @@
     if (exTimer === null) return;
     clearTimeout(exTimer);
     exTimer = null;
-    if (ctx.onExchange) ctx.onExchange(cleanExchange(ctx.exchange).filter((r) => EX_COLS.some((c) => c.k !== 'swatch' && r[c.k].trim())));
+    if (ctx.onExchange) ctx.onExchange(cleanExchange(ctx.exchange).filter((r) => EX_COLS.some((c) => r[c.k].trim())));
   }
 
   function updatePencil() {
@@ -228,7 +215,6 @@
       if (!ctx.exchange[i]) return;
       ctx.exchange[i][t.dataset.k] = t.value;
       t.parentNode.dataset.v = t.value;
-      if (t.dataset.k === 'brand' || t.dataset.k === 'name') refreshSwatchCell(i);
       scheduleExchange();
     });
     ex.addEventListener('keydown', (e) => {
@@ -302,7 +288,7 @@
     cleanExchange,
     defaultHtml: () => linesToHtml(DEFAULT_LINES),
     open(c) {
-      ctx = Object.assign({ html: '', editable: false, emptyMessage: '', exchange: [], swatchSrc: null, onSave: null, onExchange: null, onClose: null }, c);
+      ctx = Object.assign({ html: '', editable: false, emptyMessage: '', exchange: [], onSave: null, onExchange: null, onClose: null }, c);
       ctx.exchange = cleanExchange(ctx.exchange);
       const d = ensure();
       d.querySelector('.notice-edit').hidden = true;
