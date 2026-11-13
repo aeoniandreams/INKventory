@@ -116,36 +116,32 @@
     el.querySelectorAll(':scope > div').forEach((d) => { if (d.textContent.startsWith('- ')) d.classList.add('bullet'); });   // "- " 로 시작하는 줄은 걸어 들여쓰기
   }
 
+  const BLANK = () => ({ brand: '', name: '', note: '' });
+  const isBlank = (r) => !EX_COLS.some((c) => String(r[c.k]).trim());
+
+  function exRowHtml(r, i, admin) {
+    let h = `<tr data-i="${i}">`;
+    EX_COLS.forEach((c) => {
+      if (admin) h += `<td><div class="cell-wrap" data-v="${esc(r[c.k])}"><textarea class="cell" rows="1" data-i="${i}" data-k="${c.k}" maxlength="${c.max}" aria-label="${esc(c.label)} ${i + 1}행" autocomplete="off" spellcheck="false">${esc(r[c.k])}</textarea></div></td>`;
+      else h += `<td><div class="xc">${esc(r[c.k])}</div></td>`;
+    });
+    return h + '</tr>';
+  }
+
+  // 관리자: 행 추가/삭제 버튼 없이, 표 맨 아래에 늘 빈 행이 하나 있다. 거기에 쓰기 시작하면 다음 빈 행이 생기고,
+  // 한 행의 칸을 모두 지우고 다른 곳으로 옮기면 그 행이 없어진다. (완전히 빈 행은 저장하지 않는다)
   function renderExchange() {
     const box = dlg.querySelector('.notice-exch');
     const admin = !!ctx.editable;
-    const rows = ctx.exchange;
-    const shown = admin ? rows : rows.filter((r) => r.brand.trim() || r.name.trim());
+    if (admin) {
+      while (ctx.exchange.length > 1 && isBlank(ctx.exchange[ctx.exchange.length - 1]) && isBlank(ctx.exchange[ctx.exchange.length - 2])) ctx.exchange.pop();
+      if (!ctx.exchange.length || !isBlank(ctx.exchange[ctx.exchange.length - 1])) { if (ctx.exchange.length < EX_MAX_ROWS) ctx.exchange.push(BLANK()); }
+    }
+    const shown = admin ? ctx.exchange : ctx.exchange.filter((r) => !isBlank(r));
     if (!admin && !shown.length) { box.innerHTML = '<div class="exch-empty">등록된 교환 목록이 없습니다.</div>'; return; }
-    const cols = EX_COLS;
-    const total = cols.reduce((n, c) => n + c.w, 0) + (admin ? 6 : 0);
+    const total = EX_COLS.reduce((n, c) => n + c.w, 0);
     const pct = (w) => `${((w / total) * 100).toFixed(2)}%`;
-    let h = `<table class="exch-table"><thead><tr>${cols.map((c) => `<th style="width:${pct(c.w)}">${esc(c.label)}</th>`).join('')}${admin ? `<th class="x-del" style="width:${pct(6)}"></th>` : ''}</tr></thead><tbody>`;
-    shown.forEach((r, i) => {
-      h += `<tr data-i="${i}">`;
-      cols.forEach((c) => {
-        if (admin) h += `<td><div class="cell-wrap" data-v="${esc(r[c.k])}"><textarea class="cell" rows="1" data-i="${i}" data-k="${c.k}" maxlength="${c.max}" aria-label="${esc(c.label)} ${i + 1}행" autocomplete="off" spellcheck="false">${esc(r[c.k])}</textarea></div></td>`;
-        else h += `<td><div class="xc">${esc(r[c.k])}</div></td>`;
-      });
-      if (admin) h += `<td class="x-del"><button class="x-delbtn" type="button" data-i="${i}" title="이 행 삭제" aria-label="${i + 1}행 삭제">×</button></td>`;
-      h += '</tr>';
-    });
-    h += '</tbody></table>';
-    if (admin) h += '<button class="btn x-add" type="button">+ 행 추가</button>';
-    box.innerHTML = h;
-  }
-
-  function addExchangeRow() {
-    if (ctx.exchange.length >= EX_MAX_ROWS) return;
-    ctx.exchange.push({ brand: '', name: '', note: '' });
-    renderExchange();
-    const f = dlg.querySelector(`.notice-exch textarea[data-i="${ctx.exchange.length - 1}"][data-k="brand"]`);
-    if (f) f.focus();
+    box.innerHTML = `<table class="exch-table"><thead><tr>${EX_COLS.map((c) => `<th style="width:${pct(c.w)}">${esc(c.label)}</th>`).join('')}</tr></thead><tbody>${shown.map((r, i) => exRowHtml(r, i, admin)).join('')}</tbody></table>`;
   }
 
   // 편집 내용을 잠시 모았다가 저장 요청 (닫을 때는 바로). 완전히 빈 행은 저장하지 않는다.
@@ -154,7 +150,7 @@
     if (exTimer === null) return;
     clearTimeout(exTimer);
     exTimer = null;
-    if (ctx.onExchange) ctx.onExchange(cleanExchange(ctx.exchange).filter((r) => EX_COLS.some((c) => r[c.k].trim())));
+    if (ctx.onExchange) ctx.onExchange(cleanExchange(ctx.exchange).filter((r) => EX_COLS.some((c) => String(r[c.k]).trim())));
   }
 
   function updatePencil() {
@@ -207,7 +203,7 @@
     dlg.addEventListener('close', () => { flushExchange(); if (ctx.onClose) ctx.onClose(); });
     q('.notice-tabs').addEventListener('click', (e) => { const b = e.target.closest('.notice-tab'); if (b) setTab(b.dataset.tab); });
     const ex = q('.notice-exch');
-    // 교환 표 편집 (관리자): 입력 → 데이터에 반영 + 잠시 뒤 저장, 행 추가/삭제, Enter 는 아래 행의 같은 열로
+    // 교환 표 편집 (관리자): 입력 → 데이터에 반영 + 잠시 뒤 저장, 맨 아래 빈 행에 쓰면 다음 빈 행 생김, Enter 는 아래 행의 같은 열로
     ex.addEventListener('input', (e) => {
       const t = e.target.closest('textarea[data-i]');
       if (!t) return;
@@ -215,6 +211,10 @@
       if (!ctx.exchange[i]) return;
       ctx.exchange[i][t.dataset.k] = t.value;
       t.parentNode.dataset.v = t.value;
+      if (i === ctx.exchange.length - 1 && !isBlank(ctx.exchange[i]) && ctx.exchange.length < EX_MAX_ROWS) {   // 맨 아래 빈 행에 쓰기 시작 → 다음 빈 행을 만든다
+        ctx.exchange.push(BLANK());
+        ex.querySelector('tbody').insertAdjacentHTML('beforeend', exRowHtml(ctx.exchange[i + 1], i + 1, true));
+      }
       scheduleExchange();
     });
     ex.addEventListener('keydown', (e) => {
@@ -222,14 +222,24 @@
       if (!t || e.key !== 'Enter' || e.shiftKey || e.isComposing || e.keyCode === 229) return;
       e.preventDefault();
       const i = Number(t.dataset.i);
-      let next = ex.querySelector(`textarea[data-i="${i + 1}"][data-k="${t.dataset.k}"]`);
-      if (!next) { addExchangeRow(); next = ex.querySelector(`textarea[data-i="${i + 1}"][data-k="${t.dataset.k}"]`); }
+      const next = ex.querySelector(`textarea[data-i="${i + 1}"][data-k="${t.dataset.k}"]`);
       if (next) next.focus();
     });
-    ex.addEventListener('click', (e) => {
-      const del = e.target.closest('.x-delbtn');
-      if (del) { ctx.exchange.splice(Number(del.dataset.i), 1); renderExchange(); scheduleExchange(); return; }
-      if (e.target.closest('.x-add')) addExchangeRow();
+    // 모두 지운 행은 포커스가 다른 칸으로 옮겨 간 뒤에 없앤다 (마지막 빈 행은 남김)
+    ex.addEventListener('focusout', () => {
+      setTimeout(() => {
+        if (!dlg.open || q('.notice-exch').hidden || !ctx.editable) return;
+        const active = document.activeElement;
+        for (let i = ctx.exchange.length - 2; i >= 0; i--) {
+          if (!isBlank(ctx.exchange[i])) continue;
+          const tr = ex.querySelector(`tr[data-i="${i}"]`);
+          if (tr && active && tr.contains(active)) continue;               // 아직 그 행에서 입력 중
+          ctx.exchange.splice(i, 1);
+          if (tr) tr.remove();
+          ex.querySelectorAll('tbody tr').forEach((r, n) => { r.dataset.i = n; r.querySelectorAll('textarea').forEach((t) => { t.dataset.i = n; t.setAttribute('aria-label', `${t.getAttribute('aria-label').replace(/ \d+행$/, '')} ${n + 1}행`); }); });
+          scheduleExchange();
+        }
+      }, 0);
     });
     q('.notice-edit-btn').addEventListener('click', () => {
       editor.innerHTML = sanitize(ctx.html);
