@@ -8,16 +8,16 @@
       items: [
         { id: 'ink-owned',  label: '보유 잉크' },
         { id: 'ink-sale',   label: '잉팔잉사' },
-        { id: 'ink-wish',   label: '위시' },
       ],
     },
     {
       id: 'pen', label: 'FOUNTAIN PEN',
       items: [
         { id: 'pen-owned', label: '보유 만년필' },
-        { id: 'pen-wish',  label: '위시' },
       ],
     },
+    // 2차 카테고리 없이, 누르면 바로 창이 뜨는 1차 카테고리 (js/views/wish.js)
+    { id: 'wish', label: 'WISH', action: 'wish' },
   ];
 
   const $ = (sel) => document.querySelector(sel);
@@ -43,6 +43,12 @@
   // ── 네비게이션 렌더 ─────────────────────
   function renderNav() {
     nav.innerHTML = NAV.map((g) => {
+      if (g.action) {
+        return `
+        <section class="nav__group" data-id="${g.id}">
+          <button class="nav__group-btn nav__group-btn--action" type="button" data-action="${g.action}" aria-haspopup="dialog"><span>${g.label}</span></button>
+        </section>`;
+      }
       const open = store.get('inkventory.group.' + g.id) !== 'closed';
       return `
         <section class="nav__group" data-id="${g.id}" data-open="${open}">
@@ -58,6 +64,12 @@
     }).join('');
 
     nav.addEventListener('click', (e) => {
+      const act = e.target.closest('[data-action]');
+      if (act) {                                     // WISH: 페이지 이동 없이 바로 창을 띄움
+        setSidebar(false);
+        if (act.dataset.action === 'wish' && window.INKWISH) window.INKWISH.open();
+        return;
+      }
       const btn = e.target.closest('.nav__group-btn');
       if (btn) {
         const group = btn.closest('.nav__group');
