@@ -16,8 +16,8 @@
         { id: 'pen-owned', label: '보유 만년필' },
       ],
     },
-    // 2차 카테고리 없이, 누르면 바로 창이 뜨는 1차 카테고리 (js/views/wish.js)
-    { id: 'wish', label: 'WISH', action: 'wish' },
+    // 2차 카테고리 없이, 누르면 바로 전체 화면으로 들어가는 1차 카테고리 (js/views/wish.js)
+    { id: 'wish', label: 'WISH', route: 'wish' },
   ];
 
   const $ = (sel) => document.querySelector(sel);
@@ -43,10 +43,10 @@
   // ── 네비게이션 렌더 ─────────────────────
   function renderNav() {
     nav.innerHTML = NAV.map((g) => {
-      if (g.action) {
+      if (g.route) {
         return `
         <section class="nav__group" data-id="${g.id}">
-          <button class="nav__group-btn nav__group-btn--action" type="button" data-action="${g.action}" aria-haspopup="dialog"><span>${g.label}</span></button>
+          <a class="nav__group-btn nav__group-btn--link" href="#/${g.route}" data-id="${g.route}"><span>${g.label}</span></a>
         </section>`;
       }
       const open = store.get('inkventory.group.' + g.id) !== 'closed';
@@ -64,13 +64,7 @@
     }).join('');
 
     nav.addEventListener('click', (e) => {
-      const act = e.target.closest('[data-action]');
-      if (act) {                                     // WISH: 페이지 이동 없이 바로 창을 띄움
-        setSidebar(false);
-        if (act.dataset.action === 'wish' && window.INKWISH) window.INKWISH.open();
-        return;
-      }
-      const btn = e.target.closest('.nav__group-btn');
+      const btn = e.target.closest('.nav__group-btn:not(.nav__group-btn--link)');
       if (btn) {
         const group = btn.closest('.nav__group');
         const open = group.dataset.open !== 'true';
@@ -79,7 +73,7 @@
         store.set('inkventory.group.' + group.dataset.id, open ? 'open' : 'closed');
         return;
       }
-      if (e.target.closest('.nav__link')) setSidebar(false);
+      if (e.target.closest('.nav__link, .nav__group-btn--link')) setSidebar(false);
     });
   }
 
@@ -274,6 +268,7 @@
   // ── 라우팅 (해시) ───────────────────────
   function findItem(id) {
     for (const g of NAV) {
+      if (g.route) { if (g.route === id) return { group: g, item: { id: g.route, label: g.label }, top: true }; continue; }
       const item = g.items.find((i) => i.id === id);
       if (item) return { group: g, item };
     }
@@ -284,7 +279,7 @@
     const id = location.hash.replace(/^#\/?/, '');
     const found = findItem(id);
 
-    nav.querySelectorAll('.nav__link').forEach((a) => {
+    nav.querySelectorAll('.nav__link, .nav__group-btn--link').forEach((a) => {
       if (found && a.dataset.id === id) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
     });
@@ -295,7 +290,7 @@
     const view = found && VIEWS[id];
 
     if (view) {
-      pageTitle.textContent = `${found.group.label} · ${found.item.label}`;
+      pageTitle.textContent = found.top ? found.group.label : `${found.group.label} · ${found.item.label}`;
       document.title = `${found.item.label} – INKventory`;
       main.replaceChildren();
       main.classList.add('main--table');

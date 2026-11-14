@@ -1895,6 +1895,8 @@
     init() { hydrateFromCache(); emitStats(); load(); },
   };
 
+  window.INKSORT = { sortText, compareText };   // WISH 화면(wish.js)도 같은 가나다순 정렬을 쓴다
+
   window.INKVENTORY_VIEWS = window.INKVENTORY_VIEWS || {};
   window.INKVENTORY_VIEWS['ink-owned'] = {
     mount: (container) => mount(container, 'owned'),
