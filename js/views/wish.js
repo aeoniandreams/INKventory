@@ -3,7 +3,9 @@
 // 데이터: 공개 문서 inventory/inkOwned 의 wishInk: [{brand, name, gray, bold}], wishPens: [{name, gray, bold}] (누구나 읽기 / 관리자만 쓰기).
 // 일반 모드: 읽기만 (비어 있는 행은 감춤). 관리자 모드: 보유 잉크 표와 같은 방식으로 고친다.
 //   · 칸을 고치면 자동 저장, 행과 행 사이에 마우스를 두면 나오는 아이콘으로 행 추가, 우클릭(폰은 길게 누르기)으로 행 삭제
-//   · 상단 바: [정렬] (가나다순, 회색 행은 맨 아래), [회색] [굵게] (선택한 행에 적용)
+//   · 표 제목 줄 오른쪽 끝의 [정렬] (가나다순, 회색 행은 맨 아래), 선택한 행 위에 뜨는 [회색] [굵게] 창
+//   · 표는 자기만의 스크롤 막대 없이 길게 펼쳐지고, 이 사이트 페이지의 스크롤 막대로 내려서 본다 (제목 줄은 상단 바 아래에 붙어 따라옴)
+//   · 처음 내용(공개 문서에 아직 저장된 위시가 없을 때): data/wish-seed.json (스프레드시트의 위시 탭)
 //   · 행 선택: 칸을 누르면 그 행이 선택된다. Shift 를 누르고 다른 칸을 누르면 그 사이 행이 모두 선택된다.
 (() => {
   'use strict';
@@ -68,6 +70,7 @@
   let ctxRow = -1;
   let longPress = null;
   let noticeTimer = null;
+  let cleanups = [];                     // 화면을 떠날 때 걷어낼 것들
 
   const canEdit = () => !!root && isAdminMode() && fresh;
   const rowsOf = (id) => data[id || tab];
@@ -113,6 +116,14 @@
     });
   }
 
+  // 공개 문서에 저장된 위시가 아직 없으면(비었으면) 처음 내용으로 data/wish-seed.json 을 보여 준다.
+  // 관리자가 한 번이라도 고쳐서 저장하면 그때부터는 저장된 내용이 우선한다.
+  let seedP = null;
+  function loadSeed() {
+    if (!seedP) seedP = fetch('data/wish-seed.json', { cache: 'no-cache' }).then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
+    return seedP;
+  }
+
   async function load() {
     if (loadState === 'loading') return;
     loadState = 'loading';
@@ -125,10 +136,12 @@
         if (!r.ok) throw new Error('http ' + r.status);
         fields = (await r.json()).fields || {};
       }
-      TABS.forEach((t) => {
-        if (dirty[t.id] || timers[t.id] !== null) return;   // 아직 저장 안 된 내 수정이 있으면 덮어쓰지 않음
-        data[t.id] = cleanRows(t, decodeRows(fields[t.field]));
-      });
+      for (const t of TABS) {
+        if (dirty[t.id] || timers[t.id] !== null) continue;   // 아직 저장 안 된 내 수정이 있으면 덮어쓰지 않음
+        let rows = cleanRows(t, decodeRows(fields[t.field]));
+        if (!rows.some((r) => !isBlank(t, r))) rows = cleanRows(t, (await loadSeed())[t.field]);
+        data[t.id] = rows;
+      }
       loadState = 'ready';
       loadedOnce = true;
       fresh = true;
@@ -278,7 +291,7 @@
     if (!canEdit() || !first) { pop.hidden = true; return; }
     let lastTr = root.querySelector(`tbody tr[data-i="${r[1]}"]`) || first;
     const wr = root.querySelector('.table-wrap').getBoundingClientRect();
-    const headB = root.querySelector('thead').getBoundingClientRect().bottom;
+    const headB = root.querySelector('thead th').getBoundingClientRect().bottom;
     const fr = first.getBoundingClientRect();
     const lr = lastTr.getBoundingClientRect();
     if (lr.bottom <= headB || fr.top >= wr.bottom) { pop.hidden = true; return; }       // 선택한 행이 화면 밖
@@ -449,12 +462,13 @@
 
     function boundaryAt(clientY) {
       const tbody = tbodyEl();
-      const thead = wrap.querySelector('thead');
+      const thead = wrap.querySelector('thead th');
       if (!tbody || !tbody.rows.length) return null;
       const rows = tbody.rows;
       const top = wrap.getBoundingClientRect().top + wrap.clientTop;
       const z = zoomOf();
-      if (clientY < top + thead.offsetHeight * z || clientY > top + wrap.clientHeight) return null;
+      const wr = wrap.getBoundingClientRect();
+      if (clientY < thead.getBoundingClientRect().bottom || clientY > wr.bottom) return null;       // 제목 줄(상단 바 밑에 붙어 있을 때도) 위·표 아래는 제외
       const rel = clientY - top + wrap.scrollTop;
       let lo = 0; let hi = rows.length - 1;
       while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (rows[mid].offsetTop * z <= rel) lo = mid; else hi = mid - 1; }
@@ -470,11 +484,11 @@
       const n = boundaryAt(e.clientY);
       if (n === null) { hide(); return; }
       const top = wrap.getBoundingClientRect().top + wrap.clientTop;
-      const thead = wrap.querySelector('thead');
+      const thead = wrap.querySelector('thead th');
       const row = tbodyEl().rows[n];
       const z = zoomOf();
       const lineY = top + row.offsetTop * z - wrap.scrollTop - 0.5;
-      if (lineY < top + thead.offsetHeight * z || lineY > top + wrap.clientHeight) { hide(); return; }
+      if (lineY < thead.getBoundingClientRect().bottom || lineY > wrap.getBoundingClientRect().bottom) { hide(); return; }
       btn.style.top = (lineY - area.getBoundingClientRect().top - TAIL_Y) + 'px';
       btn.dataset.before = row.dataset.i;           // 이 번호의 행 앞에 추가
       btn.classList.add('is-on');
@@ -484,6 +498,8 @@
     area.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'mouse') update(e); });
     area.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') hide(); });
     wrap.addEventListener('scroll', hide, { passive: true });
+    window.addEventListener('scroll', hide, { passive: true });          // 표는 페이지와 함께 스크롤된다
+    cleanups.push(() => window.removeEventListener('scroll', hide));
     btn.addEventListener('click', () => { const b = Number(btn.dataset.before); hide(); insertRow(b); });
   }
 
@@ -508,13 +524,16 @@
     // 확대 전 표 너비: 줄일 때는 (표 상자 너비 ÷ 배율) 로 늘려서 화면 너비를 계속 채운다
     const apply = (n) => {
       zoom = clampZ(n);
-      layout.style.setProperty('--tz', String(zoom));
-      if (wrap.clientWidth > 0) layout.style.setProperty('--wish-gw', Math.floor(wrap.clientWidth / Math.min(zoom, 1)) + 'px');
+      const on = active();
+      layout.style.setProperty('--tz', String(on ? zoom : 1));
+      layout.classList.toggle('is-zoomed', on && zoom > 1);          // 키웠을 때만 표 상자에 가로 스크롤 (그때는 제목 줄이 따라오지 않는다)
+      if (on && wrap.clientWidth > 0) layout.style.setProperty('--wish-gw', Math.floor(wrap.clientWidth / Math.min(zoom, 1)) + 'px');
+      else layout.style.removeProperty('--wish-gw');
       schedulePop();
     };
     zoomRefresh = () => apply(zoom);
     apply(zoom);
-    if (window.ResizeObserver) new ResizeObserver(() => { if (active()) zoomRefresh(); }).observe(area);
+    if (window.ResizeObserver) new ResizeObserver(() => { if (zoomRefresh) zoomRefresh(); }).observe(area);
 
     const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
     let pinch = null;
@@ -522,7 +541,7 @@
     wrap.addEventListener('touchstart', (e) => {
       if (e.touches.length === 2 && active()) {
         const r = wrap.getBoundingClientRect();
-        pinch = { d: dist(e.touches), z: zoom, cx: (e.touches[0].clientX + e.touches[1].clientX) / 2 - r.left, cy: (e.touches[0].clientY + e.touches[1].clientY) / 2 - r.top, sl: wrap.scrollLeft, st: wrap.scrollTop };
+        pinch = { d: dist(e.touches), z: zoom, cx: (e.touches[0].clientX + e.touches[1].clientX) / 2 - r.left, cy: (e.touches[0].clientY + e.touches[1].clientY) / 2 - r.top, top: r.top, sl: wrap.scrollLeft };
       } else {
         pinch = null;
       }
@@ -535,7 +554,8 @@
       const k = nz / pinch.z;
       apply(nz);
       wrap.scrollLeft = (pinch.sl + pinch.cx) * k - pinch.cx;
-      wrap.scrollTop = (pinch.st + pinch.cy) * k - pinch.cy;
+      // 세로는 페이지가 스크롤되므로, 손가락 사이의 점이 같은 화면 높이에 있도록 페이지를 스크롤한다
+      window.scrollBy(0, wrap.getBoundingClientRect().top + pinch.cy * k - (pinch.top + pinch.cy));
       hint.textContent = Math.round(zoom * 100) + '%';
       hint.classList.add('is-on');
       clearTimeout(hintTimer);
@@ -691,6 +711,8 @@
     closeCtx();
     teardownPop();
     zoomRefresh = null;
+    cleanups.forEach((fn) => fn());
+    cleanups = [];
     clearTimeout(noticeTimer);
     root = null;
     fresh = false;

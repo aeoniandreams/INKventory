@@ -819,3 +819,10 @@ html[data-layout] .is-editable .wish-layout .table-area { padding-left: 21px; ma
 @media (max-width: 800px) {
   html[data-layout] .wish-layout .grid { zoom: var(--tz, 1); width: var(--wish-gw, 100%); }
 }
+
+/* WISH 표: 표 상자는 자기 스크롤 막대 없이 내용만큼 길게 펼쳐지고, 이 사이트 페이지의 스크롤 막대로 내려서 본다.
+   overflow: clip 은 둥근 모서리만 잘라 주고 스크롤 상자는 만들지 않아서, 제목 줄이 페이지 스크롤에도 상단 바 아래에 붙는다. */
+.wish-layout .table-wrap { max-height: none; overflow: clip; }
+.wish-layout .grid thead th { top: calc(var(--topbar-h) - 1px); }
+.wish-layout .grid tbody tr { scroll-margin-top: calc(var(--topbar-h) + 48px); scroll-margin-bottom: 16px; }   /* 키보드로 옮길 때 고정된 제목 줄에 가려지지 않게 */
+.wish-layout.is-zoomed .table-wrap { overflow-x: auto; overflow-y: hidden; }                                    /* 폰에서 키웠을 때만 옆으로 스크롤 */
