@@ -794,7 +794,28 @@ html[data-layout] .wish-layout .grid { width: 100%; min-width: 0 !important; zoo
 .wish-layout .grid tbody tr.is-sel td { background-color: #e9ecf4; }
 .wish-layout .grid tbody tr.is-gray .cell { color: #8892ab; }
 .wish-layout .grid tbody tr.is-bold .cell, .wish-layout .grid tbody tr.is-bold .cell-wrap::after { font-weight: 700; }
-/* 상단 바의 [회색] [굵게] 버튼 (정렬 버튼과 같은 모양, 아이콘만) */
-.sort-btn.tool-btn { width: 32px; padding: 0; justify-content: center; }
-.sort-btn.tool-btn[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
-.sort-btn.gray-btn { color: #8892ab; }
+/* 표 제목 줄의 [정렬] 버튼: 잉크명 / 제품명 칸의 오른쪽 끝 */
+.wish-layout .th-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.wish-layout .th-sort { flex: none; height: 26px; }
+/* 선택한 행 위에 뜨는 [회색] [굵게] 창 (JS 가 위치를 정함) */
+.wish-pop {
+  position: fixed; z-index: 40; display: flex; gap: 2px; padding: 3px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(20, 24, 36, .16);
+}
+.wish-pop[hidden] { display: none; }
+.pop-btn {
+  display: grid; place-items: center; width: 32px; height: 30px; padding: 0;
+  background: none; border: 0; border-radius: 7px; color: var(--accent); cursor: pointer;
+}
+.pop-btn:hover { background: var(--accent-soft); }
+.pop-btn[aria-pressed="true"] { background: #dfe7f7; }
+.pop-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* 관리자 모드의 왼쪽 여백(행 추가 아이콘 자리)을 줄인다: 아이콘 자리를 21px 로 하고, 그만큼을 화면 가장자리 여백 쪽으로 8px 당겨 쓴다. (일반 모드에는 이 여백이 없다) */
+html[data-layout] .is-editable .wish-layout .table-area { padding-left: 21px; margin-left: -8px; }
+.wish-layout .row-add { left: 0; }
+/* 폰(800px 이하): 두 손가락 확대·축소. 표 너비(--wish-gw)와 배율(--tz)은 JS (setupZoom) 가 정한다 */
+@media (max-width: 800px) {
+  html[data-layout] .wish-layout .grid { zoom: var(--tz, 1); width: var(--wish-gw, 100%); }
+}

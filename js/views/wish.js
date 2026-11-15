@@ -28,8 +28,8 @@
   const TAIL_Y = (22 / 24) * ROW_ADD_SIZE;
   const NEAR = 12;
   const SORT_ICON = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M20 8h-5"/><path d="M15 10V6.5a2.5 2.5 0 0 1 5 0V10"/><path d="M15 14h5l-5 6h5"/></svg>';
-  // 옅은 회색 원 안에 색이 채워진 동그라미
-  const GRAY_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9.5" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="5" fill="currentColor"/></svg>';
+  // 테두리 없는 옅은 회색 동그라미
+  const GRAY_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#b4bbcb"/></svg>';
   const BOLD_ICON = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7a4 4 0 0 1 0 8"/></svg>';
 
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -60,10 +60,10 @@
   let saveState = '';                    // '' | saving | saved | error | denied
   let selA = null;                       // 선택한 행 범위 (rows 번호)
   let selB = null;
+  let selCol = 0;                        // 마지막으로 커서가 있던 칸의 열 (선택 창을 그 칸 위에 띄움)
   let shiftHold = false;
-  let sortBtn = null;
-  let grayBtn = null;
-  let boldBtn = null;
+  let pop = null;                        // 선택한 행 위에 뜨는 [회색] [굵게] 창
+  let popRaf = 0;
   let ctxEl = null;
   let ctxRow = -1;
   let longPress = null;
@@ -215,9 +215,12 @@
     const total = t.cols.reduce((n, c) => n + c.w, 0);
     const top = wrap.scrollTop;
     table.innerHTML = `<colgroup>${t.cols.map((c) => `<col style="width:${((c.w / total) * 100).toFixed(2)}%">`).join('')}</colgroup>`
-      + `<thead><tr>${t.cols.map((c) => `<th scope="col">${esc(c.label)}</th>`).join('')}</tr></thead>`
+      + `<thead><tr>${t.cols.map((c, ci) => (edit && ci === t.cols.length - 1
+        ? `<th scope="col"><div class="th-row"><span>${esc(c.label)}</span><button class="sort-btn th-sort" type="button" title="가나다순으로 정렬 (회색 행은 맨 아래)" aria-label="가나다순으로 정렬">${SORT_ICON}<span class="lbl">정렬</span></button></div></th>`
+        : `<th scope="col">${esc(c.label)}</th>`)).join('')}</tr></thead>`
       + `<tbody>${shown.map((i) => rowHtml(t, rows[i], i, edit)).join('')}</tbody>`;
     wrap.scrollTop = top;
+    if (zoomRefresh) zoomRefresh();                  // 표 너비는 표가 보이는 지금의 상자 너비로 (스크롤 막대가 생겼는지에 따라 달라짐)
     paintSel();
   }
 
@@ -225,9 +228,6 @@
     if (!root) return;
     const edit = canEdit();
     root.classList.toggle('is-editable', edit);
-    if (sortBtn) sortBtn.hidden = !edit;
-    if (grayBtn) grayBtn.hidden = !edit;
-    if (boldBtn) boldBtn.hidden = !edit;
     if (!edit) { selA = selB = null; closeCtx(); }
     render();
     showStatus();
@@ -257,16 +257,71 @@
     return rows.slice(r[0], r[1] + 1);
   }
   function syncToolButtons() {
-    const sr = selectedRows();
-    if (grayBtn) grayBtn.setAttribute('aria-pressed', String(sr.length > 0 && sr.every((x) => x.gray)));
-    if (boldBtn) boldBtn.setAttribute('aria-pressed', String(sr.length > 0 && sr.every((x) => x.bold)));
+    if (pop) {
+      const sr = selectedRows();
+      pop.querySelectorAll('[data-flag]').forEach((b) => b.setAttribute('aria-pressed', String(sr.length > 0 && sr.every((x) => x[b.dataset.flag]))));
+    }
+    schedulePop();
   }
+
+  // ── 선택한 행 위에 뜨는 [회색] [굵게] 창 ──
+  // 선택한 행(범위면 맨 윗 행)의 칸 바로 위에 뜨고, 글씨를 쓰는 동안에도 선택은 그대로라 계속 떠 있다. 칸은 가리지 않는다
+  // (위쪽에 자리가 없으면 선택한 행 아래). 표가 스크롤되거나 행 높이가 바뀌면 따라 움직이고, 선택한 행이 화면 밖이면 숨긴다.
+  function schedulePop() {
+    if (popRaf) return;
+    popRaf = setTimeout(() => { popRaf = 0; positionPop(); }, 0);
+  }
+  function positionPop() {
+    if (!pop) return;
+    const r = selRange();
+    const first = r && root && root.querySelector(`tbody tr[data-i="${r[0]}"]`);
+    if (!canEdit() || !first) { pop.hidden = true; return; }
+    let lastTr = root.querySelector(`tbody tr[data-i="${r[1]}"]`) || first;
+    const wr = root.querySelector('.table-wrap').getBoundingClientRect();
+    const headB = root.querySelector('thead').getBoundingClientRect().bottom;
+    const fr = first.getBoundingClientRect();
+    const lr = lastTr.getBoundingClientRect();
+    if (lr.bottom <= headB || fr.top >= wr.bottom) { pop.hidden = true; return; }       // 선택한 행이 화면 밖
+    pop.hidden = false;
+    const pw = pop.offsetWidth;
+    const ph = pop.offsetHeight;
+    let top = fr.top - ph - 4;
+    const bar = document.querySelector('.topbar');
+    const minTop = Math.max(wr.top - 8, bar ? bar.getBoundingClientRect().bottom + 4 : 0);   // 제목 줄 위로 조금 겹치는 건 괜찮지만, 상단 바 밑으로는 못 나감
+    if (top < minTop) top = lr.bottom + 4;                                                // 위쪽에 자리가 없으면 선택한 행 아래
+    const td = first.cells[Math.min(selCol, first.cells.length - 1)];
+    let left = (td ? td.getBoundingClientRect().left : fr.left) + 6;
+    left = Math.max(8, Math.min(left, document.documentElement.clientWidth - pw - 8));
+    pop.style.left = left + 'px';
+    pop.style.top = top + 'px';
+  }
+  function setupPop() {
+    teardownPop();
+    pop = document.createElement('div');
+    pop.className = 'wish-pop';
+    pop.setAttribute('role', 'toolbar');
+    pop.setAttribute('aria-label', '선택한 행 표시');
+    pop.hidden = true;
+    pop.innerHTML = `<button type="button" class="pop-btn gray-btn" data-flag="gray" aria-pressed="false" title="회색으로 (다시 누르면 해제)" aria-label="회색으로">${GRAY_ICON}</button>`
+      + `<button type="button" class="pop-btn" data-flag="bold" aria-pressed="false" title="굵게 (다시 누르면 해제)" aria-label="굵게">${BOLD_ICON}</button>`;
+    pop.addEventListener('mousedown', (e) => e.preventDefault());    // 눌러도 칸의 커서가 그대로 있게
+    pop.addEventListener('click', (e) => { const b = e.target.closest('[data-flag]'); if (b) toggleFlag(b.dataset.flag); });
+    document.body.appendChild(pop);
+  }
+  function teardownPop() {
+    if (pop) pop.remove();
+    pop = null;
+    clearTimeout(popRaf);
+    popRaf = 0;
+  }
+  window.addEventListener('scroll', () => schedulePop(), { passive: true, capture: true });
+  window.addEventListener('resize', () => schedulePop());
 
   // 선택한 행 전부가 이미 켜져 있으면 끄고, 아니면 모두 켠다
   function toggleFlag(flag) {
     if (!canEdit()) return;
     const sr = selectedRows();
-    if (!sr.length) { showNotice('먼저 행을 선택해 주세요. (칸을 누르면 그 행이 선택됩니다)', 3000); return; }
+    if (!sr.length) return;
     const on = !sr.every((x) => x[flag]);
     sr.forEach((x) => { x[flag] = on; });
     const r = selRange();
@@ -389,6 +444,8 @@
     const btn = container.querySelector('.row-add');
     const hide = () => btn.classList.remove('is-on');
     const tbodyEl = () => wrap.querySelector('tbody');
+    // 폰에서는 표를 CSS zoom 으로 키우고 줄인다. offsetTop/offsetHeight 는 확대 전 길이라서 이 배율을 곱해 화면 길이로 맞춘다. (확대하지 않을 때는 1)
+    const zoomOf = () => { const t = wrap.querySelector('table.grid'); return t && t.offsetWidth ? t.getBoundingClientRect().width / t.offsetWidth : 1; };
 
     function boundaryAt(clientY) {
       const tbody = tbodyEl();
@@ -396,12 +453,13 @@
       if (!tbody || !tbody.rows.length) return null;
       const rows = tbody.rows;
       const top = wrap.getBoundingClientRect().top + wrap.clientTop;
-      if (clientY < top + thead.offsetHeight || clientY > top + wrap.clientHeight) return null;
+      const z = zoomOf();
+      if (clientY < top + thead.offsetHeight * z || clientY > top + wrap.clientHeight) return null;
       const rel = clientY - top + wrap.scrollTop;
       let lo = 0; let hi = rows.length - 1;
-      while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (rows[mid].offsetTop <= rel) lo = mid; else hi = mid - 1; }
-      const rt = rows[lo].offsetTop;
-      const rb = rt + rows[lo].offsetHeight;
+      while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (rows[mid].offsetTop * z <= rel) lo = mid; else hi = mid - 1; }
+      const rt = rows[lo].offsetTop * z;
+      const rb = rt + rows[lo].offsetHeight * z;
       if (rel < rt || rel >= rb) return null;
       const n = rel - rt <= NEAR ? lo : (rb - rel <= NEAR ? lo + 1 : null);
       return n !== null && n >= 1 && n <= rows.length - 1 ? n : null;
@@ -414,8 +472,9 @@
       const top = wrap.getBoundingClientRect().top + wrap.clientTop;
       const thead = wrap.querySelector('thead');
       const row = tbodyEl().rows[n];
-      const lineY = top + row.offsetTop - wrap.scrollTop - 0.5;
-      if (lineY < top + thead.offsetHeight || lineY > top + wrap.clientHeight) { hide(); return; }
+      const z = zoomOf();
+      const lineY = top + row.offsetTop * z - wrap.scrollTop - 0.5;
+      if (lineY < top + thead.offsetHeight * z || lineY > top + wrap.clientHeight) { hide(); return; }
       btn.style.top = (lineY - area.getBoundingClientRect().top - TAIL_Y) + 'px';
       btn.dataset.before = row.dataset.i;           // 이 번호의 행 앞에 추가
       btn.classList.add('is-on');
@@ -428,37 +487,74 @@
     btn.addEventListener('click', () => { const b = Number(btn.dataset.before); hide(); insertRow(b); });
   }
 
-  function setupTopbar() {
-    const topbar = document.querySelector('.topbar');
-    if (!topbar) return;
-    const mk = (cls, title, html, fn) => {
-      const b = document.createElement('button');
-      b.className = cls;
-      b.type = 'button';
-      b.hidden = true;
-      b.title = title;
-      b.setAttribute('aria-label', title);
-      b.innerHTML = html;
-      b.addEventListener('mousedown', (e) => e.preventDefault());   // 눌러도 칸의 커서(선택)가 그대로 있게
-      b.addEventListener('click', fn);
-      topbar.appendChild(b);
-      return b;
+  // ── 폰(800px 이하)용 확대·축소: 두 손가락으로 벌리거나 오므리기 ──
+  // 표 전체를 CSS zoom(--tz)으로 키우고 줄인다. 처음(100%)은 표가 화면 너비에 딱 맞는 크기.
+  // 줄이면(60%까지) 표가 계속 화면 너비를 채워서 열이 넓어지고 글자는 작아진다. 키우면(200%까지) 옆으로 스크롤된다.
+  // 손가락 사이의 점이 제자리에 있도록 스크롤 위치를 맞추고, 마지막 배율은 이 기기에 기억한다.
+  const ZOOM_KEY = 'inkventory.zoom.wish.v1';
+  const ZOOM_MIN = 0.6;
+  const ZOOM_MAX = 2;
+  let zoom = 1;
+  let zoomRefresh = null;
+
+  function setupZoom(container) {
+    const layout = container.querySelector('.wish-layout');
+    const area = container.querySelector('.table-area');
+    const wrap = container.querySelector('.table-wrap');
+    const hint = container.querySelector('.zoom-hint');
+    const active = () => window.matchMedia('(max-width: 800px)').matches;
+    const clampZ = (n) => Math.floor(Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, n)) * 1000) / 1000;
+    try { const sv = Number(localStorage.getItem(ZOOM_KEY)); if (sv > 0) zoom = clampZ(sv); } catch (err) { /* 기억 못 해도 괜찮음 */ }
+    // 확대 전 표 너비: 줄일 때는 (표 상자 너비 ÷ 배율) 로 늘려서 화면 너비를 계속 채운다
+    const apply = (n) => {
+      zoom = clampZ(n);
+      layout.style.setProperty('--tz', String(zoom));
+      if (wrap.clientWidth > 0) layout.style.setProperty('--wish-gw', Math.floor(wrap.clientWidth / Math.min(zoom, 1)) + 'px');
+      schedulePop();
     };
-    sortBtn = mk('sort-btn', '가나다순으로 정렬 (회색 행은 맨 아래)', SORT_ICON + '<span class="lbl">정렬</span>', sortRows);
-    grayBtn = mk('sort-btn tool-btn gray-btn', '선택한 행을 회색으로 (다시 누르면 해제)', GRAY_ICON, () => toggleFlag('gray'));
-    boldBtn = mk('sort-btn tool-btn', '선택한 행을 굵게 (다시 누르면 해제)', BOLD_ICON, () => toggleFlag('bold'));
-    grayBtn.setAttribute('aria-pressed', 'false');
-    boldBtn.setAttribute('aria-pressed', 'false');
-  }
-  function teardownTopbar() {
-    [sortBtn, grayBtn, boldBtn].forEach((b) => { if (b) b.remove(); });
-    sortBtn = grayBtn = boldBtn = null;
+    zoomRefresh = () => apply(zoom);
+    apply(zoom);
+    if (window.ResizeObserver) new ResizeObserver(() => { if (active()) zoomRefresh(); }).observe(area);
+
+    const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+    let pinch = null;
+    let hintTimer = null;
+    wrap.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 2 && active()) {
+        const r = wrap.getBoundingClientRect();
+        pinch = { d: dist(e.touches), z: zoom, cx: (e.touches[0].clientX + e.touches[1].clientX) / 2 - r.left, cy: (e.touches[0].clientY + e.touches[1].clientY) / 2 - r.top, sl: wrap.scrollLeft, st: wrap.scrollTop };
+      } else {
+        pinch = null;
+      }
+    }, { passive: true });
+    wrap.addEventListener('touchmove', (e) => {
+      if (!pinch || e.touches.length !== 2) return;
+      e.preventDefault();                                   // 두 손가락일 때는 브라우저의 화면 확대 대신 표를 확대
+      const nz = clampZ(pinch.z * (dist(e.touches) / pinch.d));
+      if (nz === zoom) return;
+      const k = nz / pinch.z;
+      apply(nz);
+      wrap.scrollLeft = (pinch.sl + pinch.cx) * k - pinch.cx;
+      wrap.scrollTop = (pinch.st + pinch.cy) * k - pinch.cy;
+      hint.textContent = Math.round(zoom * 100) + '%';
+      hint.classList.add('is-on');
+      clearTimeout(hintTimer);
+      hintTimer = setTimeout(() => hint.classList.remove('is-on'), 900);
+    }, { passive: false });
+    const end = (e) => {
+      if (e.touches.length < 2 && pinch) {
+        pinch = null;
+        try { localStorage.setItem(ZOOM_KEY, String(zoom)); } catch (err) { /* 무시 */ }
+      }
+    };
+    wrap.addEventListener('touchend', end, { passive: true });
+    wrap.addEventListener('touchcancel', end, { passive: true });
   }
 
-  // 표 바깥(상단 바 버튼 제외)을 누르면 선택 해제
+  // 표 바깥(선택 창 제외)을 누르면 선택 해제
   document.addEventListener('pointerdown', (e) => {
     if (!root || selA == null) return;
-    if (e.target.closest('.table-wrap') || e.target.closest('.menu') || e.target.closest('.topbar .sort-btn')) return;
+    if (e.target.closest('.table-wrap') || e.target.closest('.menu') || e.target.closest('.wish-pop')) return;
     clearSel();
   });
 
@@ -471,6 +567,7 @@
       <p class="notice" role="alert" hidden></p>
       <div class="wish-layout">
         <div class="table-area view-enter">
+          <span class="zoom-hint" aria-hidden="true"></span>
           <button class="row-add" type="button" title="행 추가" aria-label="이 위치에 행 추가">${ROW_ADD_ICON}</button>
           <div class="wish-tabs" role="tablist" aria-label="잉크 / 만년필">
             ${TABS.map((t) => `<button class="notice-tab" type="button" role="tab" data-tab="${t.id}" aria-selected="${t.id === tab}">${t.label}</button>`).join('')}
@@ -481,8 +578,9 @@
           </div>
         </div>
       </div>`;
-    setupTopbar();
+    setupPop();
     setupRowAdd(container);
+    setupZoom(container);
     const wrap = container.querySelector('.table-wrap');
 
     container.querySelector('.wish-tabs').addEventListener('click', (e) => {
@@ -499,8 +597,13 @@
       const tr = e.target.closest('tbody tr');
       if (!tr || !canEdit()) return;
       const i = Number(tr.dataset.i);
+      const td = e.target.closest('td');
+      if (td) selCol = td.cellIndex;
       if (shiftHold && selA != null) setSel(selA, i); else setSel(i, i);
     });
+    // 헤더의 [정렬] 버튼 (잉크명 / 제품명 칸 오른쪽)
+    wrap.addEventListener('mousedown', (e) => { if (e.target.closest('.th-sort')) e.preventDefault(); });
+    wrap.addEventListener('click', (e) => { if (e.target.closest('.th-sort')) sortRows(); });
     wrap.addEventListener('pointerdown', (e) => {
       const tr = e.target.closest('tbody tr');
       if (!tr || !canEdit()) return;
@@ -538,6 +641,7 @@
       if (!rows[i]) return;
       rows[i][el.dataset.k] = el.value;
       fit(el);
+      schedulePop();                                   // 글자가 늘어 행 높이가 바뀔 수 있음
       const t = tabNow();
       if (i === rows.length - 1 && rows.length < MAX_ROWS && !isBlank(t, rows[i])) {   // 맨 아래 행에 쓰기 시작하면 아래에 빈 행을 하나 더
         rows.push(blankRow(t));
@@ -585,7 +689,8 @@
     flushAll();
     cancelLongPress();
     closeCtx();
-    teardownTopbar();
+    teardownPop();
+    zoomRefresh = null;
     clearTimeout(noticeTimer);
     root = null;
     fresh = false;
