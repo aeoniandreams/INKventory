@@ -1601,10 +1601,42 @@
   // 표가 상자보다 넓을 때(좁은 창의 관리자 표, 폰에서 키웠을 때)만 표 상자에 가로 스크롤을 둔다. 그때는 제목 줄이 상단 바 아래에 붙지 못한다.
   let hscrollObs = null;
   let hscrollSync = null;
+  let hbar = null;          // 화면 맨 아래에 떠 있는 가로 스크롤 막대 (표가 길어서 표 맨 아래의 진짜 막대가 안 보일 때 대신 쓴다)
+
+  // 표가 길면 가로 스크롤 막대가 표의 맨 아래에 있어서, 위쪽을 보고 있을 때는 마우스로 옮길 수 없다.
+  // 그래서 표 상자가 가로로 스크롤될 때, 진짜 막대가 화면 밖이면 화면 맨 아래에 같은 막대를 띄워 서로 맞춰 움직인다. (터치 기기는 손가락으로 밀면 되므로 띄우지 않는다)
+  function createHBar(wrap) {
+    const bar = document.createElement('div');
+    bar.className = 'hbar';
+    bar.hidden = true;
+    bar.setAttribute('aria-hidden', 'true');
+    bar.innerHTML = '<div class="hbar__in"></div>';
+    document.body.appendChild(bar);
+    const inner = bar.firstChild;
+    const fromBar = () => { if (wrap.scrollLeft !== bar.scrollLeft) wrap.scrollLeft = bar.scrollLeft; };
+    const fromWrap = () => { if (bar.scrollLeft !== wrap.scrollLeft) bar.scrollLeft = wrap.scrollLeft; };
+    bar.addEventListener('scroll', fromBar, { passive: true });
+    wrap.addEventListener('scroll', fromWrap, { passive: true });
+    function update() {
+      const r = wrap.getBoundingClientRect();
+      const need = wrap.scrollWidth > wrap.clientWidth + 1;                           // 가로로 스크롤되는 표
+      const nativeHidden = r.bottom > window.innerHeight && r.top < window.innerHeight; // 표 맨 아래(진짜 막대)가 화면 아래로 벗어나 있고, 표는 화면에 보임
+      if (!need || !nativeHidden) { bar.hidden = true; return; }
+      bar.hidden = false;
+      const left = Math.max(0, r.left + wrap.clientLeft);
+      bar.style.left = left + 'px';
+      bar.style.width = Math.min(wrap.clientWidth, document.documentElement.clientWidth - left) + 'px';
+      inner.style.width = wrap.scrollWidth + 'px';
+      fromWrap();
+    }
+    return { update, destroy() { wrap.removeEventListener('scroll', fromWrap); bar.remove(); } };
+  }
   function setupHScroll(container) {
     const wrap = container.querySelector('.table-wrap');
     const grid = container.querySelector('table.grid');
-    const sync = () => { wrap.classList.toggle('is-hscroll', grid.getBoundingClientRect().width > wrap.clientWidth + 1); updateHeadStick(); };
+    if (hbar) hbar.destroy();
+    hbar = createHBar(wrap);
+    const sync = () => { wrap.classList.toggle('is-hscroll', grid.getBoundingClientRect().width > wrap.clientWidth + 1); updateHeadStick(); hbar.update(); };
     hscrollSync = sync;
     if (hscrollObs) hscrollObs.disconnect();
     if (window.ResizeObserver) {
@@ -1710,7 +1742,7 @@
       if (b) { scrollToRow(b.dataset.id); setBrandDrawer(false); }
     });
     pageScrollHooks.length = 0;
-    pageScrollHooks.push(updateHeadStick);
+    pageScrollHooks.push(updateHeadStick, () => { if (hbar) hbar.update(); });
     setupRowAdd(container);
     setupHScroll(container);
     setupFill(container);
@@ -1905,6 +1937,7 @@
     if (resizeObs) { resizeObs.disconnect(); resizeObs = null; }
     if (hscrollObs) { hscrollObs.disconnect(); hscrollObs = null; }
     hscrollSync = null;
+    if (hbar) { hbar.destroy(); hbar = null; }
     pageScrollHooks.length = 0;
     cancelAnimationFrame(dragRaf);
     drag = null;
