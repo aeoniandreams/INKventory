@@ -722,7 +722,7 @@
     const availW = (withPad) => {
       const cs = window.getComputedStyle(area);
       const pad = withPad ? (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0) : 0;
-      return area.clientWidth - pad - 2 - scrollbarW();
+      return area.clientWidth - pad - 2;
     };
     const fitFor = (w, withPad) => { const a = availW(withPad); return a > 0 ? Math.min(1, Math.floor((a / w) * 1000) / 1000) : 0.4; };
     // 시작 배율: 일반 모드에서 표(NORMAL_W)가 화면 너비에 딱 맞는 배율. 화면 너비와 폰의 좌우 여백(CSS --edge = clamp(12px, 2.4vw, 44px))으로 계산해서
@@ -730,7 +730,7 @@
     const startZoom = () => {
       const vw = document.documentElement.clientWidth;
       const m = Math.floor(Math.max(12, Math.min(44, vw * 0.024)));
-      const a = vw - 2 * m - 2 - scrollbarW();
+      const a = vw - 2 * m - 2;
       return a > 0 ? Math.min(1, Math.floor((a / normalTableW()) * 1000) / 1000) : 0.4;
     };
     const minZoom = () => fitFor(naturalW(), true);
@@ -738,7 +738,7 @@
     let z = startZoom();
     let follow = true;   // 아직 손가락으로 조절한 적이 없으면 시작 배율에 계속 맞춤 (돌려서 가로로 봐도)
     try { const s = Number(localStorage.getItem(ZOOM_KEY)); if (s > 0) { z = s; follow = false; } } catch (err) { /* 기억 못 해도 괜찮음 */ }
-    const apply = (n) => { z = clampZ(n); container.style.setProperty('--tz', String(z)); };
+    const apply = (n) => { z = clampZ(n); container.style.setProperty('--tz', String(z)); if (hscrollSync) hscrollSync(); };
     apply(z);
     zoomRefresh = () => apply(follow ? startZoom() : z);
 
@@ -756,8 +756,8 @@
           z,
           cx: (e.touches[0].clientX + e.touches[1].clientX) / 2 - r.left,
           cy: (e.touches[0].clientY + e.touches[1].clientY) / 2 - r.top,
+          top: r.top,
           sl: wrap.scrollLeft,
-          st: wrap.scrollTop,
         };
       } else {
         pinch = null;
@@ -773,7 +773,8 @@
       follow = false;
       apply(nz);
       wrap.scrollLeft = (pinch.sl + pinch.cx) * k - pinch.cx;
-      wrap.scrollTop = (pinch.st + pinch.cy) * k - pinch.cy;
+      // 세로는 페이지가 스크롤되므로, 손가락 사이의 점이 같은 화면 높이에 있도록 페이지를 스크롤한다
+      window.scrollBy(0, wrap.getBoundingClientRect().top + pinch.cy * k - (pinch.top + pinch.cy));
       hint.textContent = Math.round(z * 100) + '%';
       hint.classList.add('is-on');
       clearTimeout(hintTimer);
@@ -849,15 +850,42 @@
     window.INKEXPORT.open({ items });
   }
 
+  // 표는 자기 스크롤 막대 없이 길게 펼쳐지고 페이지와 함께 스크롤된다. 상단 바 아래에 붙는 영역의 아래쪽 높이(화면 위쪽 기준).
+  // withHead: 고정된 제목 줄까지 포함
+  function stickyTop(withHead) {
+    const bar = document.querySelector('.topbar');
+    let y = bar ? bar.getBoundingClientRect().bottom : 0;
+    const wrap = root && root.querySelector('.table-wrap');
+    const head = wrap && wrap.querySelector('thead th');
+    if (withHead && head) y += head.getBoundingClientRect().height;
+    return y;
+  }
+
+  // 가로 스크롤 중인 표 상자(.is-hscroll)에서는 CSS sticky 가 먹지 않아서, 제목 줄을 스크롤한 만큼 아래로 옮겨(translateY) 상단 바 아래에 붙인다.
+  function updateHeadStick() {
+    const wrap = root && root.querySelector('.table-wrap');
+    if (!wrap) return;
+    if (!wrap.classList.contains('is-hscroll')) { wrap.style.removeProperty('--hdr-y'); return; }
+    const grid = wrap.querySelector('table.grid');
+    const head = wrap.querySelector('thead th');
+    const bar = document.querySelector('.topbar');
+    const z = gridZoom();
+    const wr = wrap.getBoundingClientRect();
+    const dy = Math.max(0, (bar ? bar.getBoundingClientRect().bottom - 1 : 0) - (wr.top + wrap.clientTop));
+    const maxDy = Math.max(0, grid.getBoundingClientRect().height - head.getBoundingClientRect().height);
+    wrap.style.setProperty('--hdr-y', (Math.min(dy, maxDy) / z) + 'px');
+  }
+
   // 브랜드 이름을 누르면 표를 그 브랜드의 첫 행으로 이동
   function scrollToRow(id) {
     const wrap = root && root.querySelector('.table-wrap');
     const tr = wrap && [...tbodyEl().rows].find((r) => r.dataset.id === id);
     if (!tr) return;
     // 화면 위치(getBoundingClientRect)로 계산해야 폰의 확대·축소(CSS zoom) 상태에서도 정확하다
-    const head = wrap.querySelector('thead');
-    const y = tr.getBoundingClientRect().top - wrap.getBoundingClientRect().top + wrap.scrollTop;
-    wrap.scrollTo({ top: Math.max(0, y - (head ? head.getBoundingClientRect().height : 40)), behavior: 'smooth' });
+    // 표는 페이지와 함께 스크롤된다: 그 행이 상단 바와 고정된 제목 줄 바로 아래에 오도록 페이지를 스크롤
+    const head = wrap.querySelector('thead th');
+    const y = tr.getBoundingClientRect().top + window.scrollY - stickyTop(true);
+    window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
   }
 
   // 접근성 라벨의 "n행" 번호를 from(0부터) 이후로 다시 매김
@@ -1093,6 +1121,7 @@
     if (!root) return;
     if (isAdminMode()) loadPrivate();                    // 관리자 모드가 되면 관리자 전용 데이터를 불러옴
     else if (privState !== 'idle') dropPrivate();        // 일반 모드로 돌아오면 메모리와 화면에서 지움
+    if (hscrollSync) hscrollSync();                      // 일반/관리자 배치가 바뀌면 표 너비가 달라지므로 가로 스크롤 필요 여부를 다시 확인
     const edit = canEdit();
     root.querySelectorAll('.bar').forEach((bar) => { bar.inert = !edit; bar.title = edit ? '우클릭: 막대 추가·삭제' : ''; });
     if (!edit) closeCtx();
@@ -1307,19 +1336,16 @@
   // 스프레드시트처럼 focus 는 스크롤 없이 하고, 새 칸이 보일 만큼만(맨 아래 칸이면 표 바닥에, 맨 위면 제목 줄 바로 아래에) 스크롤한다.
   function focusCellNearest(el) {
     el.focus({ preventScroll: true });
-    const wrap = root && root.querySelector('.table-wrap');
     const tr = el.closest('tr');
-    if (!wrap || !tr) return;
-    const w = wrap.getBoundingClientRect();
-    const head = wrap.querySelector('thead th');
-    const top = head ? head.getBoundingClientRect().bottom : w.top + wrap.clientTop;      // 고정된 제목 줄 아래부터가 보이는 영역
-    const bottom = w.top + wrap.clientTop + wrap.clientHeight;                              // 가로 스크롤 막대 위까지
-    const r = tr.getBoundingClientRect();                                                   // 화면에 보이는 위치 (폰의 확대·축소 상태에서도 같은 기준)
+    if (!root || !tr) return;
+    const top = stickyTop(true);                                                           // 상단 바 + 고정된 제목 줄 아래부터가 보이는 영역
+    const bottom = window.innerHeight;
+    const r = tr.getBoundingClientRect();                                                  // 화면에 보이는 위치 (폰의 확대·축소 상태에서도 같은 기준)
     // 화면 배율(예: 125%)에서는 칸 위치가 소수점이라 딱 맞추면 1px 미만이 가려져 보일 수 있어, 아래는 2px, 위는 1px 여유를 둔다
-    if (r.bottom > bottom - 2) wrap.scrollTop += Math.ceil(r.bottom - (bottom - 2));
-    else if (r.top < top + 1) wrap.scrollTop -= Math.ceil(top + 1 - r.top);
-    if (!tr.nextElementSibling) wrap.scrollTop = wrap.scrollHeight;     // 맨 아래 행이면 표 끝(아래 여유 12px 포함)까지
-    else if (!tr.previousElementSibling) wrap.scrollTop = 0;            // 맨 위 행이면 표 맨 위까지
+    if (r.bottom > bottom - 2) window.scrollBy(0, Math.ceil(r.bottom - (bottom - 2)));
+    else if (r.top < top + 1) window.scrollBy(0, -Math.ceil(top + 1 - r.top));
+    if (!tr.nextElementSibling) window.scrollTo(0, document.documentElement.scrollHeight);    // 맨 아래 행이면 페이지 끝(아래 여유 포함)까지
+    else if (!tr.previousElementSibling) window.scrollTo(0, 0);                              // 맨 위 행이면 페이지 맨 위까지
   }
 
   function selectCell(td) {
@@ -1460,6 +1486,7 @@
     if (ctxEl && !ctxEl.hidden && !ctxEl.contains(e.target)) closeCtx();
   });
   window.addEventListener('resize', closeCtx);
+  window.addEventListener('resize', () => { if (hscrollSync) hscrollSync(); });
 
   function setupFill(container) {
     const wrap = container.querySelector('.table-wrap');
@@ -1478,10 +1505,10 @@
 
     function autoScroll() {
       if (!drag) return;
-      const wr = wrap.getBoundingClientRect();
       const edge = 40;
-      if (drag.y > wr.bottom - edge) {
-        wrap.scrollTop += Math.min(28, (drag.y - (wr.bottom - edge)) / 2 + 4); // 아래쪽 가장자리에서는 표가 따라 내려감
+      const vb = window.innerHeight;
+      if (drag.y > vb - edge) {
+        window.scrollBy(0, Math.min(28, (drag.y - (vb - edge)) / 2 + 4)); // 화면 아래쪽 가장자리에서는 페이지가 따라 내려감
         updateDragTarget();
         positionSelection();
       }
@@ -1523,10 +1550,9 @@
     if (!root || e.defaultPrevented || (e.key !== 'ArrowDown' && e.key !== 'ArrowUp')) return;
     if (e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
     if (document.activeElement && document.activeElement !== document.body) return;
-    const wrap = root.querySelector('.table-wrap');
-    if (!wrap) return;
+    if (!root.querySelector('.table-wrap')) return;
     e.preventDefault();
-    wrap.scrollBy({ top: (e.key === 'ArrowDown' ? 1 : -1) * 40 });
+    window.scrollBy({ top: (e.key === 'ArrowDown' ? 1 : -1) * 40 });
   });
 
   // 표 바깥을 누르면 선택 해제 (끄는 중에는 유지)
@@ -1568,6 +1594,27 @@
   const TAIL_Y = (22 / 24) * ROW_ADD_SIZE; // 아이콘 맨 아래(꼬리 끝, 선 굵기 포함)의 높이
   const NEAR = 12;                         // 선에서 이 거리(px) 안이면 "행과 행 사이"로 본다
 
+  // 페이지가 스크롤될 때(표는 페이지와 함께 스크롤된다) 부를 것들. 화면에 들어올 때 비우고 다시 채운다.
+  const pageScrollHooks = [];
+  window.addEventListener('scroll', () => { closeCtx(); pageScrollHooks.forEach((fn) => fn()); }, { passive: true });
+
+  // 표가 상자보다 넓을 때(좁은 창의 관리자 표, 폰에서 키웠을 때)만 표 상자에 가로 스크롤을 둔다. 그때는 제목 줄이 상단 바 아래에 붙지 못한다.
+  let hscrollObs = null;
+  let hscrollSync = null;
+  function setupHScroll(container) {
+    const wrap = container.querySelector('.table-wrap');
+    const grid = container.querySelector('table.grid');
+    const sync = () => { wrap.classList.toggle('is-hscroll', grid.getBoundingClientRect().width > wrap.clientWidth + 1); updateHeadStick(); };
+    hscrollSync = sync;
+    if (hscrollObs) hscrollObs.disconnect();
+    if (window.ResizeObserver) {
+      hscrollObs = new ResizeObserver(sync);
+      hscrollObs.observe(wrap);
+      hscrollObs.observe(grid);
+    }
+    sync();
+  }
+
   function setupRowAdd(container) {
     const area = container.querySelector('.table-area');
     const wrap = container.querySelector('.table-wrap');
@@ -1584,8 +1631,8 @@
       if (!rows.length) return null;
       const top = wrap.getBoundingClientRect().top + wrap.clientTop;
       const z = gridZoom();
-      const headH = thead.offsetHeight * z;
-      if (clientY < top + headH || clientY > top + wrap.clientHeight) return null;
+      const wr = wrap.getBoundingClientRect();
+      if (clientY < thead.querySelector('th').getBoundingClientRect().bottom || clientY > wr.bottom) return null;   // 제목 줄(상단 바 밑에 붙어 있을 때도) 위·표 아래는 제외
       const rel = clientY - top + wrap.scrollTop;          // 표 위쪽 기준
       const r = rowIndexAtRel(rel);
       const rt = rows[r].offsetTop * z;
@@ -1601,9 +1648,8 @@
       if (b === null) { hide(); return; }
       const top = wrap.getBoundingClientRect().top + wrap.clientTop;
       const z = gridZoom();
-      const headH = thead.offsetHeight * z;
       const lineY = top + tbody.rows[b].offsetTop * z - wrap.scrollTop - 0.5; // 경계선(1px)의 중앙
-      if (lineY < top + headH || lineY > top + wrap.clientHeight) { hide(); return; }
+      if (lineY < thead.querySelector('th').getBoundingClientRect().bottom || lineY > wrap.getBoundingClientRect().bottom) { hide(); return; }
       btn.style.top = (lineY - area.getBoundingClientRect().top - TAIL_Y) + 'px';
       btn.dataset.before = b; // b번째 행(0부터) 앞에 추가
       btn.classList.add('is-on');
@@ -1613,6 +1659,7 @@
     area.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'mouse') update(e); }); // 터치: 선 근처를 누르면 표시
     area.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') hide(); });
     wrap.addEventListener('scroll', hide, { passive: true });
+    pageScrollHooks.push(hide);                  // 표는 페이지와 함께 스크롤된다
 
     btn.addEventListener('click', () => {
       const b = Number(btn.dataset.before);
@@ -1662,7 +1709,10 @@
       const b = e.target.closest('button[data-id]');
       if (b) { scrollToRow(b.dataset.id); setBrandDrawer(false); }
     });
+    pageScrollHooks.length = 0;
+    pageScrollHooks.push(updateHeadStick);
     setupRowAdd(container);
+    setupHScroll(container);
     setupFill(container);
     setupBarFit(container);
     fillAll();
@@ -1853,6 +1903,9 @@
     closeCtx();
     cancelLongPress();
     if (resizeObs) { resizeObs.disconnect(); resizeObs = null; }
+    if (hscrollObs) { hscrollObs.disconnect(); hscrollObs = null; }
+    hscrollSync = null;
+    pageScrollHooks.length = 0;
     cancelAnimationFrame(dragRaf);
     drag = null;
     sel = null;

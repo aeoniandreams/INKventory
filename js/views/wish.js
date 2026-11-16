@@ -12,7 +12,6 @@
 
   const DOC_PATH = ['inventory', 'inkOwned'];
   const MAX_ROWS = 300;
-  const MIN_ROWS = 30;           // 관리자 화면에는 처음부터 빈 행을 이만큼 둔다 (보유 잉크의 빈 행처럼)
   const SAVE_DELAY = 600;
   const TABS = [
     { id: 'ink', label: '잉크', field: 'wishInk', empty: '등록된 위시 잉크가 없습니다.', cols: [
@@ -138,8 +137,8 @@
       }
       for (const t of TABS) {
         if (dirty[t.id] || timers[t.id] !== null) continue;   // 아직 저장 안 된 내 수정이 있으면 덮어쓰지 않음
-        let rows = cleanRows(t, decodeRows(fields[t.field]));
-        if (!rows.some((r) => !isBlank(t, r))) rows = cleanRows(t, (await loadSeed())[t.field]);
+        let rows = cleanRows(t, decodeRows(fields[t.field])).filter((r) => !isBlank(t, r));      // 빈 행은 두지 않는다 (행 추가는 따로 있음)
+        if (!rows.length) rows = cleanRows(t, (await loadSeed())[t.field]).filter((r) => !isBlank(t, r));
         data[t.id] = rows;
       }
       loadState = 'ready';
@@ -164,7 +163,7 @@
     timers[t.id] = null;
     if (!dirty[t.id]) return chain;
     dirty[t.id] = false;
-    const rows = cleanRows(t, data[t.id]);          // 빈 행도 그대로 저장 (행 위치를 보유 잉크처럼 유지)
+    const rows = cleanRows(t, data[t.id]).filter((r) => !isBlank(t, r));          // 빈 행은 저장하지 않는다
     saving++;
     setStatus('saving');
     chain = chain.then(async () => {
@@ -216,8 +215,7 @@
       return;
     }
     if (edit) {
-      while (rows.length < MIN_ROWS) rows.push(blankRow(t));
-      if (rows.length < MAX_ROWS && !isBlank(t, rows[rows.length - 1])) rows.push(blankRow(t));
+      if (!rows.length) rows.push(blankRow(t));                  // 표가 비었으면 첫 글을 쓸 수 있게 빈 행 하나만
     }
     const shown = rows.map((r, i) => i).filter((i) => edit || !isBlank(t, rows[i]));
     if (!shown.length) {
@@ -476,7 +474,7 @@
       const rb = rt + rows[lo].offsetHeight * z;
       if (rel < rt || rel >= rb) return null;
       const n = rel - rt <= NEAR ? lo : (rb - rel <= NEAR ? lo + 1 : null);
-      return n !== null && n >= 1 && n <= rows.length - 1 ? n : null;
+      return n !== null && n >= 1 && n <= rows.length ? n : null;      // rows.length = 맨 아래 행 아래 (맨 끝에 추가)
     }
 
     function update(e) {
@@ -485,12 +483,14 @@
       if (n === null) { hide(); return; }
       const top = wrap.getBoundingClientRect().top + wrap.clientTop;
       const thead = wrap.querySelector('thead th');
-      const row = tbodyEl().rows[n];
+      const rowsEl = tbodyEl().rows;
       const z = zoomOf();
-      const lineY = top + row.offsetTop * z - wrap.scrollTop - 0.5;
+      const lastRow = n >= rowsEl.length;
+      const row = lastRow ? rowsEl[rowsEl.length - 1] : rowsEl[n];
+      const lineY = top + (row.offsetTop + (lastRow ? row.offsetHeight : 0)) * z - wrap.scrollTop - 0.5;
       if (lineY < thead.getBoundingClientRect().bottom || lineY > wrap.getBoundingClientRect().bottom) { hide(); return; }
       btn.style.top = (lineY - area.getBoundingClientRect().top - TAIL_Y) + 'px';
-      btn.dataset.before = row.dataset.i;           // 이 번호의 행 앞에 추가
+      btn.dataset.before = lastRow ? Number(row.dataset.i) + 1 : row.dataset.i;           // 이 번호의 행 앞에 추가 (맨 끝이면 마지막 행 다음)
       btn.classList.add('is-on');
     }
 
@@ -513,6 +513,23 @@
   let zoom = 1;
   let zoomRefresh = null;
 
+  // 가로 스크롤 중(키웠을 때)에는 CSS sticky 가 먹지 않아서, 제목 줄을 스크롤한 만큼 아래로 옮겨(translateY) 상단 바 아래에 붙인다.
+  function updateHeadStick() {
+    const wrap = root && root.querySelector('.table-wrap');
+    if (!wrap) return;
+    const layout = wrap.closest('.wish-layout');
+    const head = wrap.querySelector('thead th');
+    if (!layout || !layout.classList.contains('is-zoomed') || !head) { wrap.style.removeProperty('--hdr-y'); return; }
+    const grid = wrap.querySelector('table.grid');
+    const bar = document.querySelector('.topbar');
+    const wr = wrap.getBoundingClientRect();
+    const z = grid.offsetWidth ? grid.getBoundingClientRect().width / grid.offsetWidth : 1;
+    const dy = Math.max(0, (bar ? bar.getBoundingClientRect().bottom - 1 : 0) - (wr.top + wrap.clientTop));
+    const maxDy = Math.max(0, grid.getBoundingClientRect().height - head.getBoundingClientRect().height);
+    wrap.style.setProperty('--hdr-y', (Math.min(dy, maxDy) / z) + 'px');
+  }
+  window.addEventListener('scroll', () => updateHeadStick(), { passive: true });
+
   function setupZoom(container) {
     const layout = container.querySelector('.wish-layout');
     const area = container.querySelector('.table-area');
@@ -526,9 +543,10 @@
       zoom = clampZ(n);
       const on = active();
       layout.style.setProperty('--tz', String(on ? zoom : 1));
-      layout.classList.toggle('is-zoomed', on && zoom > 1);          // 키웠을 때만 표 상자에 가로 스크롤 (그때는 제목 줄이 따라오지 않는다)
+      layout.classList.toggle('is-zoomed', on && zoom > 1);          // 키웠을 때만 표 상자에 가로 스크롤 (그때 제목 줄은 아래 updateHeadStick 으로 붙인다)
       if (on && wrap.clientWidth > 0) layout.style.setProperty('--wish-gw', Math.floor(wrap.clientWidth / Math.min(zoom, 1)) + 'px');
       else layout.style.removeProperty('--wish-gw');
+      updateHeadStick();
       schedulePop();
     };
     zoomRefresh = () => apply(zoom);
@@ -662,12 +680,7 @@
       rows[i][el.dataset.k] = el.value;
       fit(el);
       schedulePop();                                   // 글자가 늘어 행 높이가 바뀔 수 있음
-      const t = tabNow();
-      if (i === rows.length - 1 && rows.length < MAX_ROWS && !isBlank(t, rows[i])) {   // 맨 아래 행에 쓰기 시작하면 아래에 빈 행을 하나 더
-        rows.push(blankRow(t));
-        tr.parentNode.insertAdjacentHTML('beforeend', rowHtml(t, rows[rows.length - 1], rows.length - 1, true));
-      }
-      schedule(t);
+      schedule(tabNow());
     });
 
     // ↓ / Enter: 아래 칸, ↑: 위 칸. Shift + Enter: 줄바꿈 (Ctrl/Alt/Cmd + Enter 는 아무 동작도 안 함)
