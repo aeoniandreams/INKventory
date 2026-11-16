@@ -309,14 +309,9 @@ button { font: inherit; color: inherit; }
 .table-wrap::after { content: ''; display: block; height: 12px; }
 .table-wrap.is-hscroll { overflow-x: auto; overflow-y: hidden; }
 /* 긴 표가 가로로 스크롤될 때 화면 맨 아래에 떠 있는 가로 스크롤 막대 (JS createHBar). 터치 기기에서는 쓰지 않는다. */
-.hbar { position: fixed; bottom: 0; z-index: 9; height: 14px; overflow-x: scroll; overflow-y: hidden; background: color-mix(in srgb, var(--bg) 88%, transparent); border-top: 1px solid var(--line); }
+.hbar { position: fixed; bottom: 0; z-index: 9; box-sizing: border-box; height: 10px; overflow-x: scroll; overflow-y: hidden; background: color-mix(in srgb, var(--bg) 88%, transparent); border-top: 1px solid var(--line); }
 .hbar[hidden] { display: none; }
 .hbar__in { height: 1px; }
-.hbar::-webkit-scrollbar { height: 10px; background: transparent; }
-.hbar::-webkit-scrollbar-track { background: transparent; }
-.hbar::-webkit-scrollbar-thumb { background: #cfd4e0; border-radius: 6px; border: 2px solid transparent; background-clip: content-box; }
-.hbar::-webkit-scrollbar-button { display: none; }
-@supports not selector(::-webkit-scrollbar) { .hbar { scrollbar-width: thin; scrollbar-color: #cfd4e0 transparent; } }
 @media (pointer: coarse) { .hbar { display: none !important; } }
 /* 가로 스크롤 중에는 sticky 대신 JS 가 --hdr-y 만큼 제목 줄을 내려서 상단 바 아래에 붙인다 */
 .table-wrap.is-hscroll .grid thead th, .wish-layout.is-zoomed .table-wrap .grid thead th { top: 0; transform: translateY(var(--hdr-y, 0px)); }
@@ -632,16 +627,14 @@ html[data-layout="normal"] .ink-layout {
   html[data-layout="normal"] .ink-layout { max-width: none; }
 }
 
-/* 스크롤 막대: 배경 없이, 가늘게, 펄 칸과 같은 색(#e6e9f1) 막대만 */
-.table-wrap::-webkit-scrollbar, .brand-list::-webkit-scrollbar, .nav::-webkit-scrollbar, .menu::-webkit-scrollbar { width: 8px; height: 8px; background: transparent; }
-.table-wrap::-webkit-scrollbar-track, .brand-list::-webkit-scrollbar-track, .nav::-webkit-scrollbar-track, .menu::-webkit-scrollbar-track,
-.table-wrap::-webkit-scrollbar-corner { background: transparent; }
-.table-wrap::-webkit-scrollbar-thumb, .brand-list::-webkit-scrollbar-thumb, .nav::-webkit-scrollbar-thumb, .menu::-webkit-scrollbar-thumb {
-  background: #e6e9f1; border-radius: 999px; border: 2px solid transparent; background-clip: padding-box;   /* 8px 칸 안에서 보이는 굵기 4px */
-}
-.table-wrap::-webkit-scrollbar-button, .brand-list::-webkit-scrollbar-button, .nav::-webkit-scrollbar-button, .menu::-webkit-scrollbar-button { display: none; }
+/* 스크롤 막대(세로·가로 모두, 페이지·표·목록·창 전부): 배경 없이, 가늘게(칸 8px 안에 보이는 굵기 4px), 본병 드롭다운과 같은 짙은 색(#353c4a) 막대만 */
+::-webkit-scrollbar { width: 8px; height: 8px; background: transparent; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-thumb { background: #353c4a; border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-button { display: none; }
 @supports not selector(::-webkit-scrollbar) {   /* 파이어폭스 등 */
-  .table-wrap, .brand-list, .nav, .menu { scrollbar-width: thin; scrollbar-color: #e6e9f1 transparent; }
+  html { scrollbar-color: #353c4a transparent; }
+  * { scrollbar-width: thin; }
 }
 
 .view-enter { animation: view-in .35s var(--ease); }
