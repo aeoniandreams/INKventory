@@ -846,3 +846,18 @@ html[data-layout] .is-editable .wish-layout .table-area { padding-left: 21px; ma
     html[data-layout="admin"] .main--table:not(.is-trade):not(.is-wish) { --main-pl: round(down, clamp(12px, 2vw, 32px), 1px); --edge-r: round(down, clamp(12px, 2vw, 32px), 1px); }
   }
 }
+
+/* 보유 잉크 일반 모드(데스크톱): 내용이 한쪽으로 쏠린 느낌이 없게, 브랜드 표 + 보유 잉크 표 묶음을 화면 가운데에 두어 좌우 바깥 여백을 같게 한다.
+   (전에는 묶음이 왼쪽에 붙어 오른쪽이 크게 비었다.) 묶음이 사이드바 아래에 꼭 가려지던 자리는 더는 아니므로,
+   사이드바를 열어 둔 동안에는 브랜드 표를 숨겨서 일부만 가려져 보이는 일이 없게 한다. 브랜드 표 너비는 220px 고정. */
+@media (min-width: 801px) {
+  html[data-layout="normal"] .main--table:not(.is-trade):not(.is-wish) { --main-pl: clamp(12px, 2vw, 32px); --edge-r: clamp(12px, 2vw, 32px); }
+  html[data-layout="normal"] .main--table:not(.is-trade):not(.is-wish) .brand-panel { width: 220px; }
+  html[data-layout="normal"] .main--table:not(.is-trade):not(.is-wish) .ink-layout { max-width: calc(220px + 12px + var(--table-gap) + var(--normal-w)); margin-left: auto; margin-right: auto; }
+  html:has(.sidebar.is-open) .main--table:not(.is-trade):not(.is-wish) .brand-panel { visibility: hidden; }
+}
+@supports (width: round(down, 1.5px, 1px)) {
+  @media (min-width: 801px) {
+    html[data-layout="normal"] .main--table:not(.is-trade):not(.is-wish) { --main-pl: round(down, clamp(12px, 2vw, 32px), 1px); --edge-r: round(down, clamp(12px, 2vw, 32px), 1px); }
+  }
+}
