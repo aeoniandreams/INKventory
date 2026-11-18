@@ -866,7 +866,7 @@ html[data-layout] .is-editable .wish-layout .table-area { padding-left: 21px; ma
   }
 }
 
-/* ── 시작 화면의 1차 카테고리 네모 (INK / FOUNTAIN PEN / WISH) ─────────────
+/* ── 시작 화면의 1차 카테고리 네모 (OWN / 잉팔잉사 / WISH) ─────────────
    위쪽 물방울 네모(.hero__mark)와 같은 짙은 둥근 네모에 아이콘(img/home/*.png, 선 굵기를 같게 맞춰 흰색으로 만든 것)을 넣는다.
    네모나 아래 이름을 누르면 2차 카테고리가 아래로 펼쳐진다 (WISH 는 2차가 없어 바로 이동). */
 .home-cats { max-width: 540px; margin: 44px auto 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 clamp(8px, 3vw, 28px); align-items: start; }

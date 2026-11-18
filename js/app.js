@@ -4,19 +4,14 @@
   // 사이드바 카테고리 구조. 새 카테고리는 여기에만 추가하면 된다.
   const NAV = [
     {
-      id: 'ink', label: 'INK', icon: 'img/home/ink.png',
+      id: 'own', label: 'OWN', icon: 'img/home/ink.png',
       items: [
-        { id: 'ink-owned',  label: '보유 잉크' },
-        { id: 'ink-sale',   label: '잉팔잉사' },
+        { id: 'ink-owned', label: '잉크' },       // 보유 잉크
+        { id: 'pen-owned', label: '만년필' },     // 보유 만년필
       ],
     },
-    {
-      id: 'pen', label: 'FOUNTAIN PEN', icon: 'img/home/pen.png',
-      items: [
-        { id: 'pen-owned', label: '보유 만년필' },
-      ],
-    },
-    // 2차 카테고리 없이, 누르면 바로 전체 화면으로 들어가는 1차 카테고리 (js/views/wish.js)
+    // 2차 카테고리 없이, 누르면 바로 전체 화면으로 들어가는 1차 카테고리 (route = 화면 주소)
+    { id: 'sale', label: '잉팔잉사', route: 'ink-sale', icon: 'img/home/pen.png' },
     { id: 'wish', label: 'WISH', route: 'wish', icon: 'img/home/wish.png' },
   ];
 
@@ -308,14 +303,14 @@
 
     if (view) {
       pageTitle.textContent = found.top ? found.group.label : `${found.group.label} · ${found.item.label}`;
-      document.title = `${found.item.label} – INKventory`;
+      document.title = `${pageTitle.textContent} – INKventory`;
       main.replaceChildren();
       main.classList.add('main--table');
       view.mount(main, { isAdmin });
       currentView = view;
     } else if (found) {
-      pageTitle.textContent = `${found.group.label} · ${found.item.label}`;
-      document.title = `${found.item.label} – INKventory`;
+      pageTitle.textContent = found.top ? found.group.label : `${found.group.label} · ${found.item.label}`;
+      document.title = `${pageTitle.textContent} – INKventory`;
       main.innerHTML = `
         <div class="placeholder view-enter">
           <div class="crumb">${found.group.label}</div>
@@ -325,7 +320,7 @@
     } else {
       pageTitle.textContent = 'HOME';
       document.title = 'INKventory';
-      // 시작 화면: 위쪽 소개 + 1차 카테고리(INK / FOUNTAIN PEN / WISH) 네모. 네모나 이름을 누르면 2차 카테고리가 아래로 펼쳐진다 (WISH 는 2차가 없어 바로 이동)
+      // 시작 화면: 위쪽 소개 + 1차 카테고리(OWN / 잉팔잉사 / WISH) 네모. 네모나 이름을 누르면 2차 카테고리가 아래로 펼쳐진다 (잉팔잉사·WISH 는 2차가 없어 바로 이동)
       main.innerHTML = `
         <div class="hero view-enter">
           <div class="hero__mark" aria-hidden="true">
