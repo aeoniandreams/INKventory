@@ -11,7 +11,8 @@
       ],
     },
     // 2차 카테고리 없이, 누르면 바로 전체 화면으로 들어가는 1차 카테고리 (route = 화면 주소)
-    { id: 'sale', label: '잉팔잉사', route: 'ink-sale', icon: 'img/home/pen.png' },
+    // 잉팔잉사 아이콘: Lucide "store" (lucide.dev, ISC 라이선스). 다른 아이콘 이미지와 같은 크기·선 굵기로 시작 화면에서 그린다.
+    { id: 'sale', label: '잉팔잉사', route: 'ink-sale', iconSvg: '<path d="M15 21v-5a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v5"/><path d="M17.774 10.31a1.12 1.12 0 0 0-1.549 0 2.5 2.5 0 0 1-3.451 0 1.12 1.12 0 0 0-1.548 0 2.5 2.5 0 0 1-3.452 0 1.12 1.12 0 0 0-1.549 0 2.5 2.5 0 0 1-3.77-3.248l2.889-4.184A2 2 0 0 1 7 2h10a2 2 0 0 1 1.653.873l2.895 4.192a2.5 2.5 0 0 1-3.774 3.244"/><path d="M4 10.95V19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8.05"/>' },
     { id: 'wish', label: 'WISH', route: 'wish', icon: 'img/home/wish.png' },
   ];
 
@@ -272,7 +273,9 @@
 
   // 시작 화면의 1차 카테고리 네모 (NAV 에서 만든다). 2차 카테고리가 있으면 네모·이름이 펼침 버튼, 없으면(WISH) 바로 이동하는 링크.
   function homeCatHtml(g) {
-    const img = `<img class="cat__icon" src="${g.icon}?v=20261118g" alt="" width="62" height="62" draggable="false">`;
+    const img = g.iconSvg
+      ? `<svg class="cat__icon cat__icon--svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${g.iconSvg}</svg>`
+      : `<img class="cat__icon" src="${g.icon}?v=20261118g" alt="" width="62" height="62" draggable="false">`;
     if (g.route) {
       return `<div class="cat" data-id="${g.id}">
         <a class="cat__tile" href="#/${g.route}" aria-label="${g.label}">${img}</a>
@@ -327,7 +330,6 @@
             <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c3.5 4.2 6 7.3 6 10.5a6 6 0 0 1-12 0C6 10.3 8.5 7.2 12 3Z"/></svg>
           </div>
           <h1>INKventory</h1>
-          <p>잉크와 만년필 인벤토리</p>
         </div>
         <div class="home-cats view-enter">${NAV.map(homeCatHtml).join('')}</div>`;
       main.querySelectorAll('.cat[data-has-sub] .cat__toggle').forEach((btn) => {

@@ -878,6 +878,7 @@ html[data-layout] .is-editable .wish-layout .table-area { padding-left: 21px; ma
   -webkit-tap-highlight-color: transparent;
 }
 .cat__icon { width: 64%; height: 64%; object-fit: contain; pointer-events: none; user-select: none; }
+.cat__icon--svg { width: 60%; height: 60%; color: #fff; }   /* Lucide 아이콘(24칸 그림): 그림이 네모의 약 48%로 보이고 선 굵기는 이미지 아이콘과 같게(칸 1.3) */
 @media (hover: hover) { .cat__tile:hover { transform: translateY(-3px); } }
 .cat__tile:active { transform: scale(.96); }
 .cat.is-open .cat__tile { box-shadow: 0 0 0 4px var(--accent-soft); }
