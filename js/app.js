@@ -277,7 +277,7 @@
 
   // 시작 화면의 1차 카테고리 네모 (NAV 에서 만든다). 2차 카테고리가 있으면 네모·이름이 펼침 버튼, 없으면(WISH) 바로 이동하는 링크.
   function homeCatHtml(g) {
-    const img = `<img class="cat__icon" src="${g.icon}?v=20261118e" alt="" width="62" height="62" draggable="false">`;
+    const img = `<img class="cat__icon" src="${g.icon}?v=20261118g" alt="" width="62" height="62" draggable="false">`;
     if (g.route) {
       return `<div class="cat" data-id="${g.id}">
         <a class="cat__tile" href="#/${g.route}" aria-label="${g.label}">${img}</a>

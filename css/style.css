@@ -877,7 +877,7 @@ html[data-layout] .is-editable .wish-layout .table-area { padding-left: 21px; ma
   transition: transform .2s var(--ease), box-shadow .2s var(--ease);
   -webkit-tap-highlight-color: transparent;
 }
-.cat__icon { width: 76%; height: 76%; object-fit: contain; pointer-events: none; user-select: none; }
+.cat__icon { width: 64%; height: 64%; object-fit: contain; pointer-events: none; user-select: none; }
 @media (hover: hover) { .cat__tile:hover { transform: translateY(-3px); } }
 .cat__tile:active { transform: scale(.96); }
 .cat.is-open .cat__tile { box-shadow: 0 0 0 4px var(--accent-soft); }
