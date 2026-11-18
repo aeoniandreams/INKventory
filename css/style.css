@@ -902,7 +902,8 @@ html[data-layout] .is-editable .wish-layout .table-area { padding-left: 21px; ma
 .cat__sub li { margin-top: 6px; }
 .cat__sub li:first-child { margin-top: 10px; }
 .cat__sub li:last-child { padding-bottom: 2px; }
-.cat__sub a { display: block; padding: 8px 12px; color: var(--accent); font-size: 13px; font-weight: 600; text-align: center; }   /* 배경색 없는 글자만 */
-@media (hover: hover) { .cat__sub a:hover { text-decoration: underline; text-underline-offset: 4px; } }
+.cat__sub a { display: block; padding: 8px 12px; color: var(--muted); font-size: 13px; font-weight: 600; text-align: center; transition: color .15s; }   /* 배경색 없는 글자만. 평소엔 선택 안 된 1차 카테고리 이름과 같은 회색, 마우스를 올리거나 누르거나 키보드로 고르면 남색 */
+@media (hover: hover) { .cat__sub a:hover { color: var(--accent); } }
+.cat__sub a:focus-visible, .cat__sub a:active { color: var(--accent); }
 @media (max-width: 480px) { .cat__title { font-size: 12px; letter-spacing: .06em; } .cat__sub a { font-size: 12.5px; padding: 8px 8px; } }
 @media (prefers-reduced-motion: reduce) { .cat__tile, .cat__sub-wrap, .cat__sub { transition: none; } }
