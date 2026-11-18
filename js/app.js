@@ -4,20 +4,20 @@
   // 사이드바 카테고리 구조. 새 카테고리는 여기에만 추가하면 된다.
   const NAV = [
     {
-      id: 'ink', label: 'INK',
+      id: 'ink', label: 'INK', icon: 'img/home/ink.png',
       items: [
         { id: 'ink-owned',  label: '보유 잉크' },
         { id: 'ink-sale',   label: '잉팔잉사' },
       ],
     },
     {
-      id: 'pen', label: 'FOUNTAIN PEN',
+      id: 'pen', label: 'FOUNTAIN PEN', icon: 'img/home/pen.png',
       items: [
         { id: 'pen-owned', label: '보유 만년필' },
       ],
     },
     // 2차 카테고리 없이, 누르면 바로 전체 화면으로 들어가는 1차 카테고리 (js/views/wish.js)
-    { id: 'wish', label: 'WISH', route: 'wish' },
+    { id: 'wish', label: 'WISH', route: 'wish', icon: 'img/home/wish.png' },
   ];
 
   const $ = (sel) => document.querySelector(sel);
@@ -275,6 +275,23 @@
     return null;
   }
 
+  // 시작 화면의 1차 카테고리 네모 (NAV 에서 만든다). 2차 카테고리가 있으면 네모·이름이 펼침 버튼, 없으면(WISH) 바로 이동하는 링크.
+  function homeCatHtml(g) {
+    const img = `<img class="cat__icon" src="${g.icon}" alt="" width="62" height="62" draggable="false">`;
+    if (g.route) {
+      return `<div class="cat" data-id="${g.id}">
+        <a class="cat__tile" href="#/${g.route}" aria-label="${g.label}">${img}</a>
+        <a class="cat__title" href="#/${g.route}"><span>${g.label}</span></a>
+      </div>`;
+    }
+    const sid = 'cat-sub-' + g.id;
+    return `<div class="cat" data-id="${g.id}" data-has-sub>
+      <button class="cat__tile cat__toggle" type="button" aria-expanded="false" aria-controls="${sid}" aria-label="${g.label} 펼치기">${img}</button>
+      <button class="cat__title cat__toggle" type="button" aria-expanded="false" aria-controls="${sid}"><span>${g.label}</span>${CHEVRON}</button>
+      <div class="cat__sub-wrap"><ul class="cat__sub" id="${sid}">${g.items.map((i) => `<li><a href="#/${i.id}">${i.label}</a></li>`).join('')}</ul></div>
+    </div>`;
+  }
+
   function render() {
     const id = location.hash.replace(/^#\/?/, '');
     const found = findItem(id);
@@ -308,7 +325,7 @@
     } else {
       pageTitle.textContent = 'HOME';
       document.title = 'INKventory';
-      // 임시 시작 화면 — 내용은 추후 추가
+      // 시작 화면: 위쪽 소개 + 1차 카테고리(INK / FOUNTAIN PEN / WISH) 네모. 네모나 이름을 누르면 2차 카테고리가 아래로 펼쳐진다 (WISH 는 2차가 없어 바로 이동)
       main.innerHTML = `
         <div class="hero view-enter">
           <div class="hero__mark" aria-hidden="true">
@@ -316,7 +333,16 @@
           </div>
           <h1>INKventory</h1>
           <p>잉크와 만년필 인벤토리 — 곧 채워질 예정입니다.</p>
-        </div>`;
+        </div>
+        <div class="home-cats view-enter">${NAV.map(homeCatHtml).join('')}</div>`;
+      main.querySelectorAll('.cat[data-has-sub] .cat__toggle').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const cat = btn.closest('.cat');
+          const open = !cat.classList.contains('is-open');
+          cat.classList.toggle('is-open', open);
+          cat.querySelectorAll('.cat__toggle').forEach((b) => b.setAttribute('aria-expanded', String(open)));
+        });
+      });
     }
     main.scrollTop = 0;
     window.scrollTo(0, 0);
