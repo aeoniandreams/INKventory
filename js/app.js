@@ -338,6 +338,7 @@
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c3.5 4.2 6 7.3 6 10.5a6 6 0 0 1-12 0C6 10.3 8.5 7.2 12 3Z"/></svg>
           </div>
           <h1>INKventory</h1>
+          <p class="hero__by">of 明(@wishupona__)</p>
         </div>
         <div class="home-cats view-enter">${NAV.map(homeCatHtml).join('')}</div>`;
       main.querySelectorAll('.cat[data-has-sub] .cat__toggle').forEach((btn) => {

@@ -198,6 +198,7 @@ button { font: inherit; color: inherit; }
   font-weight: 800; letter-spacing: -.02em; line-height: 1.15;
 }
 .hero p { margin: 0; color: var(--muted); }
+.hero .hero__by { font-size: 14px; }   /* 제목 아래 'of 明(@wishupona__)': 예전 소개 문구와 같은 회색, 글씨는 조금 작게 */
 
 .placeholder {
   max-width: 720px; margin: 8vh auto 0; text-align: center;
