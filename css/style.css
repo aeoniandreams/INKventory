@@ -120,8 +120,8 @@ button { font: inherit; color: inherit; }
 }
 
 /* 사이드바: 본병/소분 개수 */
-/* 칸을 작게(글씨·여백·간격을 줄임) 하고 아래 아이디 줄 쪽으로 10px 내림: 아래 여백 14px → 4px, margin-bottom -10px */
-.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 0 14px 4px; margin-bottom: -10px; }
+/* 칸을 작게(글씨·여백·간격을 줄임) 하고 아래 아이디 줄 쪽으로 6px 내림: 아래 여백 14px → 8px, margin-bottom -6px (처음엔 10px 내렸다가 4px 되돌림) */
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 0 14px 8px; margin-bottom: -6px; }
 .stat {
   min-width: 0; padding: 6px 12px 7px;
   background: var(--accent-soft); border-radius: 10px;
