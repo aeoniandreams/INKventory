@@ -889,9 +889,7 @@ html[data-layout] .is-editable .wish-layout .table-area { padding-left: 21px; ma
 }
 .cat__title:hover { color: var(--ink); }
 .cat.is-open .cat__title { color: var(--accent); }
-.cat__title { position: relative; white-space: nowrap; }
-.cat__title .nav__chevron { position: absolute; right: -10px; top: 50%; margin-top: -7px; transition: transform var(--dur) var(--ease); }   /* 이름이 네모 가운데 아래에 오도록 화살표는 바깥쪽에 */
-.cat.is-open .cat__title .nav__chevron { transform: rotate(180deg); }
+.cat__title { white-space: nowrap; }
 .cat__sub-wrap { display: grid; grid-template-rows: 0fr; width: 100%; transition: grid-template-rows var(--dur) var(--ease); }
 .cat.is-open .cat__sub-wrap { grid-template-rows: 1fr; }
 .cat__sub {
@@ -903,7 +901,7 @@ html[data-layout] .is-editable .wish-layout .table-area { padding-left: 21px; ma
 .cat__sub li { margin-top: 6px; }
 .cat__sub li:first-child { margin-top: 10px; }
 .cat__sub li:last-child { padding-bottom: 2px; }
-.cat__sub a { display: block; padding: 8px 12px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 13px; font-weight: 600; text-align: center; transition: background-color .15s; }
-@media (hover: hover) { .cat__sub a:hover { background: #dfe7f7; } }
+.cat__sub a { display: block; padding: 8px 12px; color: var(--accent); font-size: 13px; font-weight: 600; text-align: center; }   /* 배경색 없는 글자만 */
+@media (hover: hover) { .cat__sub a:hover { text-decoration: underline; text-underline-offset: 4px; } }
 @media (max-width: 480px) { .cat__title { font-size: 12px; letter-spacing: .06em; } .cat__sub a { font-size: 12.5px; padding: 8px 8px; } }
-@media (prefers-reduced-motion: reduce) { .cat__tile, .cat__sub-wrap, .cat__sub, .cat__title .nav__chevron { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .cat__tile, .cat__sub-wrap, .cat__sub { transition: none; } }

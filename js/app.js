@@ -287,7 +287,7 @@
     const sid = 'cat-sub-' + g.id;
     return `<div class="cat" data-id="${g.id}" data-has-sub>
       <button class="cat__tile cat__toggle" type="button" aria-expanded="false" aria-controls="${sid}" aria-label="${g.label} 펼치기">${img}</button>
-      <button class="cat__title cat__toggle" type="button" aria-expanded="false" aria-controls="${sid}"><span>${g.label}</span>${CHEVRON}</button>
+      <button class="cat__title cat__toggle" type="button" aria-expanded="false" aria-controls="${sid}"><span>${g.label}</span></button>
       <div class="cat__sub-wrap"><ul class="cat__sub" id="${sid}">${g.items.map((i) => `<li><a href="#/${i.id}">${i.label}</a></li>`).join('')}</ul></div>
     </div>`;
   }
@@ -332,7 +332,7 @@
             <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c3.5 4.2 6 7.3 6 10.5a6 6 0 0 1-12 0C6 10.3 8.5 7.2 12 3Z"/></svg>
           </div>
           <h1>INKventory</h1>
-          <p>잉크와 만년필 인벤토리 — 곧 채워질 예정입니다.</p>
+          <p>잉크와 만년필 인벤토리</p>
         </div>
         <div class="home-cats view-enter">${NAV.map(homeCatHtml).join('')}</div>`;
       main.querySelectorAll('.cat[data-has-sub] .cat__toggle').forEach((btn) => {
