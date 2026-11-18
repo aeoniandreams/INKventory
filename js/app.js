@@ -10,9 +10,16 @@
         { id: 'pen-owned', label: '만년필' },     // 보유 만년필
       ],
     },
+    // SELL: 2차 카테고리 잉팔잉사. 아이콘은 Lucide "store" (lucide.dev, ISC 라이선스)로, 다른 아이콘 이미지와 같은 크기·선 굵기로 시작 화면에서 그린다.
+    // title: 그 화면의 상단 바·탭 제목 (카테고리 이름 SELL 을 붙이지 않고 '잉팔잉사' 그대로)
+    {
+      id: 'sale', label: 'SELL',
+      iconSvg: '<path d="M15 21v-5a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v5"/><path d="M17.774 10.31a1.12 1.12 0 0 0-1.549 0 2.5 2.5 0 0 1-3.451 0 1.12 1.12 0 0 0-1.548 0 2.5 2.5 0 0 1-3.452 0 1.12 1.12 0 0 0-1.549 0 2.5 2.5 0 0 1-3.77-3.248l2.889-4.184A2 2 0 0 1 7 2h10a2 2 0 0 1 1.653.873l2.895 4.192a2.5 2.5 0 0 1-3.774 3.244"/><path d="M4 10.95V19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8.05"/>',
+      items: [
+        { id: 'ink-sale', label: '잉팔잉사', title: '잉팔잉사' },
+      ],
+    },
     // 2차 카테고리 없이, 누르면 바로 전체 화면으로 들어가는 1차 카테고리 (route = 화면 주소)
-    // 잉팔잉사 아이콘: Lucide "store" (lucide.dev, ISC 라이선스). 다른 아이콘 이미지와 같은 크기·선 굵기로 시작 화면에서 그린다.
-    { id: 'sale', label: '잉팔잉사', homeLabel: 'SELL', navLabel: 'SELL - 잉팔잉사', route: 'ink-sale', iconSvg: '<path d="M15 21v-5a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v5"/><path d="M17.774 10.31a1.12 1.12 0 0 0-1.549 0 2.5 2.5 0 0 1-3.451 0 1.12 1.12 0 0 0-1.548 0 2.5 2.5 0 0 1-3.452 0 1.12 1.12 0 0 0-1.549 0 2.5 2.5 0 0 1-3.77-3.248l2.889-4.184A2 2 0 0 1 7 2h10a2 2 0 0 1 1.653.873l2.895 4.192a2.5 2.5 0 0 1-3.774 3.244"/><path d="M4 10.95V19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8.05"/>' },
     { id: 'wish', label: 'WISH', route: 'wish', icon: 'img/home/wish.png' },
   ];
 
@@ -306,14 +313,14 @@
     const view = found && VIEWS[id];
 
     if (view) {
-      pageTitle.textContent = found.top ? found.group.label : `${found.group.label} · ${found.item.label}`;
+      pageTitle.textContent = found.item.title || (found.top ? found.group.label : `${found.group.label} · ${found.item.label}`);
       document.title = `${pageTitle.textContent} – INKventory`;
       main.replaceChildren();
       main.classList.add('main--table');
       view.mount(main, { isAdmin });
       currentView = view;
     } else if (found) {
-      pageTitle.textContent = found.top ? found.group.label : `${found.group.label} · ${found.item.label}`;
+      pageTitle.textContent = found.item.title || (found.top ? found.group.label : `${found.group.label} · ${found.item.label}`);
       document.title = `${pageTitle.textContent} – INKventory`;
       main.innerHTML = `
         <div class="placeholder view-enter">
