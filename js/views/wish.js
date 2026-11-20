@@ -596,7 +596,8 @@
     clearSel();
   });
 
-  function mount(container) {
+  function mount(container, which) {
+    if (which) tab = which;       // 사이드바·시작 화면의 'WISH > 잉크 / 만년필' 에 따라 처음 보이는 표
     root = container;
     container.classList.add('is-wish');
     fresh = false;
@@ -624,11 +625,7 @@
     container.querySelector('.wish-tabs').addEventListener('click', (e) => {
       const b = e.target.closest('.notice-tab');
       if (!b || b.dataset.tab === tab) return;
-      tab = b.dataset.tab;
-      clearSel();
-      closeCtx();
-      render();
-      wrap.scrollTop = 0;
+      location.hash = '#/wish-' + b.dataset.tab;    // 주소·상단 바 제목·사이드바 표시가 함께 바뀌도록 화면 주소를 바꾼다 (표 자료는 이미 받아 둔 것을 그대로 씀)
     });
 
     wrap.addEventListener('focusin', (e) => {
@@ -734,9 +731,8 @@
   }
 
   window.INKVENTORY_VIEWS = window.INKVENTORY_VIEWS || {};
-  window.INKVENTORY_VIEWS.wish = {
-    mount,
-    unmount,
-    onMode() { if (root) { if (isAdminMode()) { INKFB.db().catch(() => {}); } applyEditable(); } },
-  };
+  const onMode = () => { if (root) { if (isAdminMode()) { INKFB.db().catch(() => {}); } applyEditable(); } };
+  // WISH > 잉크 (#/wish-ink), WISH > 만년필 (#/wish-pen). 예전 주소 #/wish 는 app.js 가 #/wish-ink 로 보낸다.
+  window.INKVENTORY_VIEWS['wish-ink'] = { mount: (c) => mount(c, 'ink'), unmount, onMode };
+  window.INKVENTORY_VIEWS['wish-pen'] = { mount: (c) => mount(c, 'pen'), unmount, onMode };
 })();

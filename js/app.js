@@ -19,9 +19,17 @@
         { id: 'ink-sale', label: '잉팔잉사', title: '잉팔잉사' },
       ],
     },
-    // 2차 카테고리 없이, 누르면 바로 전체 화면으로 들어가는 1차 카테고리 (route = 화면 주소)
-    { id: 'wish', label: 'WISH', route: 'wish', icon: 'img/home/wish.png' },
+    // (2차 카테고리 없이 누르면 바로 화면으로 들어가는 1차 카테고리는 route: '화면 주소' 로 쓴다)
+    {
+      id: 'wish', label: 'WISH', icon: 'img/home/wish.png',
+      items: [
+        { id: 'wish-ink', label: '잉크' },
+        { id: 'wish-pen', label: '만년필' },
+      ],
+    },
   ];
+
+  const ROUTE_ALIAS = { wish: 'wish-ink' };   // 예전 주소(#/wish)로 들어와도 열리게
 
   const $ = (sel) => document.querySelector(sel);
   const sidebar = $('#sidebar');
@@ -113,6 +121,9 @@
   toggleBtn.addEventListener('click', () => setSidebar(!isOpen()));
   // 사이트명 왼쪽의 아이콘(열기 버튼과 같은 모양)으로 닫기. (index.html 이 예전 것이어도 앱 전체가 멈추지 않게 없을 때는 건너뜀)
   if (collapseBtn) collapseBtn.addEventListener('click', () => setSidebar(false));
+  // 사이드바에서 사이트 이름을 눌러 시작 화면으로 갈 때도 사이드바를 닫는다 (사이드바 안에서 이동할 때는 늘 닫힘)
+  const brandLink = document.querySelector('#sidebar .brand');
+  if (brandLink) brandLink.addEventListener('click', () => setSidebar(false));
   backdrop.addEventListener('click', () => setSidebar(false));
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && isOpen() && !authDialog.open) setSidebar(false);
@@ -300,6 +311,7 @@
 
   function render() {
     const id = location.hash.replace(/^#\/?/, '');
+    if (ROUTE_ALIAS[id]) { location.replace('#/' + ROUTE_ALIAS[id]); return; }   // 예전 주소 → 새 주소
     const found = findItem(id);
 
     nav.querySelectorAll('.nav__link, .nav__group-btn--link').forEach((a) => {
@@ -335,7 +347,7 @@
       main.innerHTML = `
         <div class="hero view-enter">
           <div class="hero__mark" aria-hidden="true">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c3.5 4.2 6 7.3 6 10.5a6 6 0 0 1-12 0C6 10.3 8.5 7.2 12 3Z"/></svg>
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c3.5 4.2 6 7.3 6 10.5a6 6 0 0 1-12 0C6 10.3 8.5 7.2 12 3Z"/></svg>
           </div>
           <h1>INKventory</h1>
           <p class="hero__by">of 明(@wishupona__)</p>
