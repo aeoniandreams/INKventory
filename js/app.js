@@ -60,7 +60,7 @@
           <a class="nav__group-btn nav__group-btn--link" href="#/${g.route}" data-id="${g.route}"><span>${g.navLabel || g.label}</span></a>
         </section>`;
       }
-      const open = store.get('inkventory.group.' + g.id) !== 'closed';
+      const open = false;   // 사이드바는 늘 1차 카테고리만 보이는 모습으로 시작하고, 펼친 상태는 기억하지 않는다 (사이드바를 닫으면 다시 접힘)
       return `
         <section class="nav__group" data-id="${g.id}" data-open="${open}">
           <button class="nav__group-btn" type="button" aria-expanded="${open}" aria-controls="list-${g.id}">
@@ -81,7 +81,6 @@
         const open = group.dataset.open !== 'true';
         group.dataset.open = open;
         btn.setAttribute('aria-expanded', open);
-        store.set('inkventory.group.' + group.dataset.id, open ? 'open' : 'closed');
         return;
       }
       if (e.target.closest('.nav__link, .nav__group-btn--link')) setSidebar(false);
@@ -109,7 +108,19 @@
     api.init();
   }
 
+  // 사이드바를 닫으면(닫히는 동작이 끝난 뒤) 펼쳐 둔 2차 카테고리를 모두 접어, 다시 열면 1차 카테고리만 보이게 한다
+  let collapseTimer = null;
+  function collapseGroups() {
+    nav.querySelectorAll('.nav__group[data-open]').forEach((g) => {
+      g.dataset.open = 'false';
+      const b = g.querySelector('.nav__group-btn');
+      if (b) b.setAttribute('aria-expanded', 'false');
+    });
+  }
+
   function setSidebar(open) {
+    clearTimeout(collapseTimer);
+    if (!open) collapseTimer = setTimeout(collapseGroups, 320);   // 닫히는 시간(260ms)이 지난 뒤
     if (open) startStats();
     sidebar.classList.toggle('is-open', open);
     backdrop.classList.toggle('is-visible', open);
@@ -347,7 +358,7 @@
       main.innerHTML = `
         <div class="hero view-enter">
           <div class="hero__mark" aria-hidden="true">
-            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c3.5 4.2 6 7.3 6 10.5a6 6 0 0 1-12 0C6 10.3 8.5 7.2 12 3Z"/></svg>
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c3.5 4.2 6 7.3 6 10.5a6 6 0 0 1-12 0C6 10.3 8.5 7.2 12 3Z"/></svg>
           </div>
           <h1>INKventory</h1>
           <p class="hero__by">of 明(@wishupona__)</p>
