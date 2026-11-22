@@ -1,16 +1,18 @@
-// WISH 화면 (전체 화면 표). 사이드바의 WISH 를 누르면 #/wish 로 들어온다. (2차 카테고리 없음)
+// WISH 화면 (전체 화면 표, 관리자 모드 전용). 사이드바·시작 화면의 WISH > 잉크 (#/wish-ink), 만년필 (#/wish-pen) 로 들어온다.
 // 위쪽의 [잉크] [만년필] 두 박스로 표를 바꿔 본다: 잉크 = 브랜드명·잉크명 표, 만년필 = 제품명 표.
-// 데이터: 공개 문서 inventory/inkOwned 의 wishInk: [{brand, name, gray, bold}], wishPens: [{name, gray, bold}] (누구나 읽기 / 관리자만 쓰기).
-// 일반 모드: 읽기만 (비어 있는 행은 감춤). 관리자 모드: 보유 잉크 표와 같은 방식으로 고친다.
+// 데이터: 관리자 전용 문서 inventory/inkPrivate 의 wishInk: [{brand, name, gray, bold}], wishPens: [{name, gray, bold}] (읽기·쓰기 모두 관리자만).
+//   예전에 공개 문서(inventory/inkOwned)에 저장돼 있던 위시는 관리자가 이 화면을 처음 열 때 관리자 전용 문서로 옮기고 공개 문서에서는 지운다.
+// 보유 잉크 표와 같은 방식으로 고친다.
 //   · 칸을 고치면 자동 저장, 행과 행 사이에 마우스를 두면 나오는 아이콘으로 행 추가, 우클릭(폰은 길게 누르기)으로 행 삭제
 //   · 표 제목 줄 오른쪽 끝의 [정렬] (가나다순, 회색 행은 맨 아래), 선택한 행 위에 뜨는 [회색] [굵게] 창
 //   · 표는 자기만의 스크롤 막대 없이 길게 펼쳐지고, 이 사이트 페이지의 스크롤 막대로 내려서 본다 (제목 줄은 상단 바 아래에 붙어 따라옴)
-//   · 처음 내용(공개 문서에 아직 저장된 위시가 없을 때): data/wish-seed.json (스프레드시트의 위시 탭)
+//   · 처음 내용: 표가 모두 비어 있으면 아래에 [파일에서 불러오기] 가 나온다 ({ wishInk: [...], wishPens: [...] } 모양의 JSON 파일. 저장소에는 올리지 않는다)
 //   · 행 선택: 칸을 누르면 그 행이 선택된다. Shift 를 누르고 다른 칸을 누르면 그 사이 행이 모두 선택된다.
 (() => {
   'use strict';
 
-  const DOC_PATH = ['inventory', 'inkOwned'];
+  const DOC_PATH = ['inventory', 'inkPrivate'];     // 관리자 전용 문서 (위시를 저장하는 곳)
+  const PUBLIC_PATH = ['inventory', 'inkOwned'];    // 예전에 위시를 저장하던 공개 문서 (옮기기·지우기용)
   const MAX_ROWS = 300;
   const SAVE_DELAY = 600;
   const TABS = [
@@ -96,14 +98,16 @@
     if (msg && ms) noticeTimer = setTimeout(() => showNotice(''), ms);
   }
 
-  // ── 불러오기: 가벼운 공개 읽기 주소(REST)로 문서를 한 번 받는다 ──
-  function restUrl() {
+  // ── 불러오기 ──
+  // 관리자 전용 문서를 Firebase SDK 로 읽는다. (일반 모드에서는 이 화면에 들어올 수 없다)
+  // 예전 공개 문서에 위시가 남아 있으면(공개 읽기 주소로 확인) 관리자 전용 문서로 옮기고 공개 문서에서는 지운다.
+  function publicUrl() {
     const c = (window.INKVENTORY_CONFIG || {}).firebase || {};
-    return `https://firestore.googleapis.com/v1/projects/${c.projectId}/databases/(default)/documents/${DOC_PATH.join('/')}?key=${c.apiKey}`;
+    return `https://firestore.googleapis.com/v1/projects/${c.projectId}/databases/(default)/documents/${PUBLIC_PATH.join('/')}?key=${c.apiKey}`;
   }
   function decodeRows(v) {
     const vals = v && v.arrayValue && v.arrayValue.values;
-    if (!Array.isArray(vals)) return [];
+    if (!Array.isArray(vals)) return null;
     return vals.map((x) => {
       const f = (x && x.mapValue && x.mapValue.fields) || {};
       const o = {};
@@ -114,32 +118,38 @@
       return o;
     });
   }
-
-  // 공개 문서에 저장된 위시가 아직 없으면(비었으면) 처음 내용으로 data/wish-seed.json 을 보여 준다.
-  // 관리자가 한 번이라도 고쳐서 저장하면 그때부터는 저장된 내용이 우선한다.
-  let seedP = null;
-  function loadSeed() {
-    if (!seedP) seedP = fetch('data/wish-seed.json', { cache: 'no-cache' }).then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
-    return seedP;
+  async function readPublicWish() {
+    try {
+      const r = await fetch(publicUrl(), { cache: 'no-store' });
+      if (!r.ok) return {};
+      const fields = (await r.json()).fields || {};
+      const out = {};
+      TABS.forEach((t) => { const rows = decodeRows(fields[t.field]); if (rows) out[t.field] = rows; });
+      return out;
+    } catch (err) { return {}; }
   }
 
   async function load() {
     if (loadState === 'loading') return;
     loadState = 'loading';
     try {
-      const c = (window.INKVENTORY_CONFIG || {}).firebase;
-      if (!c || !c.apiKey) throw new Error('not-configured');
-      const r = await fetch(restUrl(), { cache: 'no-store' });
-      let fields = {};
-      if (r.status !== 404) {
-        if (!r.ok) throw new Error('http ' + r.status);
-        fields = (await r.json()).fields || {};
-      }
+      if (!isAdminMode()) throw new Error('admin-only');
+      const { db, doc, getDoc, setDoc, deleteField } = await INKFB.db();
+      const priv = doc(db, ...DOC_PATH);
+      const snap = await getDoc(priv);
+      const pd = snap.exists() ? snap.data() : {};
+      const rowsOf = (t) => (Array.isArray(pd[t.field]) ? pd[t.field] : null);
+      // 예전 공개 문서의 위시 → 관리자 전용 문서로 (관리자 전용 문서에 없는 표만 옮기고, 옮긴 뒤에 공개 문서에서 지운다)
+      const pub = await readPublicWish();
+      const moved = {};
+      TABS.forEach((t) => { if (!rowsOf(t) && pub[t.field]) moved[t.field] = pub[t.field]; });
+      if (Object.keys(moved).length) { await setDoc(priv, moved, { merge: true }); Object.assign(pd, moved); }
+      const stale = {};
+      TABS.forEach((t) => { if (pub[t.field] && rowsOf(t)) stale[t.field] = deleteField(); });
+      if (Object.keys(stale).length) { try { await setDoc(doc(db, ...PUBLIC_PATH), stale, { merge: true }); } catch (e) { /* 지우지 못해도 화면은 그대로 */ } }
       for (const t of TABS) {
         if (dirty[t.id] || timers[t.id] !== null) continue;   // 아직 저장 안 된 내 수정이 있으면 덮어쓰지 않음
-        let rows = cleanRows(t, decodeRows(fields[t.field])).filter((r) => !isBlank(t, r));      // 빈 행은 두지 않는다 (행 추가는 따로 있음)
-        if (!rows.length) rows = cleanRows(t, (await loadSeed())[t.field]).filter((r) => !isBlank(t, r));
-        data[t.id] = rows;
+        data[t.id] = cleanRows(t, rowsOf(t) || []).filter((r) => !isBlank(t, r));      // 빈 행은 두지 않는다 (행 추가는 따로 있음)
       }
       loadState = 'ready';
       loadedOnce = true;
@@ -209,6 +219,8 @@
     const wrap = root.querySelector('.table-wrap');
     const msg = root.querySelector('.exch-empty');
     const table = root.querySelector('table.grid');
+    const imp = root.querySelector('.wish-import');
+    if (imp) imp.hidden = !(canEdit() && loadedOnce && TABS.every((x) => !data[x.id].some((r) => !isBlank(x, r))));
     if (!loadedOnce) {
       wrap.hidden = true; msg.hidden = false;
       msg.textContent = loadState === 'error' ? '불러오지 못했습니다. 새로고침해 주세요.' : '불러오는 중…';
@@ -530,6 +542,31 @@
   }
   window.addEventListener('scroll', () => updateHeadStick(), { passive: true });
 
+  // 잉크·만년필 표가 모두 비어 있을 때만 보이는 [파일에서 불러오기]: { wishInk: [...], wishPens: [...] } 모양의 JSON 파일로 처음 내용을 채운다
+  function setupImport(container) {
+    const box = container.querySelector('.wish-import');
+    const btn = box.querySelector('button');
+    const input = box.querySelector('input');
+    btn.addEventListener('click', () => { if (canEdit()) input.click(); });
+    input.addEventListener('change', () => {
+      const file = input.files && input.files[0];
+      input.value = '';
+      if (!file || !canEdit()) return;
+      const fr = new FileReader();
+      fr.onload = () => {
+        let json = null;
+        try { json = JSON.parse(String(fr.result)); } catch (e) { json = null; }
+        const hit = json && TABS.filter((t) => Array.isArray(json[t.field]));
+        if (!hit || !hit.length) { showNotice('올바른 파일이 아닙니다. ({ "wishInk": [...], "wishPens": [...] } 모양이어야 합니다)', 5000); return; }
+        hit.forEach((t) => { data[t.id] = cleanRows(t, json[t.field]).filter((r) => !isBlank(t, r)); schedule(t, 0); });
+        clearSel();
+        render();
+        showNotice('불러왔습니다.', 2500);
+      };
+      fr.readAsText(file);
+    });
+  }
+
   function setupZoom(container) {
     const layout = container.querySelector('.wish-layout');
     const area = container.querySelector('.table-area');
@@ -615,11 +652,16 @@
           <div class="table-wrap" tabindex="0" role="region" aria-label="위시 표">
             <table class="grid"></table>
           </div>
+          <div class="wish-import" hidden>
+            <button class="btn" type="button">파일에서 불러오기</button>
+            <input type="file" accept=".json,application/json" hidden>
+          </div>
         </div>
       </div>`;
     setupPop();
     setupRowAdd(container);
     setupZoom(container);
+    setupImport(container);
     const wrap = container.querySelector('.table-wrap');
 
     container.querySelector('.wish-tabs').addEventListener('click', (e) => {

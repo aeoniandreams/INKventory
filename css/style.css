@@ -908,3 +908,5 @@ html[data-layout] .is-editable .wish-layout .table-area { padding-left: 21px; ma
 .cat__sub a:focus-visible, .cat__sub a:active { color: var(--accent); }
 @media (max-width: 480px) { .cat__title { font-size: 12px; letter-spacing: .06em; } .cat__sub a { font-size: 12.5px; padding: 8px 8px; } }
 @media (prefers-reduced-motion: reduce) { .cat__tile, .cat__sub-wrap, .cat__sub { transition: none; } }
+.wish-import { margin-top: 18px; text-align: center; }
+.wish-import[hidden] { display: none; }
