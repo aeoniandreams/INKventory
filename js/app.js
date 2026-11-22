@@ -20,8 +20,9 @@
       ],
     },
     // (2차 카테고리 없이 누르면 바로 화면으로 들어가는 1차 카테고리는 route: '화면 주소' 로 쓴다)
+    // WISH: 관리자 모드에서만 보인다 (adminOnly). 일반 모드에서는 사이드바·시작 화면에 나오지 않고, 주소로 들어와도 시작 화면으로 돌려보낸다.
     {
-      id: 'wish', label: 'WISH', icon: 'img/home/wish.png',
+      id: 'wish', label: 'WISH', icon: 'img/home/wish.png', adminOnly: true,
       items: [
         { id: 'wish-ink', label: '잉크' },
         { id: 'wish-pen', label: '만년필' },
@@ -52,8 +53,11 @@
   const CHEVRON = '<svg class="nav__chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
 
   // ── 네비게이션 렌더 ─────────────────────
+  // 지금 모드에서 보여 줄 1차 카테고리 (adminOnly 는 관리자 모드에서만)
+  const visibleNav = () => NAV.filter((g) => !g.adminOnly || isAdmin);
+
   function renderNav() {
-    nav.innerHTML = NAV.map((g) => {
+    nav.innerHTML = visibleNav().map((g) => {
       if (g.route) {
         return `
         <section class="nav__group" data-id="${g.id}">
@@ -73,17 +77,27 @@
           </div>
         </section>`;
     }).join('');
+  }
 
-    nav.addEventListener('click', (e) => {
-      const btn = e.target.closest('.nav__group-btn:not(.nav__group-btn--link)');
-      if (btn) {
-        const group = btn.closest('.nav__group');
-        const open = group.dataset.open !== 'true';
-        group.dataset.open = open;
-        btn.setAttribute('aria-expanded', open);
-        return;
-      }
-      if (e.target.closest('.nav__link, .nav__group-btn--link')) setSidebar(false);
+  // 사이드바 클릭 (한 번만 등록: 카테고리 펼치기/접기, 항목을 누르면 사이드바 닫기)
+  nav.addEventListener('click', (e) => {
+    const btn = e.target.closest('.nav__group-btn:not(.nav__group-btn--link)');
+    if (btn) {
+      const group = btn.closest('.nav__group');
+      const open = group.dataset.open !== 'true';
+      group.dataset.open = open;
+      btn.setAttribute('aria-expanded', open);
+      return;
+    }
+    if (e.target.closest('.nav__link, .nav__group-btn--link')) setSidebar(false);
+  });
+
+  // 사이드바에서 지금 보고 있는 화면 표시
+  function markCurrent(id) {
+    const found = findItem(id);
+    nav.querySelectorAll('.nav__link, .nav__group-btn--link').forEach((a) => {
+      if (found && a.dataset.id === id) a.setAttribute('aria-current', 'page');
+      else a.removeAttribute('aria-current');
     });
   }
 
@@ -176,6 +190,18 @@
     idBtn.disabled = isAdmin; // 관리자 모드에서는 아이디를 눌러도 아무 일도 일어나지 않음
     idBtn.title = isAdmin ? '' : '관리자 모드로 전환';
     if (currentView && currentView.onMode) currentView.onMode(isAdmin);
+    onModeChanged();
+  }
+
+  // 일반 ↔ 관리자 모드가 바뀌면: 사이드바 목록 다시 그리기, 시작 화면이면 다시 그리기, 관리자 전용 화면이면 다시 판단(열기 또는 돌려보내기)
+  let appStarted = false;
+  function onModeChanged() {
+    if (!appStarted) return;
+    renderNav();
+    const id = location.hash.replace(/^#\/?/, '');
+    const found = findItem(id);
+    markCurrent(id);
+    if (!found || found.group.adminOnly) render();
   }
 
   // 일반 방문자는 로그인 SDK 를 받지 않도록, 로그인이 필요할 때만 불러온다. (js/fb.js)
@@ -325,10 +351,23 @@
     if (ROUTE_ALIAS[id]) { location.replace('#/' + ROUTE_ALIAS[id]); return; }   // 예전 주소 → 새 주소
     const found = findItem(id);
 
-    nav.querySelectorAll('.nav__link, .nav__group-btn--link').forEach((a) => {
-      if (found && a.dataset.id === id) a.setAttribute('aria-current', 'page');
-      else a.removeAttribute('aria-current');
-    });
+    // 관리자 전용 화면(WISH): 일반 모드면 시작 화면으로 돌려보낸다. 단, 관리자로 로그인해 둔 탭을 새로고침한 직후에는
+    // 로그인 확인이 끝날 때까지 기다린다(끝나면 applyMode 가 다시 그린다).
+    if (found && found.group.adminOnly && !isAdmin) {
+      if (hintAtStart && !authResolved) {
+        if (currentView && currentView.unmount) currentView.unmount();
+        currentView = null;
+        main.className = 'main';
+        main.replaceChildren();
+        pageTitle.textContent = '';
+        markCurrent('');
+        return;
+      }
+      location.replace('#/');
+      return;
+    }
+
+    markCurrent(id);
 
     if (currentView && currentView.unmount) currentView.unmount();
     currentView = null;
@@ -363,7 +402,7 @@
           <h1>INKventory</h1>
           <p class="hero__by">of 明(@wishupona__)</p>
         </div>
-        <div class="home-cats view-enter">${NAV.map(homeCatHtml).join('')}</div>`;
+        <div class="home-cats view-enter">${visibleNav().map(homeCatHtml).join('')}</div>`;
       main.querySelectorAll('.cat[data-has-sub] .cat__toggle').forEach((btn) => {
         btn.addEventListener('click', () => {
           const cat = btn.closest('.cat');
@@ -381,4 +420,5 @@
 
   renderNav();
   render();
+  appStarted = true;
 })();
