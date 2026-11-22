@@ -402,7 +402,7 @@
           <h1>INKventory</h1>
           <p class="hero__by">of 明(@wishupona__)</p>
         </div>
-        <div class="home-cats view-enter">${visibleNav().map(homeCatHtml).join('')}</div>`;
+        <div class="home-cats view-enter" style="--cats:${visibleNav().length}">${visibleNav().map(homeCatHtml).join('')}</div>`;
       main.querySelectorAll('.cat[data-has-sub] .cat__toggle').forEach((btn) => {
         btn.addEventListener('click', () => {
           const cat = btn.closest('.cat');
