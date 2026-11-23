@@ -600,20 +600,35 @@ function createListView(cfg) {
     const wrap = container.querySelector('.table-wrap');
     const hint = container.querySelector('.zoom-hint');
     const active = () => window.matchMedia('(max-width: 800px)').matches;
-    const clampZ = (n) => Math.floor(Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, n)) * 1000) / 1000;
-    try { const sv = Number(localStorage.getItem(ZOOM_KEY)); if (sv > 0) zoom = clampZ(sv); } catch (err) { /* 기억 못 해도 괜찮음 */ }
-    // 확대 전 표 너비: 줄일 때는 (표 상자 너비 ÷ 배율) 로 늘려서 화면 너비를 계속 채운다
+    // cfg.naturalWidth 가 있으면(NEW ARRIVALS): 표의 원래 너비(그 너비로 표 전체가 보임)를 기준으로 한다.
+    //   · 시작 배율 = 그 너비가 화면 너비에 딱 맞는 배율 (표 전체가 한눈에 보이는 배율. 들어올 때마다 이 배율로 시작하고, 손가락으로 조절한 값은 기억하지 않는다)
+    //   · 가장 작게 = 시작 배율, 가장 크게 = 200%. 키우면 옆으로 스크롤된다.
+    // 없으면(WISH): 100% = 표가 화면 너비에 맞는 크기, 60%까지 줄이면 화면 너비를 계속 채우고, 마지막 배율을 기억한다.
+    const natural = cfg.naturalWidth || 0;
+    const availW = () => {
+      const cs = window.getComputedStyle(area);
+      return area.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0) - 2;
+    };
+    const fitZ = () => { const a = availW(); return a > 0 ? Math.min(1, Math.floor((a / natural) * 1000) / 1000) : 0.4; };
+    const minZ = () => (natural ? fitZ() : ZOOM_MIN);
+    const clampZ = (n) => Math.floor(Math.max(minZ(), Math.min(ZOOM_MAX, n)) * 1000) / 1000;
+    let follow = !!natural;          // 손가락으로 조절하기 전에는 시작 배율에 계속 맞춤 (화면을 돌려도)
+    if (natural) zoom = fitZ();
+    else { try { const sv = Number(localStorage.getItem(ZOOM_KEY)); if (sv > 0) zoom = clampZ(sv); } catch (err) { /* 기억 못 해도 괜찮음 */ } }
+    // 확대 전 표 너비: (WISH) 줄일 때는 표 상자 너비 ÷ 배율 로 늘려서 화면 너비를 계속 채운다 / (NEW ARRIVALS) 늘 원래 너비
     const apply = (n) => {
       zoom = clampZ(n);
       const on = active();
       layout.style.setProperty('--tz', String(on ? zoom : 1));
-      layout.classList.toggle('is-zoomed', on && zoom > 1);          // 키웠을 때만 표 상자에 가로 스크롤 (그때 제목 줄은 아래 updateHeadStick 으로 붙인다)
-      if (on && wrap.clientWidth > 0) layout.style.setProperty('--wish-gw', Math.floor(wrap.clientWidth / Math.min(zoom, 1)) + 'px');
+      const wide = natural ? natural * zoom > availW() + 1 : zoom > 1;
+      layout.classList.toggle('is-zoomed', on && wide);              // 표가 화면보다 넓어졌을 때만 표 상자에 가로 스크롤 (그때 제목 줄은 아래 updateHeadStick 으로 붙인다)
+      if (on && natural) layout.style.setProperty('--wish-gw', natural + 'px');
+      else if (on && wrap.clientWidth > 0) layout.style.setProperty('--wish-gw', Math.floor(wrap.clientWidth / Math.min(zoom, 1)) + 'px');
       else layout.style.removeProperty('--wish-gw');
       updateHeadStick();
       schedulePop();
     };
-    zoomRefresh = () => apply(zoom);
+    zoomRefresh = () => apply(natural && follow ? fitZ() : zoom);
     apply(zoom);
     if (window.ResizeObserver) new ResizeObserver(() => { if (zoomRefresh) zoomRefresh(); }).observe(area);
 
@@ -634,6 +649,7 @@ function createListView(cfg) {
       const nz = clampZ(pinch.z * (dist(e.touches) / pinch.d));
       if (nz === zoom) return;
       const k = nz / pinch.z;
+      follow = false;
       apply(nz);
       wrap.scrollLeft = (pinch.sl + pinch.cx) * k - pinch.cx;
       // 세로는 페이지가 스크롤되므로, 손가락 사이의 점이 같은 화면 높이에 있도록 페이지를 스크롤한다
@@ -646,7 +662,7 @@ function createListView(cfg) {
     const end = (e) => {
       if (e.touches.length < 2 && pinch) {
         pinch = null;
-        try { localStorage.setItem(ZOOM_KEY, String(zoom)); } catch (err) { /* 무시 */ }
+        if (!natural) { try { localStorage.setItem(ZOOM_KEY, String(zoom)); } catch (err) { /* 무시 */ } }
       }
     };
     wrap.addEventListener('touchend', end, { passive: true });
@@ -668,13 +684,14 @@ function createListView(cfg) {
     selA = selB = null;
     container.innerHTML = `
       <p class="notice" role="alert" hidden></p>
-      <div class="wish-layout">
+      <div class="wish-layout${cfg.wide ? ' wish-layout--wide' : ''}">
         <div class="table-area view-enter">
           <span class="zoom-hint" aria-hidden="true"></span>
           <button class="row-add" type="button" title="행 추가" aria-label="이 위치에 행 추가">${ROW_ADD_ICON}</button>
           <div class="wish-tabs" role="tablist" aria-label="잉크 / 만년필">
             ${TABS.map((t) => `<button class="notice-tab" type="button" role="tab" data-tab="${t.id}" aria-selected="${t.id === tab}">${t.label}</button>`).join('')}
           </div>
+          ${cfg.zoomNote ? '<p class="zoom-note">표는 확대/축소가 가능합니다!</p>' : ''}
           <div class="exch-empty" hidden></div>
           <div class="table-wrap" tabindex="0" role="region" aria-label="${cfg.ariaLabel}">
             <table class="grid"></table>
@@ -825,6 +842,7 @@ function createListView(cfg) {
   // NEW ARRIVALS > 잉크 (#/arrivals-ink), 만년필 (#/arrivals-pen): 얻은 잉크·만년필과 얻은 날짜
   const arrivals = createListView({
     route: 'arrivals', ariaLabel: '얻은 목록 표', migratePublic: false, importFile: true, sort: 'date', flags: ['bold'],
+    wide: true, naturalWidth: 860, zoomNote: true,   // 데스크톱에서는 보유 잉크 표처럼 넓게, 폰에서는 표 전체가 보이는 배율로 시작, 표 위에 확대·축소 안내
     sortTitle: '얻은 날짜순으로 정렬 (최근이 위)',
     tabs: [
       { id: 'ink', label: '잉크', field: 'arrivalsInk', empty: '아직 적은 잉크가 없습니다.', cols: [

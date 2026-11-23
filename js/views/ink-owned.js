@@ -737,7 +737,9 @@
     const clampZ = (n) => Math.floor(Math.max(minZoom(), Math.min(ZOOM_MAX, n)) * 1000) / 1000;
     let z = startZoom();
     let follow = true;   // 아직 손가락으로 조절한 적이 없으면 시작 배율에 계속 맞춤 (돌려서 가로로 봐도)
-    try { const s = Number(localStorage.getItem(ZOOM_KEY)); if (s > 0) { z = s; follow = false; } } catch (err) { /* 기억 못 해도 괜찮음 */ }
+    // 잉팔잉사는 들어올 때마다 표 전체가 보이는 배율(시작 배율)로 시작한다 (보유 잉크에서 정해 둔 배율을 가져오지 않고, 손가락으로 조절한 값도 기억하지 않는다)
+    const remember = !isTrade();
+    if (remember) { try { const s = Number(localStorage.getItem(ZOOM_KEY)); if (s > 0) { z = s; follow = false; } } catch (err) { /* 기억 못 해도 괜찮음 */ } }
     const apply = (n) => { z = clampZ(n); container.style.setProperty('--tz', String(z)); if (hscrollSync) hscrollSync(); };
     apply(z);
     zoomRefresh = () => apply(follow ? startZoom() : z);
@@ -784,7 +786,7 @@
     const end = (e) => {
       if (e.touches.length < 2 && pinch) {
         pinch = null;
-        try { localStorage.setItem(ZOOM_KEY, String(z)); } catch (err) { /* 무시 */ }
+        if (remember) { try { localStorage.setItem(ZOOM_KEY, String(z)); } catch (err) { /* 무시 */ } }
       }
     };
     wrap.addEventListener('touchend', end, { passive: true });
@@ -1717,6 +1719,7 @@
       <div class="table-area view-enter">
         <span class="zoom-hint" aria-hidden="true"></span>
         <button class="row-add" type="button" title="행 추가" aria-label="이 위치에 행 추가">${ROW_ADD_ICON}</button>
+        ${isTrade() ? '<p class="zoom-note">표는 확대/축소가 가능합니다!</p>' : ''}
         <ul class="menu" role="listbox" aria-label="본병/소분" hidden></ul>
         <div class="table-wrap" tabindex="0" role="region" aria-label="보유 잉크 표">
           <table class="grid" style="min-width:${BASE_WIDTH}px">

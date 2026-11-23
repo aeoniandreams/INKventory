@@ -917,3 +917,14 @@ html[data-layout] .is-editable .wish-layout .table-area { padding-left: 21px; ma
 .home-cats.is-dense .cat__tile { width: clamp(64px, 19vw, 96px); }
 .home-cats.is-dense .cat__title { white-space: normal; }
 @media (max-width: 480px) { .home-cats.is-dense .cat__title { font-size: 11px; letter-spacing: .04em; line-height: 1.25; } .home-cats.is-dense .cat__sub a { font-size: 12px; padding: 8px 4px; } }
+
+/* 표 위의 확대·축소 안내 (NEW ARRIVALS, 잉팔잉사): 표 안 글씨(.grid)와 같은 크기·굵기, 회색. 두 손가락 확대·축소는 폭 800px 이하에서만 되므로 그때만 보인다. */
+.zoom-note { display: none; margin: 0 0 8px; color: var(--muted); font-size: 14px; font-weight: 400; line-height: 1.4; text-align: center; }
+@media (max-width: 800px) { .zoom-note { display: block; } }
+@media (pointer: coarse) { .zoom-note { font-size: 13px; } }
+.is-trade .table-area { flex-direction: column; align-items: center; justify-content: flex-start; }   /* 안내 글을 표 위에 두려고 세로로 쌓음 (표는 전과 같이 가운데) */
+.is-trade .table-area .zoom-note { align-self: stretch; }
+
+/* NEW ARRIVALS: 데스크톱에서는 보유 잉크 표처럼 넓게 (열이 4개라서) */
+.wish-layout--wide { max-width: 1100px; }
+.wish-layout--wide .wish-tabs { max-width: 360px; }
