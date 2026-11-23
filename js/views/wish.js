@@ -4,13 +4,13 @@
 // 위쪽의 [잉크] [만년필] 두 박스로 표를 바꿔 본다 (박스를 누르면 화면 주소가 바뀌어 상단 바 제목·사이드바 표시가 함께 바뀐다).
 // 데이터: 관리자 전용 문서 inventory/inkPrivate 의 필드 (읽기·쓰기 모두 관리자만)
 //   · WISH  wishInk: [{brand, name, gray, bold}], wishPens: [{name, gray, bold}]
-//   · NEW ARRIVALS  arrivalsInk: [{brand, name, date, gray, bold}], arrivalsPens: [{name, date, gray, bold}]
+//   · NEW ARRIVALS  arrivalsInk: [{date, brand, name, place, gray, bold}], arrivalsPens: [{date, name, price, place, gray, bold}]  (구매처 = place, 구매 가격 = price)
 //   예전에 공개 문서(inventory/inkOwned)에 저장돼 있던 위시는 관리자가 WISH 를 처음 열 때 관리자 전용 문서로 옮기고 공개 문서에서는 지운다.
 // 보유 잉크 표와 같은 방식으로 고친다.
 //   · 칸을 고치면 자동 저장, 행과 행 사이에 마우스를 두면 나오는 아이콘으로 행 추가, 우클릭(폰은 길게 누르기)으로 행 삭제
 //   · 표 제목 줄 오른쪽 끝의 [정렬] (WISH: 가나다순·회색 행은 맨 아래 / NEW ARRIVALS: 얻은 날짜순, 최근이 위), 선택한 행 위에 뜨는 [회색] [굵게] 창 (NEW ARRIVALS 는 [굵게] 만)
 //   · 표는 자기만의 스크롤 막대 없이 길게 펼쳐지고, 이 사이트 페이지의 스크롤 막대로 내려서 본다 (제목 줄은 상단 바 아래에 붙어 따라옴)
-//   · 처음 내용(WISH): 표가 모두 비어 있으면 아래에 [파일에서 불러오기] 가 나온다 ({ wishInk: [...], wishPens: [...] } 모양의 JSON 파일. 저장소에는 올리지 않는다)
+//   · 처음 내용: 표가 모두 비어 있으면 아래에 [파일에서 불러오기] 가 나온다 (그 화면의 필드 이름으로 된 JSON 파일, 예: { wishInk: [...], wishPens: [...] }. 파일은 저장소에 올리지 않고 private/ 에 둔다)
 //   · 행 선택: 칸을 누르면 그 행이 선택된다. Shift 를 누르고 다른 칸을 누르면 그 사이 행이 모두 선택된다.
 (() => {
   'use strict';
@@ -584,7 +584,7 @@ function createListView(cfg) {
         let json = null;
         try { json = JSON.parse(String(fr.result)); } catch (e) { json = null; }
         const hit = json && TABS.filter((t) => Array.isArray(json[t.field]));
-        if (!hit || !hit.length) { showNotice('올바른 파일이 아닙니다. ({ "wishInk": [...], "wishPens": [...] } 모양이어야 합니다)', 5000); return; }
+        if (!hit || !hit.length) { showNotice('올바른 파일이 아닙니다. ({ ' + TABS.map((t) => '"' + t.field + '": [...]').join(', ') + ' } 모양이어야 합니다)', 5000); return; }
         hit.forEach((t) => { data[t.id] = cleanRows(t, json[t.field]).filter((r) => !isBlank(t, r)); schedule(t, 0); });
         clearSel();
         render();
@@ -824,17 +824,20 @@ function createListView(cfg) {
 
   // NEW ARRIVALS > 잉크 (#/arrivals-ink), 만년필 (#/arrivals-pen): 얻은 잉크·만년필과 얻은 날짜
   const arrivals = createListView({
-    route: 'arrivals', ariaLabel: '얻은 목록 표', migratePublic: false, importFile: false, sort: 'date', flags: ['bold'],
+    route: 'arrivals', ariaLabel: '얻은 목록 표', migratePublic: false, importFile: true, sort: 'date', flags: ['bold'],
     sortTitle: '얻은 날짜순으로 정렬 (최근이 위)',
     tabs: [
       { id: 'ink', label: '잉크', field: 'arrivalsInk', empty: '아직 적은 잉크가 없습니다.', cols: [
-        { k: 'brand', label: '브랜드명', w: 30, max: 100 },
-        { k: 'name', label: '잉크명', w: 44, max: 100 },
-        { k: 'date', label: '얻은 날짜', w: 26, max: 20 },
+        { k: 'date', label: '얻은 날짜', w: 14, max: 20 },
+        { k: 'brand', label: '브랜드명', w: 22, max: 300 },
+        { k: 'name', label: '잉크명', w: 44, max: 800 },
+        { k: 'place', label: '구매처', w: 20, max: 200 },
       ] },
       { id: 'pen', label: '만년필', field: 'arrivalsPens', empty: '아직 적은 만년필이 없습니다.', cols: [
-        { k: 'name', label: '제품명', w: 70, max: 100 },
-        { k: 'date', label: '얻은 날짜', w: 30, max: 20 },
+        { k: 'date', label: '얻은 날짜', w: 16, max: 20 },
+        { k: 'name', label: '제품명', w: 46, max: 400 },
+        { k: 'price', label: '구매 가격', w: 14, max: 40 },
+        { k: 'place', label: '구매처', w: 24, max: 200 },
       ] },
     ],
   });
