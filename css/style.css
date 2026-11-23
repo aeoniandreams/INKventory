@@ -911,3 +911,9 @@ html[data-layout] .is-editable .wish-layout .table-area { padding-left: 21px; ma
 @media (prefers-reduced-motion: reduce) { .cat__tile, .cat__sub-wrap, .cat__sub { transition: none; } }
 .wish-import { margin-top: 18px; text-align: center; }
 .wish-import[hidden] { display: none; }
+
+/* 시작 화면에 네모가 4개 이상일 때(관리자 모드): 이름이 긴 NEW ARRIVALS 도 들어가게 네모를 조금 줄이고, 좁은 폰에서는 이름을 두 줄로 */
+.home-cats.is-dense { gap: 0 clamp(6px, 2vw, 22px); }
+.home-cats.is-dense .cat__tile { width: clamp(64px, 19vw, 96px); }
+.home-cats.is-dense .cat__title { white-space: normal; }
+@media (max-width: 480px) { .home-cats.is-dense .cat__title { font-size: 11px; letter-spacing: .04em; line-height: 1.25; } .home-cats.is-dense .cat__sub a { font-size: 12px; padding: 8px 4px; } }

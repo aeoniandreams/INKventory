@@ -1,29 +1,26 @@
-// WISH 화면 (전체 화면 표, 관리자 모드 전용). 사이드바·시작 화면의 WISH > 잉크 (#/wish-ink), 만년필 (#/wish-pen) 로 들어온다.
-// 위쪽의 [잉크] [만년필] 두 박스로 표를 바꿔 본다: 잉크 = 브랜드명·잉크명 표, 만년필 = 제품명 표.
-// 데이터: 관리자 전용 문서 inventory/inkPrivate 의 wishInk: [{brand, name, gray, bold}], wishPens: [{name, gray, bold}] (읽기·쓰기 모두 관리자만).
-//   예전에 공개 문서(inventory/inkOwned)에 저장돼 있던 위시는 관리자가 이 화면을 처음 열 때 관리자 전용 문서로 옮기고 공개 문서에서는 지운다.
+// 표 목록 화면 (전체 화면 표, 관리자 모드 전용): WISH 와 NEW ARRIVALS 가 같은 코드를 쓴다 (createListView 에 설정만 다르게).
+//   · WISH           : 사이드바·시작 화면의 WISH > 잉크 (#/wish-ink), 만년필 (#/wish-pen)
+//   · NEW ARRIVALS   : NEW ARRIVALS > 잉크 (#/arrivals-ink), 만년필 (#/arrivals-pen) — 얻은 잉크·만년필과 얻은 날짜
+// 위쪽의 [잉크] [만년필] 두 박스로 표를 바꿔 본다 (박스를 누르면 화면 주소가 바뀌어 상단 바 제목·사이드바 표시가 함께 바뀐다).
+// 데이터: 관리자 전용 문서 inventory/inkPrivate 의 필드 (읽기·쓰기 모두 관리자만)
+//   · WISH  wishInk: [{brand, name, gray, bold}], wishPens: [{name, gray, bold}]
+//   · NEW ARRIVALS  arrivalsInk: [{brand, name, date, gray, bold}], arrivalsPens: [{name, date, gray, bold}]
+//   예전에 공개 문서(inventory/inkOwned)에 저장돼 있던 위시는 관리자가 WISH 를 처음 열 때 관리자 전용 문서로 옮기고 공개 문서에서는 지운다.
 // 보유 잉크 표와 같은 방식으로 고친다.
 //   · 칸을 고치면 자동 저장, 행과 행 사이에 마우스를 두면 나오는 아이콘으로 행 추가, 우클릭(폰은 길게 누르기)으로 행 삭제
-//   · 표 제목 줄 오른쪽 끝의 [정렬] (가나다순, 회색 행은 맨 아래), 선택한 행 위에 뜨는 [회색] [굵게] 창
+//   · 표 제목 줄 오른쪽 끝의 [정렬] (WISH: 가나다순·회색 행은 맨 아래 / NEW ARRIVALS: 얻은 날짜순, 최근이 위), 선택한 행 위에 뜨는 [회색] [굵게] 창
 //   · 표는 자기만의 스크롤 막대 없이 길게 펼쳐지고, 이 사이트 페이지의 스크롤 막대로 내려서 본다 (제목 줄은 상단 바 아래에 붙어 따라옴)
-//   · 처음 내용: 표가 모두 비어 있으면 아래에 [파일에서 불러오기] 가 나온다 ({ wishInk: [...], wishPens: [...] } 모양의 JSON 파일. 저장소에는 올리지 않는다)
+//   · 처음 내용(WISH): 표가 모두 비어 있으면 아래에 [파일에서 불러오기] 가 나온다 ({ wishInk: [...], wishPens: [...] } 모양의 JSON 파일. 저장소에는 올리지 않는다)
 //   · 행 선택: 칸을 누르면 그 행이 선택된다. Shift 를 누르고 다른 칸을 누르면 그 사이 행이 모두 선택된다.
 (() => {
   'use strict';
 
+function createListView(cfg) {
   const DOC_PATH = ['inventory', 'inkPrivate'];     // 관리자 전용 문서 (위시를 저장하는 곳)
   const PUBLIC_PATH = ['inventory', 'inkOwned'];    // 예전에 위시를 저장하던 공개 문서 (옮기기·지우기용)
   const MAX_ROWS = 300;
   const SAVE_DELAY = 600;
-  const TABS = [
-    { id: 'ink', label: '잉크', field: 'wishInk', empty: '등록된 위시 잉크가 없습니다.', cols: [
-      { k: 'brand', label: '브랜드명', w: 40, max: 100 },
-      { k: 'name', label: '잉크명', w: 60, max: 100 },
-    ] },
-    { id: 'pen', label: '만년필', field: 'wishPens', empty: '등록된 위시 만년필이 없습니다.', cols: [
-      { k: 'name', label: '제품명', w: 100, max: 100 },
-    ] },
-  ];
+  const TABS = cfg.tabs;
   const tabOf = (id) => TABS.find((t) => t.id === id);
 
   const ROW_ADD_ICON = '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 17a2 2 0 0 1-2 2H7.2l-5.2 2L4 15.8V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M13 8v6"/><path d="M10 11h6"/></svg>';
@@ -140,7 +137,7 @@
       const pd = snap.exists() ? snap.data() : {};
       const rowsOf = (t) => (Array.isArray(pd[t.field]) ? pd[t.field] : null);
       // 예전 공개 문서의 위시 → 관리자 전용 문서로 (관리자 전용 문서에 없는 표만 옮기고, 옮긴 뒤에 공개 문서에서 지운다)
-      const pub = await readPublicWish();
+      const pub = cfg.migratePublic ? await readPublicWish() : {};
       const moved = {};
       TABS.forEach((t) => { if (!rowsOf(t) && pub[t.field]) moved[t.field] = pub[t.field]; });
       if (Object.keys(moved).length) { await setDoc(priv, moved, { merge: true }); Object.assign(pd, moved); }
@@ -220,7 +217,7 @@
     const msg = root.querySelector('.exch-empty');
     const table = root.querySelector('table.grid');
     const imp = root.querySelector('.wish-import');
-    if (imp) imp.hidden = !(canEdit() && loadedOnce && TABS.every((x) => !data[x.id].some((r) => !isBlank(x, r))));
+    if (imp) imp.hidden = !(cfg.importFile && canEdit() && loadedOnce && TABS.every((x) => !data[x.id].some((r) => !isBlank(x, r))));
     if (!loadedOnce) {
       wrap.hidden = true; msg.hidden = false;
       msg.textContent = loadState === 'error' ? '불러오지 못했습니다. 새로고침해 주세요.' : '불러오는 중…';
@@ -239,7 +236,7 @@
     const top = wrap.scrollTop;
     table.innerHTML = `<colgroup>${t.cols.map((c) => `<col style="width:${((c.w / total) * 100).toFixed(2)}%">`).join('')}</colgroup>`
       + `<thead><tr>${t.cols.map((c, ci) => (edit && ci === t.cols.length - 1
-        ? `<th scope="col"><div class="th-row"><span>${esc(c.label)}</span><button class="sort-btn th-sort" type="button" title="가나다순으로 정렬 (회색 행은 맨 아래)" aria-label="가나다순으로 정렬">${SORT_ICON}<span class="lbl">정렬</span></button></div></th>`
+        ? `<th scope="col"><div class="th-row"><span>${esc(c.label)}</span><button class="sort-btn th-sort" type="button" title="${cfg.sortTitle}" aria-label="${cfg.sortTitle}">${SORT_ICON}<span class="lbl">정렬</span></button></div></th>`
         : `<th scope="col">${esc(c.label)}</th>`)).join('')}</tr></thead>`
       + `<tbody>${shown.map((i) => rowHtml(t, rows[i], i, edit)).join('')}</tbody>`;
     wrap.scrollTop = top;
@@ -359,9 +356,37 @@
 
   // ── 정렬 ──
   // 가나다순(잉크: 브랜드 → 잉크명, 만년필: 제품명). 회색 행은 맨 아래로 내려가고 그 안에서도 가나다순. 빈 행은 맨 끝.
+  // 얻은 날짜 열 값을 비교용 숫자로 (2026-11-23, 2026.11.23, 26/11/23 등). 날짜를 읽을 수 없으면 null.
+  function dateKey(v) {
+    const m = String(v || '').match(/(\d{2,4})\D+(\d{1,2})\D+(\d{1,2})/);
+    if (!m) return null;
+    let y = Number(m[1]);
+    if (y < 100) y += 2000;
+    return y * 10000 + Number(m[2]) * 100 + Number(m[3]);
+  }
+
   function sortRows() {
     if (!canEdit()) return;
     const t = tabNow();
+    if (cfg.sort === 'date') {          // 얻은 날짜순: 최근이 위, 날짜가 없는 행은 아래, 빈 행은 맨 끝 (같으면 지금 순서 유지)
+      const rows0 = rowsOf();
+      const k = new Map(rows0.map((r) => [r, dateKey(r.date)]));
+      const sorted = rows0.slice().sort((x, y) => {
+        const bx = isBlank(t, x); const by = isBlank(t, y);
+        if (bx !== by) return bx ? 1 : -1;
+        const a = k.get(x); const b = k.get(y);
+        if ((a === null) !== (b === null)) return a === null ? 1 : -1;
+        if (a !== null && a !== b) return b - a;
+        return 0;
+      });
+      if (sorted.every((r, i) => r === rows0[i])) { showNotice('이미 정렬되어 있습니다.', 2500); return; }
+      data[tab] = sorted;
+      clearSel();
+      closeCtx();
+      render();
+      schedule(t, 0);
+      return;
+    }
     const S = window.INKSORT || { sortText: (s) => String(s || '').toLowerCase(), compareText: (a, b) => (a < b ? -1 : a > b ? 1 : 0) };
     const rows = rowsOf();
     const keys = new Map(rows.map((r) => [r, t.cols.map((c) => S.sortText(r[c.k]))]));
@@ -649,7 +674,7 @@
             ${TABS.map((t) => `<button class="notice-tab" type="button" role="tab" data-tab="${t.id}" aria-selected="${t.id === tab}">${t.label}</button>`).join('')}
           </div>
           <div class="exch-empty" hidden></div>
-          <div class="table-wrap" tabindex="0" role="region" aria-label="위시 표">
+          <div class="table-wrap" tabindex="0" role="region" aria-label="${cfg.ariaLabel}">
             <table class="grid"></table>
           </div>
           <div class="wish-import" hidden>
@@ -667,7 +692,7 @@
     container.querySelector('.wish-tabs').addEventListener('click', (e) => {
       const b = e.target.closest('.notice-tab');
       if (!b || b.dataset.tab === tab) return;
-      location.hash = '#/wish-' + b.dataset.tab;    // 주소·상단 바 제목·사이드바 표시가 함께 바뀌도록 화면 주소를 바꾼다 (표 자료는 이미 받아 둔 것을 그대로 씀)
+      location.hash = '#/' + cfg.route + '-' + b.dataset.tab;    // 주소·상단 바 제목·사이드바 표시가 함께 바뀌도록 화면 주소를 바꾼다 (표 자료는 이미 받아 둔 것을 그대로 씀)
     });
 
     wrap.addEventListener('focusin', (e) => {
@@ -772,9 +797,45 @@
     showStatus();
   }
 
-  window.INKVENTORY_VIEWS = window.INKVENTORY_VIEWS || {};
   const onMode = () => { if (root) { if (isAdminMode()) { INKFB.db().catch(() => {}); } applyEditable(); } };
+  return { mount, unmount, onMode };
+}
+
+  window.INKVENTORY_VIEWS = window.INKVENTORY_VIEWS || {};
+
   // WISH > 잉크 (#/wish-ink), WISH > 만년필 (#/wish-pen). 예전 주소 #/wish 는 app.js 가 #/wish-ink 로 보낸다.
-  window.INKVENTORY_VIEWS['wish-ink'] = { mount: (c) => mount(c, 'ink'), unmount, onMode };
-  window.INKVENTORY_VIEWS['wish-pen'] = { mount: (c) => mount(c, 'pen'), unmount, onMode };
+  const wish = createListView({
+    route: 'wish', ariaLabel: '위시 표', migratePublic: true, importFile: true, sort: 'text',
+    sortTitle: '가나다순으로 정렬 (회색 행은 맨 아래)',
+    tabs: [
+      { id: 'ink', label: '잉크', field: 'wishInk', empty: '등록된 위시 잉크가 없습니다.', cols: [
+        { k: 'brand', label: '브랜드명', w: 40, max: 100 },
+        { k: 'name', label: '잉크명', w: 60, max: 100 },
+      ] },
+      { id: 'pen', label: '만년필', field: 'wishPens', empty: '등록된 위시 만년필이 없습니다.', cols: [
+        { k: 'name', label: '제품명', w: 100, max: 100 },
+      ] },
+    ],
+  });
+  window.INKVENTORY_VIEWS['wish-ink'] = { mount: (c) => wish.mount(c, 'ink'), unmount: wish.unmount, onMode: wish.onMode };
+  window.INKVENTORY_VIEWS['wish-pen'] = { mount: (c) => wish.mount(c, 'pen'), unmount: wish.unmount, onMode: wish.onMode };
+
+  // NEW ARRIVALS > 잉크 (#/arrivals-ink), 만년필 (#/arrivals-pen): 얻은 잉크·만년필과 얻은 날짜
+  const arrivals = createListView({
+    route: 'arrivals', ariaLabel: '얻은 목록 표', migratePublic: false, importFile: false, sort: 'date',
+    sortTitle: '얻은 날짜순으로 정렬 (최근이 위)',
+    tabs: [
+      { id: 'ink', label: '잉크', field: 'arrivalsInk', empty: '아직 적은 잉크가 없습니다.', cols: [
+        { k: 'brand', label: '브랜드명', w: 30, max: 100 },
+        { k: 'name', label: '잉크명', w: 44, max: 100 },
+        { k: 'date', label: '얻은 날짜', w: 26, max: 20 },
+      ] },
+      { id: 'pen', label: '만년필', field: 'arrivalsPens', empty: '아직 적은 만년필이 없습니다.', cols: [
+        { k: 'name', label: '제품명', w: 70, max: 100 },
+        { k: 'date', label: '얻은 날짜', w: 30, max: 20 },
+      ] },
+    ],
+  });
+  window.INKVENTORY_VIEWS['arrivals-ink'] = { mount: (c) => arrivals.mount(c, 'ink'), unmount: arrivals.unmount, onMode: arrivals.onMode };
+  window.INKVENTORY_VIEWS['arrivals-pen'] = { mount: (c) => arrivals.mount(c, 'pen'), unmount: arrivals.unmount, onMode: arrivals.onMode };
 })();
