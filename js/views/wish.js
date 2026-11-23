@@ -8,7 +8,7 @@
 //   예전에 공개 문서(inventory/inkOwned)에 저장돼 있던 위시는 관리자가 WISH 를 처음 열 때 관리자 전용 문서로 옮기고 공개 문서에서는 지운다.
 // 보유 잉크 표와 같은 방식으로 고친다.
 //   · 칸을 고치면 자동 저장, 행과 행 사이에 마우스를 두면 나오는 아이콘으로 행 추가, 우클릭(폰은 길게 누르기)으로 행 삭제
-//   · 표 제목 줄 오른쪽 끝의 [정렬] (WISH: 가나다순·회색 행은 맨 아래 / NEW ARRIVALS: 얻은 날짜순, 최근이 위), 선택한 행 위에 뜨는 [회색] [굵게] 창
+//   · 표 제목 줄 오른쪽 끝의 [정렬] (WISH: 가나다순·회색 행은 맨 아래 / NEW ARRIVALS: 얻은 날짜순, 최근이 위), 선택한 행 위에 뜨는 [회색] [굵게] 창 (NEW ARRIVALS 는 [굵게] 만)
 //   · 표는 자기만의 스크롤 막대 없이 길게 펼쳐지고, 이 사이트 페이지의 스크롤 막대로 내려서 본다 (제목 줄은 상단 바 아래에 붙어 따라옴)
 //   · 처음 내용(WISH): 표가 모두 비어 있으면 아래에 [파일에서 불러오기] 가 나온다 ({ wishInk: [...], wishPens: [...] } 모양의 JSON 파일. 저장소에는 올리지 않는다)
 //   · 행 선택: 칸을 누르면 그 행이 선택된다. Shift 를 누르고 다른 칸을 누르면 그 사이 행이 모두 선택된다.
@@ -322,8 +322,10 @@ function createListView(cfg) {
     pop.setAttribute('role', 'toolbar');
     pop.setAttribute('aria-label', '선택한 행 표시');
     pop.hidden = true;
-    pop.innerHTML = `<button type="button" class="pop-btn gray-btn" data-flag="gray" aria-pressed="false" title="회색으로 (다시 누르면 해제)" aria-label="회색으로">${GRAY_ICON}</button>`
-      + `<button type="button" class="pop-btn" data-flag="bold" aria-pressed="false" title="굵게 (다시 누르면 해제)" aria-label="굵게">${BOLD_ICON}</button>`;
+    // 선택한 행에 적용할 표시: 기본은 [회색] [굵게], 설정(cfg.flags)으로 줄일 수 있다 (NEW ARRIVALS 는 굵게만)
+    const flags = cfg.flags || ['gray', 'bold'];
+    pop.innerHTML = (flags.includes('gray') ? `<button type="button" class="pop-btn gray-btn" data-flag="gray" aria-pressed="false" title="회색으로 (다시 누르면 해제)" aria-label="회색으로">${GRAY_ICON}</button>` : '')
+      + (flags.includes('bold') ? `<button type="button" class="pop-btn" data-flag="bold" aria-pressed="false" title="굵게 (다시 누르면 해제)" aria-label="굵게">${BOLD_ICON}</button>` : '');
     pop.addEventListener('mousedown', (e) => e.preventDefault());    // 눌러도 칸의 커서가 그대로 있게
     pop.addEventListener('click', (e) => { const b = e.target.closest('[data-flag]'); if (b) toggleFlag(b.dataset.flag); });
     document.body.appendChild(pop);
@@ -822,7 +824,7 @@ function createListView(cfg) {
 
   // NEW ARRIVALS > 잉크 (#/arrivals-ink), 만년필 (#/arrivals-pen): 얻은 잉크·만년필과 얻은 날짜
   const arrivals = createListView({
-    route: 'arrivals', ariaLabel: '얻은 목록 표', migratePublic: false, importFile: false, sort: 'date',
+    route: 'arrivals', ariaLabel: '얻은 목록 표', migratePublic: false, importFile: false, sort: 'date', flags: ['bold'],
     sortTitle: '얻은 날짜순으로 정렬 (최근이 위)',
     tabs: [
       { id: 'ink', label: '잉크', field: 'arrivalsInk', empty: '아직 적은 잉크가 없습니다.', cols: [
