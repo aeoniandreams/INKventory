@@ -691,7 +691,7 @@ function createListView(cfg) {
           <div class="wish-tabs" role="tablist" aria-label="잉크 / 만년필">
             ${TABS.map((t) => `<button class="notice-tab" type="button" role="tab" data-tab="${t.id}" aria-selected="${t.id === tab}">${t.label}</button>`).join('')}
           </div>
-          ${cfg.zoomNote ? '<p class="zoom-note">표는 확대/축소가 가능합니다!</p>' : ''}
+          ${cfg.zoomNote ? '<p class="zoom-note">표는 확대/축소가 가능합니다! (모바일 ver.)</p>' : ''}
           <div class="exch-empty" hidden></div>
           <div class="table-wrap" tabindex="0" role="region" aria-label="${cfg.ariaLabel}">
             <table class="grid"></table>
@@ -846,16 +846,16 @@ function createListView(cfg) {
     sortTitle: '얻은 날짜순으로 정렬 (최근이 위)',
     tabs: [
       { id: 'ink', label: '잉크', field: 'arrivalsInk', empty: '아직 적은 잉크가 없습니다.', cols: [
-        { k: 'date', label: '얻은 날짜', w: 14, max: 20 },
-        { k: 'brand', label: '브랜드명', w: 22, max: 300 },
-        { k: 'name', label: '잉크명', w: 44, max: 800 },
-        { k: 'place', label: '구매처', w: 20, max: 200 },
+        { k: 'date', label: '얻은 날짜', w: 17.1, max: 20 },       // 너비(%): 브랜드명은 이전의 60%, 구매처는 이전의 80% (남는 너비는 날짜·잉크명이 나눠 가짐)
+        { k: 'brand', label: '브랜드명', w: 13.2, max: 300 },
+        { k: 'name', label: '잉크명', w: 53.7, max: 800 },
+        { k: 'place', label: '구매처', w: 16, max: 200 },
       ] },
       { id: 'pen', label: '만년필', field: 'arrivalsPens', empty: '아직 적은 만년필이 없습니다.', cols: [
-        { k: 'date', label: '얻은 날짜', w: 16, max: 20 },
-        { k: 'name', label: '제품명', w: 46, max: 400 },
-        { k: 'price', label: '구매 가격', w: 14, max: 40 },
-        { k: 'place', label: '구매처', w: 24, max: 200 },
+        { k: 'date', label: '얻은 날짜', w: 17, max: 20 },
+        { k: 'name', label: '제품명', w: 48.9, max: 400 },
+        { k: 'price', label: '구매 가격', w: 14.9, max: 40 },
+        { k: 'place', label: '구매처', w: 19.2, max: 200 },     // 구매처는 이전(24%)의 80%
       ] },
     ],
   });

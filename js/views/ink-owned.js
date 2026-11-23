@@ -1719,7 +1719,7 @@
       <div class="table-area view-enter">
         <span class="zoom-hint" aria-hidden="true"></span>
         <button class="row-add" type="button" title="행 추가" aria-label="이 위치에 행 추가">${ROW_ADD_ICON}</button>
-        ${isTrade() ? '<p class="zoom-note">표는 확대/축소가 가능합니다!</p>' : ''}
+        ${isTrade() ? '<p class="zoom-note">표는 확대/축소가 가능합니다! (모바일 ver.)</p>' : ''}
         <ul class="menu" role="listbox" aria-label="본병/소분" hidden></ul>
         <div class="table-wrap" tabindex="0" role="region" aria-label="보유 잉크 표">
           <table class="grid" style="min-width:${BASE_WIDTH}px">
