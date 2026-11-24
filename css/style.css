@@ -608,7 +608,7 @@ html[data-layout="normal"] .is-trade .ink-layout { max-width: none; }
 
 /* 일반 모드에서 패널과 표 사이가 너무 멀어지지 않게: 묶음 전체의 너비를 "패널 + 표 + 사이 간격(--table-gap)"까지만 */
 html[data-layout="normal"] .ink-layout {
-  --table-gap: 150px;
+  --table-gap: 56px;
   max-width: calc(var(--sidebar-w) - var(--main-pl) + var(--table-gap) + var(--normal-w) + 12px);
 }
 
