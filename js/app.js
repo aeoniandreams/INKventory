@@ -166,7 +166,11 @@
   // ── 일반 / 관리자 모드 (Firebase Authentication · Google 로그인) ──
   // 관리자 = config.js 의 adminUid 와 UID 가 같은 구글 계정 한 개.
   // 화면 표시는 편의일 뿐이고, 실제 수정 권한은 Firestore 보안 규칙(서버)에서 같은 UID 로 막는다.
-  const HINT_KEY = 'inkventory.signedin';   // 이 탭에서 로그인한 적이 있음 → 시작할 때 SDK 미리 로드
+  // 로그인은 브라우저를 껐다 켜도 LOGIN_DAYS 일 동안 유지된다 (Firebase 가 이 기기에 로그인 정보를 보관, 로그아웃하면 바로 지워짐).
+  // 처음 로그인한 때를 이 기기에 적어 두고(HINT_KEY), 그 뒤 LOGIN_DAYS 일이 지나면 자동으로 로그아웃해서 다시 로그인하게 한다.
+  // 적혀 있으면 시작할 때 로그인 SDK 를 미리 불러 로그인 상태를 바로 확인한다. (index.html 의 head 스크립트도 같은 값을 쓴다)
+  const HINT_KEY = 'inkventory.admin.since';
+  const LOGIN_DAYS = 30;
   const REDIRECT_KEY = 'inkventory.redirect';
   const cfg = window.INKVENTORY_CONFIG || {};
 
@@ -183,12 +187,22 @@
     del(k) { try { sessionStorage.removeItem(k); } catch (e) {} },
   };
 
+  // 이 기기의 "관리자 로그인 시작 시각" 기록
+  const loginStore = {
+    since() { try { const v = Number(localStorage.getItem(HINT_KEY)); return v > 0 ? v : 0; } catch (e) { return 0; } },
+    valid() { const t = this.since(); return t > 0 && Date.now() - t < LOGIN_DAYS * 86400000; },
+    expired() { const t = this.since(); return t > 0 && Date.now() - t >= LOGIN_DAYS * 86400000; },
+    start() { try { localStorage.setItem(HINT_KEY, String(Date.now())); } catch (e) {} },
+    clear() { try { localStorage.removeItem(HINT_KEY); } catch (e) {} },
+  };
+  try { sessionStorage.removeItem('inkventory.signedin'); } catch (e) {}   // 예전 방식(이 탭에서만 기억)의 흔적
+
   let isAdmin = false;
   let fb = null; // 로드된 Firebase SDK
 
   // 화면 배치(layout)는 일반/관리자 모드에 따라 다르다(표의 열 구성 등). 새로고침해도 관리자 배치가 깜빡이지 않도록,
   // 이 탭에서 로그인한 적이 있으면(힌트) 로그인 확인이 끝날 때까지는 관리자 배치로 미리 보여 준다. (index.html 의 head 스크립트가 처음 값을 정함)
-  const hintAtStart = !!session.get(HINT_KEY);
+  const hintAtStart = loginStore.valid();
   let authResolved = false;
 
   function applyMode() {
@@ -222,7 +236,15 @@
         fb.onAuthStateChanged(fb.auth, (user) => {
           authResolved = true;
           isAdmin = !!user && !!cfg.adminUid && user.uid === cfg.adminUid;
-          if (isAdmin) session.set(HINT_KEY, '1'); else session.del(HINT_KEY);
+          if (isAdmin && loginStore.expired()) {        // 로그인한 지 LOGIN_DAYS 일이 지남 → 자동 로그아웃 (다시 로그인하게)
+            isAdmin = false;
+            loginStore.clear();
+            Promise.resolve(fb.signOut(fb.auth)).catch(() => {});
+          } else if (isAdmin) {
+            if (!loginStore.since()) loginStore.start();   // 처음 로그인한 때를 적어 둔다
+          } else {
+            loginStore.clear();
+          }
           applyMode();
         });
         return fb;
@@ -297,7 +319,7 @@
   // 안내 없이 즉시 일반 모드로 전환
   async function signOut() {
     isAdmin = false;
-    session.del(HINT_KEY);
+    loginStore.clear();
     applyMode();
     try {
       if (fb) await fb.signOut(fb.auth);
@@ -312,8 +334,8 @@
 
   applyMode();
 
-  // 이 탭에서 로그인한 적이 있거나 리다이렉트로 돌아온 경우에만 시작할 때 SDK 로드
-  if (session.get(HINT_KEY) || session.get(REDIRECT_KEY)) {
+  // 이 기기에서 로그인한 적이 있거나(기간이 지났어도: 그때는 불러와서 로그아웃시킴) 리다이렉트로 돌아온 경우에만 시작할 때 SDK 로드
+  if (loginStore.since() || session.get(REDIRECT_KEY)) {
     const fromRedirect = !!session.get(REDIRECT_KEY);
     loadFirebase().then(async () => {
       if (!fromRedirect) return;

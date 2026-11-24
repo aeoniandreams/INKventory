@@ -32,7 +32,7 @@
       authP = (async () => {
         const [a, m] = await Promise.all([app(), load('firebase-auth')]);
         const instance = m.getAuth(a);
-        await m.setPersistence(instance, m.browserSessionPersistence); // 탭을 닫으면 로그아웃
+        await m.setPersistence(instance, m.browserLocalPersistence);   // 브라우저를 껐다 켜도 로그인 유지 (최대 며칠인지는 js/app.js 의 LOGIN_DAYS)
         return { auth: instance, ...m };
       })();
       authP.catch(() => { authP = null; });
