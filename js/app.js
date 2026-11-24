@@ -166,11 +166,12 @@
   // ── 일반 / 관리자 모드 (Firebase Authentication · Google 로그인) ──
   // 관리자 = config.js 의 adminUid 와 UID 가 같은 구글 계정 한 개.
   // 화면 표시는 편의일 뿐이고, 실제 수정 권한은 Firestore 보안 규칙(서버)에서 같은 UID 로 막는다.
-  // 로그인은 브라우저를 껐다 켜도 LOGIN_DAYS 일 동안 유지된다 (Firebase 가 이 기기에 로그인 정보를 보관, 로그아웃하면 바로 지워짐).
-  // 처음 로그인한 때를 이 기기에 적어 두고(HINT_KEY), 그 뒤 LOGIN_DAYS 일이 지나면 자동으로 로그아웃해서 다시 로그인하게 한다.
+  // 로그인은 브라우저를 껐다 켜도 유지된다 (Firebase 가 이 기기에 로그인 정보를 보관, 로그아웃하면 바로 지워짐).
+  // 마지막으로 접속한 때를 이 기기에 적어 두고(HINT_KEY), 마지막 접속 뒤 LOGIN_DAYS 일 동안 들어오지 않으면 자동으로 로그아웃해서 다시 로그인하게 한다.
+  // LOGIN_DAYS 일이 지나기 전에 다시 접속하면 그날부터 다시 LOGIN_DAYS 일을 센다 (접속할 때마다 새로 센다).
   // 적혀 있으면 시작할 때 로그인 SDK 를 미리 불러 로그인 상태를 바로 확인한다. (index.html 의 head 스크립트도 같은 값을 쓴다)
   const HINT_KEY = 'inkventory.admin.since';
-  const LOGIN_DAYS = 30;
+  const LOGIN_DAYS = 7;
   const REDIRECT_KEY = 'inkventory.redirect';
   const cfg = window.INKVENTORY_CONFIG || {};
 
@@ -187,7 +188,7 @@
     del(k) { try { sessionStorage.removeItem(k); } catch (e) {} },
   };
 
-  // 이 기기의 "관리자 로그인 시작 시각" 기록
+  // 이 기기의 "관리자 마지막 접속 시각" 기록
   const loginStore = {
     since() { try { const v = Number(localStorage.getItem(HINT_KEY)); return v > 0 ? v : 0; } catch (e) { return 0; } },
     valid() { const t = this.since(); return t > 0 && Date.now() - t < LOGIN_DAYS * 86400000; },
@@ -241,7 +242,7 @@
             loginStore.clear();
             Promise.resolve(fb.signOut(fb.auth)).catch(() => {});
           } else if (isAdmin) {
-            if (!loginStore.since()) loginStore.start();   // 처음 로그인한 때를 적어 둔다
+            loginStore.start();                            // 접속했으니 마지막 접속 시각을 지금으로 (여기서부터 LOGIN_DAYS 일을 다시 센다)
           } else {
             loginStore.clear();
           }
@@ -325,6 +326,12 @@
       if (fb) await fb.signOut(fb.auth);
     } catch (err) { /* 화면은 이미 일반 모드. 서버 세션은 탭을 닫으면 사라짐 */ }
   }
+
+  // 탭을 열어 둔 채 며칠이 지나도 같은 규칙: 화면이 다시 보일 때 기간이 지났으면 로그아웃, 아니면 마지막 접속 시각을 새로 적는다
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible' || !isAdmin) return;
+    if (loginStore.expired()) signOut(); else loginStore.start();
+  });
 
   idBtn.addEventListener('click', openAuth);
   googleBtn.addEventListener('click', signIn);
