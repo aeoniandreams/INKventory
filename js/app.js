@@ -456,6 +456,30 @@
 
   window.addEventListener('hashchange', render);
 
+  // ── 맨 위 / 맨 아래로 바로 가는 버튼 (화면 오른쪽 아래) ──
+  // 페이지가 화면보다 충분히 길 때만 보이고, 이미 맨 위면 위 버튼, 이미 맨 아래면 아래 버튼은 숨긴다.
+  const scrollBtns = $('#scrollBtns');
+  const scrollTopBtn = $('#scrollTopBtn');
+  const scrollBottomBtn = $('#scrollBottomBtn');
+  const pageH = () => Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
+  function updateScrollBtns() {
+    if (!scrollBtns) return;
+    const room = pageH() - window.innerHeight;
+    const y = window.scrollY || document.documentElement.scrollTop || 0;
+    scrollBtns.hidden = room < 80;
+    scrollTopBtn.hidden = y < 40;
+    scrollBottomBtn.hidden = room - y < 40;
+  }
+  if (scrollBtns) {
+    scrollTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'auto' }));
+    scrollBottomBtn.addEventListener('click', () => window.scrollTo({ top: pageH(), behavior: 'auto' }));
+    window.addEventListener('scroll', updateScrollBtns, { passive: true });
+    window.addEventListener('resize', updateScrollBtns);
+    window.addEventListener('hashchange', () => setTimeout(updateScrollBtns, 60));
+    if (window.ResizeObserver) new ResizeObserver(updateScrollBtns).observe(main);     // 표가 불러와져 페이지가 길어지거나 짧아질 때
+    setTimeout(updateScrollBtns, 0);
+  }
+
   renderNav();
   render();
   appStarted = true;

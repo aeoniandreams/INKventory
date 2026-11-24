@@ -19,7 +19,7 @@
         href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-jp-dynamic-subset.css">
 
   <!-- 파일 주소 끝의 ?v= 숫자: css/js 를 고칠 때마다 함께 올린다. (index.html 과 css/js 가 서로 다른 시점의 것으로 섞여 앱이 멈추는 일을 막음) -->
-  <link rel="stylesheet" href="css/style.css?v=20261125b">
+  <link rel="stylesheet" href="css/style.css?v=20261125c">
 
   <!-- 화면 배치: 이 기기에서 관리자로 마지막 접속한 지 7일이 안 됐으면 관리자 배치로 시작(첫 화면 깜빡임 방지). 아니면 일반 배치. -->
   <script>
@@ -29,7 +29,7 @@
 
   <!-- 데이터 로딩 최적화: 보유 잉크 화면으로 바로 들어오면(새로고침 등) 다른 스크립트가 준비되기 전에 데이터 요청부터 시작 -->
   <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
-  <script src="js/config.js?v=20261125b"></script>
+  <script src="js/config.js?v=20261125c"></script>
   <script>
     try {
       var fbc = window.INKVENTORY_CONFIG && window.INKVENTORY_CONFIG.firebase;
@@ -96,6 +96,16 @@
     <main class="main" id="main" tabindex="-1"></main>
   </div>
 
+  <!-- 화면 오른쪽 아래: 맨 위 / 맨 아래로 바로 가는 버튼 (페이지가 길 때만 보임, js/app.js) -->
+  <div class="scroll-btns" id="scrollBtns" hidden>
+    <button class="scroll-btn" id="scrollTopBtn" type="button" title="맨 위로" aria-label="화면 맨 위로">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>
+    </button>
+    <button class="scroll-btn" id="scrollBottomBtn" type="button" title="맨 아래로" aria-label="화면 맨 아래로">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
+  </div>
+
   <dialog class="dialog" id="authDialog" aria-labelledby="authTitle">
     <div class="dialog__body">
       <h2 class="dialog__title" id="authTitle">관리자 모드</h2>
@@ -108,11 +118,11 @@
     </div>
   </dialog>
 
-  <script src="js/fb.js?v=20261125b"></script>
-  <script src="js/views/ink-owned.js?v=20261125b"></script>
-  <script src="js/views/ink-export.js?v=20261125b"></script>
-  <script src="js/views/ink-notice.js?v=20261125b"></script>
-  <script src="js/views/wish.js?v=20261125b"></script>
-  <script src="js/app.js?v=20261125b"></script>
+  <script src="js/fb.js?v=20261125c"></script>
+  <script src="js/views/ink-owned.js?v=20261125c"></script>
+  <script src="js/views/ink-export.js?v=20261125c"></script>
+  <script src="js/views/ink-notice.js?v=20261125c"></script>
+  <script src="js/views/wish.js?v=20261125c"></script>
+  <script src="js/app.js?v=20261125c"></script>
 </body>
 </html>

@@ -927,3 +927,17 @@ html[data-layout] .is-editable .wish-layout .table-area { padding-left: 21px; ma
 
 /* NEW ARRIVALS: 데스크톱에서는 보유 잉크 표처럼 넓게 (열이 4개라서) */
 .wish-layout--wide { max-width: 1100px; }
+
+/* 화면 오른쪽 아래의 맨 위 / 맨 아래 버튼 */
+.scroll-btns { position: fixed; right: 16px; bottom: 26px; z-index: 12; display: flex; flex-direction: column; gap: 8px; }   /* 26px: 표 아래에 뜨는 가로 스크롤 막대(.hbar)보다 위 */
+.scroll-btns[hidden], .scroll-btn[hidden] { display: none; }
+.scroll-btn {
+  width: 40px; height: 40px; padding: 0; display: grid; place-items: center;
+  background: var(--surface); color: var(--accent); border: 1px solid var(--line); border-radius: 12px; cursor: pointer;
+  box-shadow: 0 2px 4px rgba(20, 24, 36, .12), 0 6px 16px rgba(20, 24, 36, .22);   /* 표와 겹쳐도 구분되도록 그림자를 깔아 둔다 */
+  transition: background-color .15s, color .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+@media (hover: hover) { .scroll-btn:hover { background: var(--accent-soft); } }
+.scroll-btn:active { background: var(--accent-soft); }
+@media (max-width: 800px) { .scroll-btns { right: 12px; bottom: 20px; } }
