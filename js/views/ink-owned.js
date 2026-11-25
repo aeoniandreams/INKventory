@@ -66,8 +66,8 @@
   // 발색 색 분류: 한 행에 여러 색을 지정할 수 있고(data[id].colors = ['blue','navy'] 처럼 키 배열), 5×3 칸에 이 순서로 놓는다 (13개, 마지막 두 칸은 비어 있음).
   const COLOR_OPTIONS = [
     { k: 'red',    n: '빨강', c: '#e53935' }, { k: 'orange', n: '주황', c: '#fb8c00' }, { k: 'yellow', n: '노랑', c: '#fdd835' }, { k: 'green',  n: '초록', c: '#3a9442' }, { k: 'teal',   n: '청록', c: '#1fa39e' },
-    { k: 'blue',   n: '하늘', c: '#1e88e5' }, { k: 'navy',   n: '파랑', c: '#3f5bd9' }, { k: 'indigo', n: '청보라', c: '#6a4bc8' }, { k: 'purple', n: '보라', c: '#8e24aa' }, { k: 'pink',   n: '분홍', c: '#f48fb1' },
-    { k: 'brown',  n: '갈색', c: '#795548' }, { k: 'gray',   n: '회색', c: '#9e9e9e' }, { k: 'black',  n: '검정', c: '#212121' },
+    { k: 'blue',   n: '하늘', c: '#42a5f5' }, { k: 'navy',   n: '파랑', c: '#3f5bd9' }, { k: 'indigo', n: '청보라', c: '#6a4bc8' }, { k: 'purple', n: '보라', c: '#8e24aa' }, { k: 'pink',   n: '분홍', c: '#f48fb1' },
+    { k: 'brown',  n: '갈색', c: '#94705f' }, { k: 'gray',   n: '회색', c: '#9e9e9e' }, { k: 'black',  n: '검정', c: '#212121' },
   ];
   // 저장되는 값은 키(k)라서, 이름을 바꿔도 이미 분류해 둔 데이터는 그대로 따라온다. 주의: 키 'blue' 는 지금 '하늘', 키 'navy' 는 지금 '파랑' 원이다 (2026-11 이름·색을 바꿈).
   const COLOR_KEYS = COLOR_OPTIONS.map((o) => o.k);
