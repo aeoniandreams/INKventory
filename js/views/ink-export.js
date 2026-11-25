@@ -1,7 +1,7 @@
 // 잉팔잉사 이미지 저장 (관리자 모드 전용). ink-owned.js 의 "이미지" 버튼이 INKEXPORT.open({ items }) 로 연다.
 //   · 발색 모음: 발색 사진을 4열 × 5행(한 장에 20개)으로 이어 붙인 이미지. 사진 사이 여백 없음. 사진 위에 브랜드·잉크명을 쓰고,
 //     글자색은 그 자리의 사진 밝기를 재서 어두우면 흰색, 밝으면 검은색(가장자리에 반대색 테두리를 얇게 둘러 읽기 쉽게).
-//   · 표: 잉팔잉사 표 전체를 되도록 한 장으로. 한 장에 TABLE_MAX(30)행을 넘으면 여러 장으로 나누되,
+//   · 표: 잉팔잉사 표 전체를 되도록 한 장으로 (발색 열은 빼고 그린다 — 발색은 '발색 모음'으로 따로 만들 수 있어서). 한 장에 TABLE_MAX(40)행을 넘으면 여러 장으로 나누되,
 //     ① 브랜드 묶음(group)을 쪼개지 않는 것이 가장 우선, ② 그다음으로 장마다 행 수가 비슷하게. (splitRows)
 // items: [{ brand, group, name, pearl, note, portions, price, src }]  (group = 브랜드 묶음 이름, src = 사진 주소, 없으면 '')
 // 사진은 CORS 를 허용하는 주소여야 캔버스로 합쳐서 저장할 수 있다 (저장소 사진은 같은 사이트, 드라이브 사진은 lh3.googleusercontent.com).
@@ -9,14 +9,13 @@
   'use strict';
 
   const PER_PAGE = 20;      // 한 이미지에 넣는 최대 개수
-  const TABLE_MAX = 30;     // 표 한 장에 넣는 행 수의 마지노선 (넘으면 여러 장)
+  const TABLE_MAX = 40;    // 표 한 장에 넣는 행 수의 마지노선 (넘으면 여러 장)
   const GRID_COLS = 4;      // 발색 모음: 4열 × 5행
   const TILE_H = 500;       // 발색 한 칸의 높이(px). 1:1 이면 500×500, 3:4 이면 375×500
   const FONT = '"Pretendard JP Variable", Pretendard, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif';
   const TABLE_COLS = [
     { k: 'brand', label: '브랜드', w: 180 },
     { k: 'name', label: '잉크명', w: 260 },
-    { k: 'swatch', label: '발색', w: 64 },
     { k: 'note', label: '비고', w: 180 },
     { k: 'portions', label: '소분 가능\n(5ml)', w: 98 },
     { k: 'price', label: '가격', w: 83 },
@@ -202,8 +201,8 @@
     return cv;
   }
 
-  // ── 표 한 장 (20행) ──
-  function drawTable(list, imgs, pageNo, pageCount) {
+  // ── 표 한 장 (발색 열 없음) ──
+  function drawTable(list, pageNo, pageCount) {
     const S = 2;
     const PAD = 24;
     const HEAD = 40;
@@ -211,9 +210,8 @@
     const W = TABLE_COLS.reduce((s, c) => s + c.w, 0);
     const meas = document.createElement('canvas').getContext('2d');
     meas.font = `400 14px ${FONT}`;
-    const TEXT_COLS = TABLE_COLS.filter((c) => c.k !== 'swatch');
     // 칸마다 줄 단위로 나눈 글자 (직접 줄바꿈 + 칸 너비에 맞춘 자동 줄바꿈)
-    const cellLines = list.map((it) => Object.fromEntries(TEXT_COLS.map((c) => [c.k, String(it[c.k] || '').split('\n').flatMap((ln) => wrapWords(meas, ln, c.w - 24))])));
+    const cellLines = list.map((it) => Object.fromEntries(TABLE_COLS.map((c) => [c.k, String(it[c.k] || '').split('\n').flatMap((ln) => wrapWords(meas, ln, c.w - 24))])));
     const heights = cellLines.map((cl) => Math.max(40, Math.max(...Object.values(cl).map((arr) => arr.length)) * 20 + 20));
     const H = HEAD + heights.reduce((a, b) => a + b, 0);
     const cv = document.createElement('canvas');
@@ -239,12 +237,9 @@
       ctx.fillStyle = '#6f7380';
       ctx.font = `700 13px ${FONT}`;
       const lines = c.label.split('\n');
-      const centered = c.k === 'swatch';
-      ctx.textAlign = centered ? 'center' : 'left';
-      lines.forEach((ln, i) => ctx.fillText(ln, centered ? x + c.w / 2 : x + 12, PAD + HEAD / 2 + (i - (lines.length - 1) / 2) * 16));
+      lines.forEach((ln, i) => ctx.fillText(ln, x + 12, PAD + HEAD / 2 + (i - (lines.length - 1) / 2) * 16));
       x += c.w;
     });
-    ctx.textAlign = 'left';
     // 행
     let y = PAD + HEAD;
     list.forEach((it, ri) => {
@@ -252,28 +247,9 @@
       let cx = PAD;
       TABLE_COLS.forEach((c) => {
         if (c.k === 'name' && it.pearl) { ctx.fillStyle = '#e6e9f1'; ctx.fillRect(cx, y, c.w, h); }
-        if (c.k === 'swatch') {
-          const r = 14;
-          const mx = cx + c.w / 2;
-          const my = y + h / 2;
-          ctx.save();
-          ctx.beginPath();
-          ctx.arc(mx, my, r, 0, Math.PI * 2);
-          ctx.clip();
-          ctx.fillStyle = '#eef0f6';
-          ctx.fillRect(mx - r, my - r, r * 2, r * 2);
-          if (imgs[ri]) drawCover(ctx, imgs[ri], mx - r, my - r, r * 2, r * 2);
-          ctx.restore();
-          ctx.beginPath();
-          ctx.arc(mx, my, r - 0.5, 0, Math.PI * 2);
-          ctx.strokeStyle = imgs[ri] ? 'rgba(31,36,48,.14)' : '#cfd4e0';
-          ctx.lineWidth = 1;
-          ctx.stroke();
-        } else {
-          ctx.fillStyle = '#1f2430';
-          ctx.font = `400 14px ${FONT}`;
-          cellLines[ri][c.k].forEach((ln, li) => ctx.fillText(ln, cx + 12, y + 20 + li * 20));
-        }
+        ctx.fillStyle = '#1f2430';
+        ctx.font = `400 14px ${FONT}`;
+        cellLines[ri][c.k].forEach((ln, li) => ctx.fillText(ln, cx + 12, y + 20 + li * 20));
         // 오른쪽 선
         ctx.fillStyle = '#d7dbe4';
         if (c !== TABLE_COLS[TABLE_COLS.length - 1]) ctx.fillRect(cx + c.w - 1, y, 1, h);
@@ -377,7 +353,7 @@
       info.textContent = '글꼴과 사진을 불러오는 중…';
       const text = list.map((it) => `${it.brand}${it.name}${it.note}${it.portions}${it.price}`).join('') + '0123456789소분 가능 (5ml)브랜드잉크명발색비고가격INKventory잉팔잉사/·…';
       try { await Promise.all(['400', '500', '700'].map((w) => document.fonts.load(`${w} 16px "Pretendard JP Variable"`, text))); } catch (err) { /* 글꼴을 못 받아도 기본 글꼴로 그림 */ }
-      const imgs = await Promise.all(list.map((it) => loadImage(it.src)));
+      const imgs = swatch ? await Promise.all(list.map((it) => loadImage(it.src))) : list.map(() => null);   // 표에는 발색이 없으니 사진을 불러오지 않음
       const failed = imgs.filter((im, i) => list[i].src && !im).length;
       const objs = list.map((it, i) => ({ it, img: imgs[i] }));
       const groups = swatch ? pages(objs) : splitRows(objs, (o) => o.it.group || o.it.brand);
@@ -389,7 +365,7 @@
         await new Promise((r) => setTimeout(r, 0));          // 화면이 멈춰 보이지 않게 한 장마다 숨 돌림
         const its = g.map((x) => x.it);
         const ims = g.map((x) => x.img);
-        const cv = swatch ? drawCollage(its, ims, ratio) : drawTable(its, ims, k, groups.length);
+        const cv = swatch ? drawCollage(its, ims, ratio) : drawTable(its, k, groups.length);
         const blob = await new Promise((res) => cv.toBlob(res, mime));
         if (!blob) throw new Error('blob');
         const url = URL.createObjectURL(blob);
