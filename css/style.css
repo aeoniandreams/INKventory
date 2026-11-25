@@ -941,3 +941,13 @@ html[data-layout] .is-editable .wish-layout .table-area { padding-left: 21px; ma
 @media (hover: hover) { .scroll-btn:hover { background: var(--accent-soft); } }
 .scroll-btn:active { background: var(--accent-soft); }
 @media (max-width: 800px) { .scroll-btns { right: 12px; bottom: 20px; } }
+
+/* 폰 + 관리자 모드: 표가 화면 가운데에 오게 한다.
+   행 추가 아이콘 자리(왼쪽 21px)만 있고 오른쪽은 없어서 표가 오른쪽으로 쏠려 보였다 (왼쪽 바깥 25px / 오른쪽 12px).
+   → 오른쪽에도 같은 21px 을 두고(양쪽 모두 화면 가장자리 쪽으로 8px 당겨 씀) 좌우 바깥 여백을 25px 로 같게 한다.
+   표 너비·확대 배율은 JS 가 양쪽 여백을 모두 빼고 계산한다. (WISH / NEW ARRIVALS / 보유 잉크. 잉팔잉사는 아이콘이 없어서 원래 가운데) */
+@media (max-width: 800px) {
+  html[data-layout] .is-editable .wish-layout .table-area { padding-left: 21px; padding-right: 21px; margin-left: -8px; margin-right: -8px; }
+  html[data-layout="admin"] .main--table:not(.is-trade):not(.is-wish) .table-area { padding-left: 21px; padding-right: 21px; margin-left: -8px; margin-right: -8px; }
+  html[data-layout="admin"] .main--table:not(.is-trade):not(.is-wish) .row-add { left: 0; }
+}
