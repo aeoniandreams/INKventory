@@ -1365,7 +1365,7 @@
     const filter = colorMode === 'filter';
     const picked = filter ? (colorFilter ? [colorFilter] : []) : colorsOf(colorTarget);
     const dots = COLOR_OPTIONS.map((o) => `<button class="color-dot" type="button" data-c="${o.k}" style="--dot:${o.c}" title="${o.n}" aria-label="${o.n}" aria-pressed="${picked.includes(o.k)}"></button>`).join('');
-    cMenuEl.innerHTML = `<p class="color-cap">${filter ? '색으로 골라 보기' : '색 분류 (여러 개 선택)'}</p><div class="color-grid">${dots}</div>`
+    cMenuEl.innerHTML = `<p class="color-cap">${filter ? '필터' : '복수 선택 가능'}</p><div class="color-grid">${dots}</div>`
       + (picked.length ? `<button class="color-clear" type="button">${filter ? '필터 해제' : '모두 해제'}</button>` : '');
     if (!cMenuEl.hidden) placeColorMenu();
     if (focusKey) { const d = cMenuEl.querySelector(`.color-dot[data-c="${focusKey}"]`); if (d) d.focus({ preventScroll: true }); }
