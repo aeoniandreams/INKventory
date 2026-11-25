@@ -63,11 +63,11 @@
     '본병 (15ml)', '본병 (20ml)', '본병 (25ml)', '본병 (30ml)', '본병 (38ml)', '본병 (50ml)', '본병 (65ml)', '본병 (80ml)',
   ];
 
-  // 발색 색 분류: 한 행에 여러 색을 지정할 수 있고(data[id].colors = ['blue','navy'] 처럼 키 배열), 4×3 칸에 이 순서로 놓는다 (12개).
+  // 발색 색 분류: 한 행에 여러 색을 지정할 수 있고(data[id].colors = ['blue','navy'] 처럼 키 배열), 5×3 칸에 이 순서로 놓는다 (13개, 마지막 두 칸은 비어 있음).
   const COLOR_OPTIONS = [
-    { k: 'pink',   n: '분홍', c: '#f48fb1' }, { k: 'red',    n: '빨강', c: '#e53935' }, { k: 'orange', n: '주황', c: '#fb8c00' }, { k: 'yellow', n: '노랑', c: '#fdd835' },
-    { k: 'green',  n: '초록', c: '#43a047' }, { k: 'blue',   n: '하늘', c: '#1e88e5' }, { k: 'navy',   n: '파랑', c: '#3f5bd9' }, { k: 'indigo', n: '청보라', c: '#6a4bc8' },
-    { k: 'purple', n: '보라', c: '#8e24aa' }, { k: 'brown',  n: '갈색', c: '#795548' }, { k: 'gray',   n: '회색', c: '#9e9e9e' }, { k: 'black',  n: '검정', c: '#212121' },
+    { k: 'red',    n: '빨강', c: '#e53935' }, { k: 'orange', n: '주황', c: '#fb8c00' }, { k: 'yellow', n: '노랑', c: '#fdd835' }, { k: 'green',  n: '초록', c: '#3a9442' }, { k: 'teal',   n: '청록', c: '#1fa39e' },
+    { k: 'blue',   n: '하늘', c: '#1e88e5' }, { k: 'navy',   n: '파랑', c: '#3f5bd9' }, { k: 'indigo', n: '청보라', c: '#6a4bc8' }, { k: 'purple', n: '보라', c: '#8e24aa' }, { k: 'pink',   n: '분홍', c: '#f48fb1' },
+    { k: 'brown',  n: '갈색', c: '#795548' }, { k: 'gray',   n: '회색', c: '#9e9e9e' }, { k: 'black',  n: '검정', c: '#212121' },
   ];
   // 저장되는 값은 키(k)라서, 이름을 바꿔도 이미 분류해 둔 데이터는 그대로 따라온다. 주의: 키 'blue' 는 지금 '하늘', 키 'navy' 는 지금 '파랑' 원이다 (2026-11 이름·색을 바꿈).
   const COLOR_KEYS = COLOR_OPTIONS.map((o) => o.k);
@@ -1334,7 +1334,7 @@
   });
   window.addEventListener('resize', () => closeFilterMenu(false));
 
-  // ── 발색 색 고르기 창 (원 11개, 4×3) ──
+  // ── 발색 색 고르기 창 (원 13개, 5×3) ──
   // 같은 창을 두 곳에서 쓴다.
   //  - 'filter'  : 발색 제목 칸의 chevron. 색 하나를 고르면 그 색으로 분류된 행만 나온다 (다시 누르거나 "필터 해제"로 풀기).
   //  - 'classify': 발색 칸을 우클릭 → "색 분류 선택". 이 행이 어떤 색으로 분류될지 여러 개 고를 수 있다 (누를 때마다 바로 저장, 창은 열려 있음).
@@ -2115,8 +2115,8 @@
         const go = (n) => { if (n >= 0 && n < dots.length) dots[n].focus({ preventScroll: true }); };
         if (e.key === 'ArrowRight') { e.preventDefault(); go(i < 0 ? 0 : i + 1); }
         else if (e.key === 'ArrowLeft') { e.preventDefault(); go(i < 0 ? 0 : i - 1); }
-        else if (e.key === 'ArrowDown') { e.preventDefault(); go(i < 0 ? 0 : i + 4); }
-        else if (e.key === 'ArrowUp') { e.preventDefault(); go(i < 0 ? 0 : i - 4); }
+        else if (e.key === 'ArrowDown') { e.preventDefault(); go(i < 0 ? 0 : i + 5); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); go(i < 0 ? 0 : i - 5); }
         else if (e.key === 'Escape') { e.preventDefault(); closeColorMenu(true); }
         else if (e.key === 'Tab') { closeColorMenu(false); }
       });

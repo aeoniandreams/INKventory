@@ -439,12 +439,12 @@ html[data-mode="normal"] .grid th.col-kind { cursor: default; }
 .th-filter:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .filter-menu { min-width: 110px; }
 
-/* 발색 제목 칸의 chevron (일반·관리자 모드 모두. 잉팔잉사에는 없음) + 색 고르기 창: 원 11개를 4×3 으로 */
+/* 발색 제목 칸의 chevron (일반·관리자 모드 모두. 잉팔잉사에는 없음) + 색 고르기 창: 원 13개를 5×3 으로 */
 .th-filter[data-f="swatch"] { right: 3px; width: 20px; height: 20px; }
 .grid th.col-swatch.has-filter { padding: 0 24px 0 6px; cursor: pointer; }   /* 열이 좁아서 chevron 자리를 오른쪽에 */
 .color-menu { padding: 10px 12px 12px; }
 .color-cap { margin: 0 2px 8px; font-size: 12px; color: var(--muted); white-space: nowrap; }
-.color-grid { display: grid; grid-template-columns: repeat(4, 32px); gap: 8px; }
+.color-grid { display: grid; grid-template-columns: repeat(5, 32px); gap: 8px; }
 .color-dot {
   position: relative; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%;
   background: var(--dot); cursor: pointer; -webkit-tap-highlight-color: transparent;
