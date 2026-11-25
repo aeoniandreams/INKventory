@@ -439,6 +439,33 @@ html[data-mode="normal"] .grid th.col-kind { cursor: default; }
 .th-filter:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .filter-menu { min-width: 110px; }
 
+/* 발색 제목 칸의 chevron (관리자 모드에서만) + 색 고르기 창: 원 11개를 4×3 으로 */
+.th-filter[data-f="swatch"] { right: 3px; width: 20px; height: 20px; }
+html[data-mode="admin"] .grid th.col-swatch.has-filter { padding: 0 24px 0 6px; cursor: pointer; }   /* 열이 좁아서 chevron 자리를 오른쪽에 */
+html:not([data-mode="admin"]) .th-filter[data-f="swatch"] { display: none; }
+.color-menu { padding: 10px 12px 12px; }
+.color-cap { margin: 0 2px 8px; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.color-grid { display: grid; grid-template-columns: repeat(4, 32px); gap: 8px; }
+.color-dot {
+  position: relative; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%;
+  background: var(--dot); cursor: pointer; -webkit-tap-highlight-color: transparent;
+  box-shadow: inset 0 0 0 1px rgba(20, 24, 36, .16);
+}
+@media (hover: hover) { .color-dot:hover { box-shadow: inset 0 0 0 1px rgba(20, 24, 36, .16), 0 0 0 2px var(--line); } }
+.color-dot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.color-dot[aria-pressed="true"] { box-shadow: inset 0 0 0 1px rgba(20, 24, 36, .16), 0 0 0 2px var(--surface), 0 0 0 4px var(--accent); }
+.color-dot[aria-pressed="true"]::after {   /* 고른 색: 흰 체크 (노랑·회색 위에서도 보이게 얇은 그림자) */
+  content: ''; position: absolute; left: 11px; top: 7px; width: 7px; height: 13px;
+  border-right: 2.5px solid #fff; border-bottom: 2.5px solid #fff; transform: rotate(45deg);
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, .55));
+}
+.color-clear {
+  display: block; width: 100%; margin-top: 10px; padding: 7px 8px; border: 0; border-radius: 6px;
+  background: none; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; text-align: center;
+}
+@media (hover: hover) { .color-clear:hover { background: var(--accent-soft); color: var(--accent); } }
+.color-clear:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
 .cell:read-only { cursor: default; }
 .cell:not(:read-only) { cursor: text; }
 .cell:not(:read-only):focus { background: #fff; box-shadow: inset 0 0 0 1px var(--accent); }

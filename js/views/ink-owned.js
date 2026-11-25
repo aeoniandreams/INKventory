@@ -63,6 +63,14 @@
     '본병 (15ml)', '본병 (20ml)', '본병 (25ml)', '본병 (30ml)', '본병 (38ml)', '본병 (50ml)', '본병 (65ml)', '본병 (80ml)',
   ];
 
+  // 발색 색 분류: 한 행에 여러 색을 지정할 수 있고(data[id].colors = ['blue','navy'] 처럼 키 배열), 4×3 칸에 이 순서로 놓는다 (마지막 칸은 비어 있음).
+  const COLOR_OPTIONS = [
+    { k: 'pink',   n: '분홍', c: '#f48fb1' }, { k: 'red',    n: '빨강', c: '#e53935' }, { k: 'orange', n: '주황', c: '#fb8c00' }, { k: 'yellow', n: '노랑', c: '#fdd835' },
+    { k: 'green',  n: '초록', c: '#43a047' }, { k: 'blue',   n: '파랑', c: '#1e88e5' }, { k: 'navy',   n: '남색', c: '#1a237e' }, { k: 'purple', n: '보라', c: '#8e24aa' },
+    { k: 'brown',  n: '갈색', c: '#795548' }, { k: 'gray',   n: '회색', c: '#9e9e9e' }, { k: 'black',  n: '검정', c: '#212121' },
+  ];
+  const COLOR_KEYS = COLOR_OPTIONS.map((o) => o.k);
+
   // ── 상태 ────────────────────────────────
   const defaultOrder = () => Array.from({ length: DEFAULT_ROWS }, (_, i) => String(i));
   let order = defaultOrder();   // 화면에 보이는 행 순서 (행 id)
@@ -81,10 +89,16 @@
   // 보유 잉크의 본병/소분 필터 ('' = 전체, '본병' / '소분'): 제목 줄의 본병/소분 칸 chevron 으로 고른다. 관리자 모드(본병/소분 열이 보일 때)에서만 적용되고, 화면에 다시 들어오면 전체로 돌아온다.
   let kindFilter = '';
   const kindFilterOn = () => !isTrade() && !!kindFilter && isAdminMode();
+  // 발색 색 필터 ('' = 전체, 또는 색 키): 제목 줄의 발색 칸 chevron 으로 고른다. 본병/소분 필터와 같이 켜면 둘 다 맞는 행만 나온다.
+  let colorFilter = '';
+  const colorFilterOn = () => !isTrade() && !!colorFilter && isAdminMode();
+  const anyFilterOn = () => kindFilterOn() || colorFilterOn();
+  const colorsOf = (id) => { const v = data[id] && data[id].colors; return Array.isArray(v) ? v.filter((k) => COLOR_KEYS.includes(k)) : []; };
   const shownIds = () => {
     if (isTrade()) return order.filter((id) => data[id] && data[id].hasPortions);
-    if (!kindFilterOn()) return order;
-    return order.filter((id) => String((data[id] && data[id].kind) || '').startsWith(kindFilter));
+    if (!anyFilterOn()) return order;
+    return order.filter((id) => (!kindFilterOn() || String((data[id] && data[id].kind) || '').startsWith(kindFilter))
+      && (!colorFilterOn() || colorsOf(id).includes(colorFilter)));
   };
   const pending = new Map();    // 아직 저장 안 된 변경. 키: "id|필드" 또는 "@order"
   let saveTimer = null;
@@ -469,6 +483,7 @@
   function rebuildRows() {
     closeMenu(false);
     closeFilterMenu(false);
+    closeColorMenu(false);
     clearSelection();
     root.querySelector('tbody').innerHTML = rowsHtml();
     fillAll();
@@ -1121,7 +1136,7 @@
     if (hscrollSync) hscrollSync();                      // 일반/관리자 배치가 바뀌면 표 너비가 달라지므로 가로 스크롤 필요 여부를 다시 확인
     const edit = canEdit();
     root.querySelectorAll('.bar').forEach((bar) => { bar.inert = !edit; bar.title = edit ? '우클릭: 막대 추가·삭제' : ''; });
-    if (!edit) closeCtx();
+    if (!edit) { closeCtx(); closeColorMenu(false); }
     if (!edit) root.querySelector('.row-add').classList.remove('is-on');
     root.querySelectorAll('.cell').forEach((input) => {
       const ok = edit && columnEditable(input.dataset.f);
@@ -1138,7 +1153,8 @@
     if (!edit) { closeMenu(false); clearSelection(); }
     if (!isAdminMode()) {
       closeFilterMenu(false);
-      if (kindFilter) { kindFilter = ''; rebuildRows(); applyEditable(); return; }   // 일반 모드로 돌아오면 필터를 풀고 모든 행을 다시 보여 줌 (일반 모드에는 본병/소분 열이 없다)
+      closeColorMenu(false);
+      if (kindFilter || colorFilter) { kindFilter = ''; colorFilter = ''; rebuildRows(); applyEditable(); return; }   // 일반 모드로 돌아오면 필터를 풀고 모든 행을 다시 보여 줌
     }
     updateFilterUi();
     if (isAdminMode()) INKFB.db().catch(() => {});   // 관리자 모드가 되면 저장용 SDK 를 미리 받아 둠 (첫 저장이 빠르게)
@@ -1186,6 +1202,7 @@
 
   function openMenu(btn) {
     if (!root || !menuEl) return;
+    closeColorMenu(false);
     const id = btn.closest('tr').dataset.id;
     const current = (data[id] && data[id].kind) || '';
     const firstBottle = KIND_OPTIONS.findIndex((v) => v.startsWith('본병'));
@@ -1260,23 +1277,25 @@
   function closeFilterMenu(focusBtn) {
     if (!fMenuEl || fMenuEl.hidden) return;
     fMenuEl.hidden = true;
-    const btn = root && root.querySelector('.th-filter');
+    const btn = root && root.querySelector('.th-filter[data-f="kind"]');
     if (btn) { btn.setAttribute('aria-expanded', 'false'); if (focusBtn) btn.focus(); }
   }
 
   function updateFilterUi() {
-    const btn = root && root.querySelector('.th-filter');
+    const btn = root && root.querySelector('.th-filter[data-f="kind"]');
     if (!btn) return;
     btn.classList.toggle('is-on', kindFilterOn());
     btn.title = kindFilterOn() ? `${kindFilter}만 보는 중 (누르면 바꾸거나 해제)` : '본병/소분 골라 보기';
     btn.setAttribute('aria-label', kindFilterOn() ? `본병/소분 필터: ${kindFilter}만 보는 중` : '본병/소분 필터');
+    updateColorUi();
   }
 
   function openFilterMenu() {
-    const btn = root && root.querySelector('.th-filter');
+    const btn = root && root.querySelector('.th-filter[data-f="kind"]');
     if (!btn || !fMenuEl || !isAdminMode()) return;
     closeMenu(false);
     closeCtx();
+    closeColorMenu(false);
     let html = FILTER_OPTIONS.map((v) => `<li role="option" tabindex="-1" data-v="${v}" aria-selected="${v === kindFilter}">${v}</li>`).join('');
     if (kindFilter) html += '<li class="menu-sep" role="separator"></li><li class="menu-clear" role="option" tabindex="-1" data-v="" aria-selected="false">필터 해제</li>';
     fMenuEl.innerHTML = html;
@@ -1312,6 +1331,112 @@
     if (fMenuEl && !fMenuEl.hidden && !fMenuEl.contains(e.target) && !e.target.closest('th.col-kind')) closeFilterMenu(false);
   });
   window.addEventListener('resize', () => closeFilterMenu(false));
+
+  // ── 발색 색 고르기 창 (원 11개, 4×3) ──
+  // 같은 창을 두 곳에서 쓴다.
+  //  - 'filter'  : 발색 제목 칸의 chevron. 색 하나를 고르면 그 색으로 분류된 행만 나온다 (다시 누르거나 "필터 해제"로 풀기).
+  //  - 'classify': 발색 칸을 우클릭 → "색 분류 선택". 이 행이 어떤 색으로 분류될지 여러 개 고를 수 있다 (누를 때마다 바로 저장, 창은 열려 있음).
+  let cMenuEl = null;       // <div class="menu color-menu">
+  let colorMode = '';       // '' | 'filter' | 'classify'
+  let colorTarget = '';     // classify 일 때 대상 행 id
+  let colorAnchor = null;   // 창을 붙여 둘 칸 (제목 칸 또는 발색 칸)
+  const colorBtn = () => root && root.querySelector('.th-filter[data-f="swatch"]');
+  const colorName = (k) => (COLOR_OPTIONS.find((o) => o.k === k) || {}).n || '';
+
+  function placeColorMenu() {
+    if (!root || !cMenuEl || !colorAnchor) return;
+    const area = root.querySelector('.table-area').getBoundingClientRect();
+    const cell = colorAnchor.getBoundingClientRect();
+    cMenuEl.style.maxHeight = '';
+    const mw = cMenuEl.offsetWidth;
+    const fullH = cMenuEl.offsetHeight;
+    const spaceBelow = window.innerHeight - cell.bottom - 8;
+    const spaceAbove = cell.top - 8;
+    const below = spaceBelow >= fullH || spaceBelow >= spaceAbove;
+    const mh = Math.min(fullH, below ? spaceBelow : spaceAbove);
+    cMenuEl.style.maxHeight = mh + 'px';
+    const left = Math.max(0, Math.min(cell.left, window.innerWidth - mw - 8));
+    cMenuEl.style.left = (left - area.left) + 'px';
+    cMenuEl.style.top = ((below ? cell.bottom : cell.top - mh) - area.top) + 'px';
+  }
+
+  function renderColorMenu(focusKey) {
+    if (!cMenuEl) return;
+    const filter = colorMode === 'filter';
+    const picked = filter ? (colorFilter ? [colorFilter] : []) : colorsOf(colorTarget);
+    const dots = COLOR_OPTIONS.map((o) => `<button class="color-dot" type="button" data-c="${o.k}" style="--dot:${o.c}" title="${o.n}" aria-label="${o.n}" aria-pressed="${picked.includes(o.k)}"></button>`).join('');
+    cMenuEl.innerHTML = `<p class="color-cap">${filter ? '색으로 골라 보기' : '색 분류 (여러 개 선택)'}</p><div class="color-grid">${dots}</div>`
+      + (picked.length ? `<button class="color-clear" type="button">${filter ? '필터 해제' : '모두 해제'}</button>` : '');
+    if (!cMenuEl.hidden) placeColorMenu();
+    if (focusKey) { const d = cMenuEl.querySelector(`.color-dot[data-c="${focusKey}"]`); if (d) d.focus({ preventScroll: true }); }
+  }
+
+  function openColorMenu(mode, anchor, id) {
+    if (!root || !cMenuEl || !isAdminMode() || isTrade() || (mode === 'classify' && !canEdit())) return;
+    closeMenu(false);
+    closeFilterMenu(false);
+    closeCtx();
+    colorMode = mode;
+    colorTarget = id || '';
+    colorAnchor = anchor;
+    renderColorMenu();
+    cMenuEl.hidden = false;
+    placeColorMenu();
+    const b = colorBtn();
+    if (b) b.setAttribute('aria-expanded', String(mode === 'filter'));
+    (cMenuEl.querySelector('.color-dot[aria-pressed="true"]') || cMenuEl.querySelector('.color-dot')).focus({ preventScroll: true });
+  }
+
+  function closeColorMenu(focusBtn) {
+    if (!cMenuEl || cMenuEl.hidden) return;
+    const wasFilter = colorMode === 'filter';
+    cMenuEl.hidden = true;
+    colorMode = '';
+    colorTarget = '';
+    colorAnchor = null;
+    const b = colorBtn();
+    if (b) { b.setAttribute('aria-expanded', 'false'); if (focusBtn && wasFilter) b.focus(); }
+  }
+
+  function updateColorUi() {
+    const b = colorBtn();
+    if (!b) return;
+    b.classList.toggle('is-on', colorFilterOn());
+    b.title = colorFilterOn() ? `${colorName(colorFilter)}만 보는 중 (누르면 바꾸거나 해제)` : '색으로 골라 보기';
+    b.setAttribute('aria-label', colorFilterOn() ? `발색 색 필터: ${colorName(colorFilter)}만 보는 중` : '발색 색 필터');
+  }
+
+  function setColorFilter(v) {
+    closeColorMenu(true);
+    if (!root || !isAdminMode() || v === colorFilter) return;
+    colorFilter = v;
+    rebuildRows();
+    applyEditable();
+  }
+
+  // 색 하나를 눌렀을 때
+  function pickColor(k) {
+    if (colorMode === 'filter') { setColorFilter(k === colorFilter ? '' : k); return; }
+    if (colorMode !== 'classify' || !canEdit() || !COLOR_KEYS.includes(k)) return;
+    const cur = new Set(colorsOf(colorTarget));
+    if (cur.has(k)) cur.delete(k); else cur.add(k);
+    queueSave(colorTarget, 'colors', COLOR_KEYS.filter((x) => cur.has(x)));   // 항상 같은 순서로 저장
+    renderColorMenu(k);
+  }
+
+  function clearColors() {
+    if (colorMode === 'filter') { setColorFilter(''); return; }
+    if (colorMode !== 'classify' || !canEdit()) return;
+    queueSave(colorTarget, 'colors', []);
+    renderColorMenu();
+  }
+
+  document.addEventListener('pointerdown', (e) => {
+    if (!cMenuEl || cMenuEl.hidden || cMenuEl.contains(e.target)) return;
+    if (colorMode === 'filter' && e.target.closest('th.col-swatch')) return;   // 제목 칸을 다시 누르면 그 클릭이 닫아 줌
+    closeColorMenu(false);
+  });
+  window.addEventListener('resize', () => closeColorMenu(false));
 
   // ── 칸 선택 + 채우기 핸들 (스프레드시트처럼) ──
   // 내용이 있는 칸을 선택하면 테두리 오른쪽 아래 꼭짓점에 작은 원이 나타난다.
@@ -1479,14 +1604,15 @@
     ctxEl.setAttribute('aria-label', '행·잔량 막대');
     ctxEl.hidden = true;
     ctxEl.innerHTML = '<li role="menuitem" tabindex="-1" data-act="add">막대 추가</li><li role="menuitem" tabindex="-1" data-act="del">이 막대 삭제</li>' +
-      '<li class="menu-sep" role="separator" aria-hidden="true" data-sep></li><li role="menuitem" tabindex="-1" data-act="row" class="menu-danger">행 삭제</li>';
+      '<li class="menu-sep" role="separator" aria-hidden="true" data-sep></li><li role="menuitem" tabindex="-1" data-act="color">색 분류 선택</li>' +
+      '<li class="menu-sep" role="separator" aria-hidden="true" data-sep2></li><li role="menuitem" tabindex="-1" data-act="row" class="menu-danger">행 삭제</li>';
     document.body.appendChild(ctxEl);
     ctxEl.addEventListener('click', (e) => {
       const li = e.target.closest('[role="menuitem"]');
       if (li && li.getAttribute('aria-disabled') !== 'true') runCtx(li.dataset.act);
     });
     ctxEl.addEventListener('keydown', (e) => {
-      const items = [...ctxEl.querySelectorAll('[role="menuitem"]')].filter((li) => li.getAttribute('aria-disabled') !== 'true');
+      const items = [...ctxEl.querySelectorAll('[role="menuitem"]')].filter((li) => li.getAttribute('aria-disabled') !== 'true' && li.style.display !== 'none');
       const i = items.indexOf(document.activeElement);
       if (e.key === 'ArrowDown' && items.length) { e.preventDefault(); items[(i + 1) % items.length].focus(); }
       else if (e.key === 'ArrowUp' && items.length) { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
@@ -1496,8 +1622,9 @@
     return ctxEl;
   }
 
-  function openCtx(x, y, tr, bi) {
+  function openCtx(x, y, tr, bi, onSwatch) {
     const el = ensureCtx();
+    closeColorMenu(false);
     const levels = getLevels(tr.dataset.id);
     ctxTarget = { id: tr.dataset.id, bi };
     const add = el.querySelector('[data-act="add"]');
@@ -1505,6 +1632,8 @@
     const rowItem = el.querySelector('[data-act="row"]');
     const onBar = bi >= 0;                                    // 막대 위에서 열었을 때만 막대 항목을 보여 줌
     [add, del, el.querySelector('[data-sep]')].forEach((li) => { li.style.display = onBar ? '' : 'none'; });
+    const colorItem = el.querySelector('[data-act="color"]');
+    [colorItem, el.querySelector('[data-sep2]')].forEach((li) => { li.style.display = onSwatch ? '' : 'none'; });   // 발색 칸에서 열었을 때만
     add.setAttribute('aria-disabled', String(levels.length >= MAX_BARS));
     del.setAttribute('aria-disabled', String(levels.length <= 1));
     el.hidden = false;
@@ -1512,7 +1641,7 @@
     const h = el.offsetHeight;
     el.style.left = Math.max(8, Math.min(x, window.innerWidth - w - 8)) + 'px';
     el.style.top = Math.max(8, Math.min(y, window.innerHeight - h - 8)) + 'px';
-    (onBar ? (add.getAttribute('aria-disabled') === 'true' ? del : add) : rowItem).focus();
+    (onBar ? (add.getAttribute('aria-disabled') === 'true' ? del : add) : onSwatch ? colorItem : rowItem).focus();
   }
 
   function closeCtx() {
@@ -1525,6 +1654,12 @@
     closeCtx();
     if (!t || !root || !canEdit()) return;
     if (act === 'row') { deleteRow(t.id); return; }
+    if (act === 'color') {
+      const row = [...tbodyEl().rows].find((r) => r.dataset.id === t.id);
+      const cell = row && row.querySelector('td.c-swatch');
+      if (cell) openColorMenu('classify', cell, t.id);
+      return;
+    }
     const tr = [...tbodyEl().rows].find((r) => r.dataset.id === t.id);
     if (!tr) return;
     const levels = getLevels(t.id);
@@ -1628,7 +1763,7 @@
   // ── 행 추가 ─────────────────────────────
   // b: 새 행이 들어갈 자리(0부터). b번째 행 "앞"에 빈 행을 끼워 넣는다.
   function insertRow(b) {
-    if (isTrade() || !root || !canEdit() || kindFilterOn() || b < 1 || b > order.length) return;
+    if (isTrade() || !root || !canEdit() || anyFilterOn() || b < 1 || b > order.length) return;
     if (order.length >= MAX_ROWS) {
       showNotice(`행은 최대 ${MAX_ROWS}개까지 추가할 수 있습니다.`);
       setTimeout(() => showNotice(''), 3500);
@@ -1662,7 +1797,7 @@
 
   // 페이지가 스크롤될 때(표는 페이지와 함께 스크롤된다) 부를 것들. 화면에 들어올 때 비우고 다시 채운다.
   const pageScrollHooks = [];
-  window.addEventListener('scroll', () => { closeCtx(); closeFilterMenu(false); pageScrollHooks.forEach((fn) => fn()); }, { passive: true });
+  window.addEventListener('scroll', () => { closeCtx(); closeFilterMenu(false); closeColorMenu(false); pageScrollHooks.forEach((fn) => fn()); }, { passive: true });
 
   // 표가 상자보다 넓을 때(좁은 창의 관리자 표, 폰에서 키웠을 때)만 표 상자에 가로 스크롤을 둔다. 그때는 제목 줄이 상단 바 아래에 붙지 못한다.
   let hscrollObs = null;
@@ -1742,7 +1877,7 @@
 
     function update(e) {
       if (isTrade() || drag || !canEdit() || e.target.closest('.row-add')) return; // 버튼 위에 있으면 그대로 유지
-      if (kindFilterOn()) { hide(); return; }   // 본병/소분 필터가 켜져 있으면 행 추가는 쓰지 않음
+      if (anyFilterOn()) { hide(); return; }   // 필터(본병/소분·색)가 켜져 있으면 행 추가는 쓰지 않음
       const b = boundaryAt(e.clientY);
       if (b === null) { hide(); return; }
       const top = wrap.getBoundingClientRect().top + wrap.clientTop;
@@ -1771,6 +1906,7 @@
     variant = which === 'trade' ? 'trade' : 'owned';
     root = container;
     kindFilter = '';   // 화면에 들어올 때마다 전체 보기로 시작
+    colorFilter = '';
     container.classList.toggle('is-trade', isTrade());
     hydrateFromCache();   // 전에 받아 둔 내용이 있으면 처음부터 채워서 그림
     container.innerHTML = `
@@ -1788,12 +1924,15 @@
         ${isTrade() ? '<p class="zoom-note">표는 확대/축소가 가능합니다! (모바일 ver.)</p>' : ''}
         <ul class="menu" role="listbox" aria-label="본병/소분" hidden></ul>
         <ul class="menu filter-menu" role="listbox" aria-label="본병/소분 필터" hidden></ul>
+        ${isTrade() ? '' : '<div class="menu color-menu" role="group" aria-label="발색 색 분류" hidden></div>'}
         <div class="table-wrap" tabindex="0" role="region" aria-label="보유 잉크 표">
           <table class="grid" style="min-width:${BASE_WIDTH}px">
             <colgroup>${COLUMNS.map((c, i) => (i === LEVEL_COL ? `<col class="col-${c.key}">` : `<col class="col-${c.key}" style="width:${c.width}px">`)).join('')}</colgroup>
-            <thead><tr>${COLUMNS.map((c) => (c.key === 'kind' && !isTrade()
-              ? `<th scope="col" class="col-${c.key}"><span class="th-label">${c.label}</span><button class="th-filter" type="button" title="본병/소분 골라 보기" aria-label="본병/소분 필터" aria-haspopup="listbox" aria-expanded="false">${CHEVRON_DOWN}</button></th>`
-              : `<th scope="col" class="col-${c.key}">${c.label}</th>`)).join('')}</tr></thead>
+            <thead><tr>${COLUMNS.map((c) => {
+              if (c.key === 'kind' && !isTrade()) return `<th scope="col" class="col-${c.key}"><span class="th-label">${c.label}</span><button class="th-filter" data-f="kind" type="button" title="본병/소분 골라 보기" aria-label="본병/소분 필터" aria-haspopup="listbox" aria-expanded="false">${CHEVRON_DOWN}</button></th>`;
+              if (c.key === 'swatch' && !isTrade()) return `<th scope="col" class="col-${c.key} has-filter"><span class="th-label">${c.label}</span><button class="th-filter" data-f="swatch" type="button" title="색으로 골라 보기" aria-label="발색 색 필터" aria-haspopup="true" aria-expanded="false">${CHEVRON_DOWN}</button></th>`;
+              return `<th scope="col" class="col-${c.key}">${c.label}</th>`;
+            }).join('')}</tr></thead>
             <tbody>${rowsHtml()}</tbody>
           </table>
           <div class="sel-box" hidden></div>
@@ -1806,6 +1945,10 @@
     menuEl = container.querySelector('.menu');
     menuFor = null;
     fMenuEl = container.querySelector('.filter-menu');
+    cMenuEl = container.querySelector('.color-menu');
+    colorMode = '';
+    colorTarget = '';
+    colorAnchor = null;
     renderBrands();
     setupZoom(container);
     setupBrandDrawer();
@@ -1915,10 +2058,10 @@
       else if (e.key === 'Escape') { e.preventDefault(); closeMenu(true); }
       else if (e.key === 'Tab') { closeMenu(false); }
     });
-    container.querySelector('.table-wrap').addEventListener('scroll', () => { closeMenu(false); closeCtx(); closeFilterMenu(false); }, { passive: true });
+    container.querySelector('.table-wrap').addEventListener('scroll', () => { closeMenu(false); closeCtx(); closeFilterMenu(false); closeColorMenu(false); }, { passive: true });
 
     // 본병/소분 필터: 제목 칸 chevron → 드롭다운 (관리자 모드)
-    const filterBtn = container.querySelector('.th-filter');
+    const filterBtn = container.querySelector('.th-filter[data-f="kind"]');
     if (filterBtn && fMenuEl) {
       // 제목 칸 어디를 눌러도 열린다 (폰에서 표가 작게 보일 때 chevron 만으로는 누르기 어려워서). 버튼(키보드)의 클릭도 여기로 올라온다.
       filterBtn.closest('th').addEventListener('click', () => {
@@ -1940,6 +2083,34 @@
       });
     }
 
+    // 발색 색 고르기 창 (필터 / 색 분류 공통)
+    if (cMenuEl) {
+      const swatchTh = container.querySelector('th.col-swatch.has-filter');
+      if (swatchTh) {
+        // 제목 칸 어디를 눌러도 열린다 (폰에서 표가 작게 보여도 누르기 쉽게)
+        swatchTh.addEventListener('click', () => {
+          if (!isAdminMode()) return;
+          if (!cMenuEl.hidden && colorMode === 'filter') closeColorMenu(true); else openColorMenu('filter', swatchTh);
+        });
+      }
+      cMenuEl.addEventListener('click', (e) => {
+        const dot = e.target.closest('.color-dot');
+        if (dot) { pickColor(dot.dataset.c); return; }
+        if (e.target.closest('.color-clear')) clearColors();
+      });
+      cMenuEl.addEventListener('keydown', (e) => {
+        const dots = [...cMenuEl.querySelectorAll('.color-dot')];
+        const i = dots.indexOf(document.activeElement);
+        const go = (n) => { if (n >= 0 && n < dots.length) dots[n].focus({ preventScroll: true }); };
+        if (e.key === 'ArrowRight') { e.preventDefault(); go(i < 0 ? 0 : i + 1); }
+        else if (e.key === 'ArrowLeft') { e.preventDefault(); go(i < 0 ? 0 : i - 1); }
+        else if (e.key === 'ArrowDown') { e.preventDefault(); go(i < 0 ? 0 : i + 4); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); go(i < 0 ? 0 : i - 4); }
+        else if (e.key === 'Escape') { e.preventDefault(); closeColorMenu(true); }
+        else if (e.key === 'Tab') { closeColorMenu(false); }
+      });
+    }
+
     // 잔량 막대 우클릭(키보드는 메뉴 키 / Shift+F10) → 막대 추가·삭제 메뉴
     tbody.addEventListener('contextmenu', (e) => {
       const tr = e.target.closest('tr');
@@ -1953,13 +2124,14 @@
       if (!x && !y) { const r = (line || e.target.closest('td') || tr).getBoundingClientRect(); x = r.left + 24; y = r.bottom; }   // 키보드로 열었을 때
       const td = e.target.closest('td');
       if (td) selectCell(td);
-      openCtx(x, y, tr, line ? lines.indexOf(line) : -1);
+      openCtx(x, y, tr, line ? lines.indexOf(line) : -1, !!e.target.closest('td.c-swatch'));
     });
     // 터치(폰): 막대를 길게 누르면 같은 메뉴. (iOS 는 contextmenu 이벤트가 없어서 직접 감시)
     tbody.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'mouse' || !canEdit()) return;
       const line = e.target.closest('.bar-line');
-      if (!line) return;
+      const sw = !line && !isTrade() ? e.target.closest('td.c-swatch') : null;   // 발색 칸을 길게 눌러도 같은 메뉴 (색 분류 선택)
+      if (!line && !sw) return;
       cancelLongPress();
       longPress = {
         x: e.clientX,
@@ -1968,9 +2140,9 @@
           longPress = null;
           suppressClick = true;
           setTimeout(() => { suppressClick = false; }, 800);
-          const tr = line.closest('tr');
-          selectCell(line.closest('td'));
-          openCtx(e.clientX, e.clientY, tr, [...tr.querySelectorAll('.bar-line')].indexOf(line));
+          const tr = (line || sw).closest('tr');
+          selectCell((line || sw).closest('td'));
+          openCtx(e.clientX, e.clientY, tr, line ? [...tr.querySelectorAll('.bar-line')].indexOf(line) : -1, !line);
         }, 550),
       };
     });
@@ -1983,7 +2155,7 @@
     // 발색 원: 누르면(키보드는 Enter / Space) 원본 사진 보기
     tbody.addEventListener('click', (e) => {
       const sw = e.target.closest('.swatch.has-img');
-      if (sw) openLightbox(sw);
+      if (sw) { if (suppressClick) { suppressClick = false; return; } openLightbox(sw); }   // 길게 눌러 메뉴를 연 직후의 클릭은 사진을 열지 않음
     });
     tbody.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter' && e.key !== ' ') return;
@@ -2029,6 +2201,7 @@
     closeLightbox();
     closeMenu(false);
     closeFilterMenu(false);
+    closeColorMenu(false);
     closeCtx();
     cancelLongPress();
     if (resizeObs) { resizeObs.disconnect(); resizeObs = null; }
@@ -2043,7 +2216,9 @@
     handle = null;
     menuEl = null;
     fMenuEl = null;
+    cMenuEl = null;
     kindFilter = '';
+    colorFilter = '';
     root = null;
     showStatus();
   }
