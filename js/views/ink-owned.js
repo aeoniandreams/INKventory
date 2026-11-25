@@ -78,7 +78,14 @@
   let saleNotice = null;        // 잉팔잉사 알림글 (공개 문서의 saleNotice 필드, 안전한 HTML). 없으면(null) 기본 글
   const isTrade = () => variant === 'trade';
   // 지금 화면에 나오는 행 id (순서대로). 잉팔잉사는 소분 가능이 적혀 있는 행만.
-  const shownIds = () => (isTrade() ? order.filter((id) => data[id] && data[id].hasPortions) : order);
+  // 보유 잉크의 본병/소분 필터 ('' = 전체, '본병' / '소분'): 제목 줄의 본병/소분 칸 chevron 으로 고른다. 관리자 모드(본병/소분 열이 보일 때)에서만 적용되고, 화면에 다시 들어오면 전체로 돌아온다.
+  let kindFilter = '';
+  const kindFilterOn = () => !isTrade() && !!kindFilter && isAdminMode();
+  const shownIds = () => {
+    if (isTrade()) return order.filter((id) => data[id] && data[id].hasPortions);
+    if (!kindFilterOn()) return order;
+    return order.filter((id) => String((data[id] && data[id].kind) || '').startsWith(kindFilter));
+  };
   const pending = new Map();    // 아직 저장 안 된 변경. 키: "id|필드" 또는 "@order"
   let saveTimer = null;
   let saving = false;
@@ -461,6 +468,7 @@
 
   function rebuildRows() {
     closeMenu(false);
+    closeFilterMenu(false);
     clearSelection();
     root.querySelector('tbody').innerHTML = rowsHtml();
     fillAll();
@@ -694,10 +702,8 @@
 
   // ── 폰용 확대·축소: 두 손가락으로 벌리거나 오므리기 (800px 이하, 일반 모드·관리자 모드 모두 같은 방식) ──
   // 표 전체를 CSS zoom(--tz)으로 키우고 줄인다. 손가락 사이의 점이 제자리에 있도록 스크롤 위치를 맞춘다. 한 손가락은 그대로 스크롤.
-  //  · 시작 배율: 일반 모드 표의 가로 너비가 화면 가로 너비에 딱 맞는 배율 (관리자 모드도 같은 값 → 공통 열의 크기가 두 모드에서 같다)
-  //  · 가장 작게: 지금 보이는 표 전체의 가로 너비 = 화면 가로 너비. (일반 모드는 시작 배율과 같고, 열이 더 많은 관리자 모드는 더 작게 줄여 전체를 볼 수 있다)
-  //  · 가장 크게: 200%.  마지막으로 정한 배율은 이 기기에 기억한다.
-  const ZOOM_KEY = 'inkventory.zoom.v3';
+  //  · 가장 작게 = 시작 배율: 지금 보이는 표 전체의 가로 너비 = 화면 가로 너비. (열이 더 많은 관리자 모드는 일반 모드보다 더 작은 배율에서 시작한다)
+  //  · 가장 크게: 200%.  손가락으로 조절한 배율은 기억하지 않는다 (들어올 때마다 표 전체가 보이는 배율로 시작).
   const ZOOM_MAX = 2;
   let zoomRefresh = null;   // 배치(일반/관리자)가 바뀌었을 때 배율 범위를 다시 계산
 
@@ -725,21 +731,13 @@
       return area.clientWidth - pad - 2;
     };
     const fitFor = (w, withPad) => { const a = availW(withPad); return a > 0 ? Math.min(1, Math.floor((a / w) * 1000) / 1000) : 0.4; };
-    // 시작 배율: 일반 모드에서 표(NORMAL_W)가 화면 너비에 딱 맞는 배율. 화면 너비와 폰의 좌우 여백(CSS --edge = clamp(12px, 2.4vw, 44px))으로 계산해서
-    // 관리자 모드에서도 같은 값이 나온다.
-    const startZoom = () => {
-      const vw = document.documentElement.clientWidth;
-      const m = Math.floor(Math.max(12, Math.min(44, vw * 0.024)));
-      const a = vw - 2 * m - 2;
-      return a > 0 ? Math.min(1, Math.floor((a / normalTableW()) * 1000) / 1000) : 0.4;
-    };
+    // 시작 배율: 지금 보이는 표 전체(일반 모드는 일반 배치, 관리자 모드는 열이 더 많은 관리자 배치)가 화면 너비에 딱 맞는 배율 = 가장 작은 배율.
+    // 들어올 때마다 이 배율로 시작하고, 손가락으로 조절한 값은 기억하지 않는다. (잉팔잉사도 같음)
+    const startZoom = () => fitFor(naturalW(), true);
     const minZoom = () => fitFor(naturalW(), true);
     const clampZ = (n) => Math.floor(Math.max(minZoom(), Math.min(ZOOM_MAX, n)) * 1000) / 1000;
     let z = startZoom();
-    let follow = true;   // 아직 손가락으로 조절한 적이 없으면 시작 배율에 계속 맞춤 (돌려서 가로로 봐도)
-    // 잉팔잉사는 들어올 때마다 표 전체가 보이는 배율(시작 배율)로 시작한다 (보유 잉크에서 정해 둔 배율을 가져오지 않고, 손가락으로 조절한 값도 기억하지 않는다)
-    const remember = !isTrade();
-    if (remember) { try { const s = Number(localStorage.getItem(ZOOM_KEY)); if (s > 0) { z = s; follow = false; } } catch (err) { /* 기억 못 해도 괜찮음 */ } }
+    let follow = true;   // 아직 손가락으로 조절한 적이 없으면 시작 배율에 계속 맞춤 (돌려서 가로로 봐도, 일반 ↔ 관리자 배치가 바뀌어도)
     const apply = (n) => { z = clampZ(n); container.style.setProperty('--tz', String(z)); if (hscrollSync) hscrollSync(); };
     apply(z);
     zoomRefresh = () => apply(follow ? startZoom() : z);
@@ -784,10 +782,7 @@
     }, { passive: false });
 
     const end = (e) => {
-      if (e.touches.length < 2 && pinch) {
-        pinch = null;
-        if (remember) { try { localStorage.setItem(ZOOM_KEY, String(z)); } catch (err) { /* 무시 */ } }
-      }
+      if (e.touches.length < 2 && pinch) pinch = null;
     };
     wrap.addEventListener('touchend', end, { passive: true });
     wrap.addEventListener('touchcancel', end, { passive: true });
@@ -1141,6 +1136,11 @@
     if (zoomRefresh) zoomRefresh();                      // 배치가 바뀌면 확대·축소 범위도 다시 계산
     if (barFit) barFit();                                // 잔량 막대 길이도 다시 맞춤
     if (!edit) { closeMenu(false); clearSelection(); }
+    if (!isAdminMode()) {
+      closeFilterMenu(false);
+      if (kindFilter) { kindFilter = ''; rebuildRows(); applyEditable(); return; }   // 일반 모드로 돌아오면 필터를 풀고 모든 행을 다시 보여 줌 (일반 모드에는 본병/소분 열이 없다)
+    }
+    updateFilterUi();
     if (isAdminMode()) INKFB.db().catch(() => {});   // 관리자 모드가 되면 저장용 SDK 를 미리 받아 둠 (첫 저장이 빠르게)
     showStatus();
   }
@@ -1250,6 +1250,68 @@
     if (menuFor && !menuEl.contains(e.target) && !menuFor.contains(e.target)) closeMenu(false);
   });
   window.addEventListener('resize', () => closeMenu(false));
+
+  // ── 본병/소분 필터 (제목 줄의 chevron 드롭다운) ──
+  // 본병 / 소분 중 하나를 고르면 그 종류의 행만 표에 나온다. 고른 것을 풀려면 목록 맨 아래 "필터 해제".
+  // 보기만 바꾸는 기능이라 데이터는 그대로이고, 필터가 켜져 있는 동안에는 행 추가 아이콘을 쓰지 않는다 (보이는 행 번호와 저장된 순서가 달라서).
+  const FILTER_OPTIONS = ['본병', '소분'];
+  let fMenuEl = null;   // <ul class="menu filter-menu">
+
+  function closeFilterMenu(focusBtn) {
+    if (!fMenuEl || fMenuEl.hidden) return;
+    fMenuEl.hidden = true;
+    const btn = root && root.querySelector('.th-filter');
+    if (btn) { btn.setAttribute('aria-expanded', 'false'); if (focusBtn) btn.focus(); }
+  }
+
+  function updateFilterUi() {
+    const btn = root && root.querySelector('.th-filter');
+    if (!btn) return;
+    btn.classList.toggle('is-on', kindFilterOn());
+    btn.title = kindFilterOn() ? `${kindFilter}만 보는 중 (누르면 바꾸거나 해제)` : '본병/소분 골라 보기';
+    btn.setAttribute('aria-label', kindFilterOn() ? `본병/소분 필터: ${kindFilter}만 보는 중` : '본병/소분 필터');
+  }
+
+  function openFilterMenu() {
+    const btn = root && root.querySelector('.th-filter');
+    if (!btn || !fMenuEl || !isAdminMode()) return;
+    closeMenu(false);
+    closeCtx();
+    let html = FILTER_OPTIONS.map((v) => `<li role="option" tabindex="-1" data-v="${v}" aria-selected="${v === kindFilter}">${v}</li>`).join('');
+    if (kindFilter) html += '<li class="menu-sep" role="separator"></li><li class="menu-clear" role="option" tabindex="-1" data-v="" aria-selected="false">필터 해제</li>';
+    fMenuEl.innerHTML = html;
+    fMenuEl.hidden = false;
+    // 제목 칸 바로 아래에 띄우되, 화면 아래로 넘치면 위로 (표 바깥에 있는 메뉴라서 확대·축소의 영향을 받지 않는다)
+    const area = root.querySelector('.table-area').getBoundingClientRect();
+    const cell = btn.closest('th').getBoundingClientRect();
+    fMenuEl.style.minWidth = Math.max(cell.width, 110) + 'px';
+    fMenuEl.style.maxHeight = '';
+    const mw = fMenuEl.offsetWidth;
+    const fullH = fMenuEl.offsetHeight;
+    const spaceBelow = window.innerHeight - cell.bottom - 8;
+    const spaceAbove = cell.top - 8;
+    const below = spaceBelow >= fullH || spaceBelow >= spaceAbove;
+    const mh = Math.min(fullH, below ? spaceBelow : spaceAbove);
+    fMenuEl.style.maxHeight = mh + 'px';
+    const left = Math.max(0, Math.min(cell.left, window.innerWidth - mw - 8));
+    fMenuEl.style.left = (left - area.left) + 'px';
+    fMenuEl.style.top = ((below ? cell.bottom : cell.top - mh) - area.top) + 'px';
+    btn.setAttribute('aria-expanded', 'true');
+    (fMenuEl.querySelector('[aria-selected="true"]') || fMenuEl.querySelector('[role="option"]')).focus();
+  }
+
+  function setKindFilter(v) {
+    closeFilterMenu(true);
+    if (!root || !isAdminMode() || v === kindFilter) return;
+    kindFilter = v;
+    rebuildRows();
+    applyEditable();
+  }
+
+  document.addEventListener('pointerdown', (e) => {
+    if (fMenuEl && !fMenuEl.hidden && !fMenuEl.contains(e.target) && !e.target.closest('th.col-kind')) closeFilterMenu(false);
+  });
+  window.addEventListener('resize', () => closeFilterMenu(false));
 
   // ── 칸 선택 + 채우기 핸들 (스프레드시트처럼) ──
   // 내용이 있는 칸을 선택하면 테두리 오른쪽 아래 꼭짓점에 작은 원이 나타난다.
@@ -1566,7 +1628,7 @@
   // ── 행 추가 ─────────────────────────────
   // b: 새 행이 들어갈 자리(0부터). b번째 행 "앞"에 빈 행을 끼워 넣는다.
   function insertRow(b) {
-    if (isTrade() || !root || !canEdit() || b < 1 || b > order.length) return;
+    if (isTrade() || !root || !canEdit() || kindFilterOn() || b < 1 || b > order.length) return;
     if (order.length >= MAX_ROWS) {
       showNotice(`행은 최대 ${MAX_ROWS}개까지 추가할 수 있습니다.`);
       setTimeout(() => showNotice(''), 3500);
@@ -1591,6 +1653,8 @@
   // 반전하면 꼬리가 오른쪽 아래로 가서 표를 향한다.
   const ROW_ADD_ICON = '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 17a2 2 0 0 1-2 2H7.2l-5.2 2L4 15.8V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M13 8v6"/><path d="M10 11h6"/></svg>';
   const ROW_ADD_SIZE = 19;
+  // Lucide "chevron-down" (본병/소분 제목 칸의 필터 버튼)
+  const CHEVRON_DOWN = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
   // Lucide "arrow-down-a-z" (정렬 버튼)
   const SORT_ICON = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M20 8h-5"/><path d="M15 10V6.5a2.5 2.5 0 0 1 5 0V10"/><path d="M15 14h5l-5 6h5"/></svg>';
   const TAIL_Y = (22 / 24) * ROW_ADD_SIZE; // 아이콘 맨 아래(꼬리 끝, 선 굵기 포함)의 높이
@@ -1598,7 +1662,7 @@
 
   // 페이지가 스크롤될 때(표는 페이지와 함께 스크롤된다) 부를 것들. 화면에 들어올 때 비우고 다시 채운다.
   const pageScrollHooks = [];
-  window.addEventListener('scroll', () => { closeCtx(); pageScrollHooks.forEach((fn) => fn()); }, { passive: true });
+  window.addEventListener('scroll', () => { closeCtx(); closeFilterMenu(false); pageScrollHooks.forEach((fn) => fn()); }, { passive: true });
 
   // 표가 상자보다 넓을 때(좁은 창의 관리자 표, 폰에서 키웠을 때)만 표 상자에 가로 스크롤을 둔다. 그때는 제목 줄이 상단 바 아래에 붙지 못한다.
   let hscrollObs = null;
@@ -1678,6 +1742,7 @@
 
     function update(e) {
       if (isTrade() || drag || !canEdit() || e.target.closest('.row-add')) return; // 버튼 위에 있으면 그대로 유지
+      if (kindFilterOn()) { hide(); return; }   // 본병/소분 필터가 켜져 있으면 행 추가는 쓰지 않음
       const b = boundaryAt(e.clientY);
       if (b === null) { hide(); return; }
       const top = wrap.getBoundingClientRect().top + wrap.clientTop;
@@ -1705,6 +1770,7 @@
   function mount(container, which) {
     variant = which === 'trade' ? 'trade' : 'owned';
     root = container;
+    kindFilter = '';   // 화면에 들어올 때마다 전체 보기로 시작
     container.classList.toggle('is-trade', isTrade());
     hydrateFromCache();   // 전에 받아 둔 내용이 있으면 처음부터 채워서 그림
     container.innerHTML = `
@@ -1721,10 +1787,13 @@
         <button class="row-add" type="button" title="행 추가" aria-label="이 위치에 행 추가">${ROW_ADD_ICON}</button>
         ${isTrade() ? '<p class="zoom-note">표는 확대/축소가 가능합니다! (모바일 ver.)</p>' : ''}
         <ul class="menu" role="listbox" aria-label="본병/소분" hidden></ul>
+        <ul class="menu filter-menu" role="listbox" aria-label="본병/소분 필터" hidden></ul>
         <div class="table-wrap" tabindex="0" role="region" aria-label="보유 잉크 표">
           <table class="grid" style="min-width:${BASE_WIDTH}px">
             <colgroup>${COLUMNS.map((c, i) => (i === LEVEL_COL ? `<col class="col-${c.key}">` : `<col class="col-${c.key}" style="width:${c.width}px">`)).join('')}</colgroup>
-            <thead><tr>${COLUMNS.map((c) => `<th scope="col" class="col-${c.key}">${c.label}</th>`).join('')}</tr></thead>
+            <thead><tr>${COLUMNS.map((c) => (c.key === 'kind' && !isTrade()
+              ? `<th scope="col" class="col-${c.key}"><span class="th-label">${c.label}</span><button class="th-filter" type="button" title="본병/소분 골라 보기" aria-label="본병/소분 필터" aria-haspopup="listbox" aria-expanded="false">${CHEVRON_DOWN}</button></th>`
+              : `<th scope="col" class="col-${c.key}">${c.label}</th>`)).join('')}</tr></thead>
             <tbody>${rowsHtml()}</tbody>
           </table>
           <div class="sel-box" hidden></div>
@@ -1736,6 +1805,7 @@
     const tbody = container.querySelector('tbody');
     menuEl = container.querySelector('.menu');
     menuFor = null;
+    fMenuEl = container.querySelector('.filter-menu');
     renderBrands();
     setupZoom(container);
     setupBrandDrawer();
@@ -1845,7 +1915,30 @@
       else if (e.key === 'Escape') { e.preventDefault(); closeMenu(true); }
       else if (e.key === 'Tab') { closeMenu(false); }
     });
-    container.querySelector('.table-wrap').addEventListener('scroll', () => { closeMenu(false); closeCtx(); }, { passive: true });
+    container.querySelector('.table-wrap').addEventListener('scroll', () => { closeMenu(false); closeCtx(); closeFilterMenu(false); }, { passive: true });
+
+    // 본병/소분 필터: 제목 칸 chevron → 드롭다운 (관리자 모드)
+    const filterBtn = container.querySelector('.th-filter');
+    if (filterBtn && fMenuEl) {
+      // 제목 칸 어디를 눌러도 열린다 (폰에서 표가 작게 보일 때 chevron 만으로는 누르기 어려워서). 버튼(키보드)의 클릭도 여기로 올라온다.
+      filterBtn.closest('th').addEventListener('click', () => {
+        if (!isAdminMode()) return;
+        if (fMenuEl.hidden) openFilterMenu(); else closeFilterMenu(true);
+      });
+      fMenuEl.addEventListener('click', (e) => {
+        const li = e.target.closest('[role="option"]');
+        if (li) setKindFilter(li.dataset.v);
+      });
+      fMenuEl.addEventListener('keydown', (e) => {
+        const items = [...fMenuEl.querySelectorAll('[role="option"]')];
+        const i = items.indexOf(document.activeElement);
+        if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+        else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (i >= 0) setKindFilter(items[i].dataset.v); }
+        else if (e.key === 'Escape') { e.preventDefault(); closeFilterMenu(true); }
+        else if (e.key === 'Tab') { closeFilterMenu(false); }
+      });
+    }
 
     // 잔량 막대 우클릭(키보드는 메뉴 키 / Shift+F10) → 막대 추가·삭제 메뉴
     tbody.addEventListener('contextmenu', (e) => {
@@ -1935,6 +2028,7 @@
     barFit = null;
     closeLightbox();
     closeMenu(false);
+    closeFilterMenu(false);
     closeCtx();
     cancelLongPress();
     if (resizeObs) { resizeObs.disconnect(); resizeObs = null; }
@@ -1948,6 +2042,8 @@
     selBox = null;
     handle = null;
     menuEl = null;
+    fMenuEl = null;
+    kindFilter = '';
     root = null;
     showStatus();
   }
