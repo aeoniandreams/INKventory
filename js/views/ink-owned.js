@@ -91,7 +91,7 @@
   const kindFilterOn = () => !isTrade() && !!kindFilter && isAdminMode();
   // 발색 색 필터 ('' = 전체, 또는 색 키): 제목 줄의 발색 칸 chevron 으로 고른다. 본병/소분 필터와 같이 켜면 둘 다 맞는 행만 나온다.
   let colorFilter = '';
-  const colorFilterOn = () => !isTrade() && !!colorFilter && isAdminMode();
+  const colorFilterOn = () => !isTrade() && !!colorFilter;   // 일반 모드에서도 쓴다 (색 분류를 고치는 것만 관리자 모드)
   const anyFilterOn = () => kindFilterOn() || colorFilterOn();
   const colorsOf = (id) => { const v = data[id] && data[id].colors; return Array.isArray(v) ? v.filter((k) => COLOR_KEYS.includes(k)) : []; };
   const shownIds = () => {
@@ -1136,7 +1136,7 @@
     if (hscrollSync) hscrollSync();                      // 일반/관리자 배치가 바뀌면 표 너비가 달라지므로 가로 스크롤 필요 여부를 다시 확인
     const edit = canEdit();
     root.querySelectorAll('.bar').forEach((bar) => { bar.inert = !edit; bar.title = edit ? '우클릭: 막대 추가·삭제' : ''; });
-    if (!edit) { closeCtx(); closeColorMenu(false); }
+    if (!edit) { closeCtx(); if (colorMode === 'classify') closeColorMenu(false); }   // 색 고르기 창 중 '필터'는 일반 모드에서도 쓰므로 그대로 둠
     if (!edit) root.querySelector('.row-add').classList.remove('is-on');
     root.querySelectorAll('.cell').forEach((input) => {
       const ok = edit && columnEditable(input.dataset.f);
@@ -1153,8 +1153,8 @@
     if (!edit) { closeMenu(false); clearSelection(); }
     if (!isAdminMode()) {
       closeFilterMenu(false);
-      closeColorMenu(false);
-      if (kindFilter || colorFilter) { kindFilter = ''; colorFilter = ''; rebuildRows(); applyEditable(); return; }   // 일반 모드로 돌아오면 필터를 풀고 모든 행을 다시 보여 줌
+      if (colorMode === 'classify') closeColorMenu(false);
+      if (kindFilter) { kindFilter = ''; rebuildRows(); applyEditable(); return; }   // 일반 모드로 돌아오면 본병/소분 필터는 풀고 모든 행을 다시 보여 줌 (색 필터는 일반 모드에서도 쓰므로 그대로)
     }
     updateFilterUi();
     if (isAdminMode()) INKFB.db().catch(() => {});   // 관리자 모드가 되면 저장용 SDK 를 미리 받아 둠 (첫 저장이 빠르게)
@@ -1259,6 +1259,7 @@
     setPick(btn, value);
     queueSave(id, 'kind', value);
     syncLock(tr);          // 소분이면 소분 가능·가격 칸에 대각선 + 입력 잠금
+    if (reflectFilters(id)) return;   // 본병/소분 필터에 더 이상 맞지 않으면 행이 바로 사라짐
     positionSelection();
   }
 
@@ -1372,7 +1373,7 @@
   }
 
   function openColorMenu(mode, anchor, id) {
-    if (!root || !cMenuEl || !isAdminMode() || isTrade() || (mode === 'classify' && !canEdit())) return;
+    if (!root || !cMenuEl || isTrade() || (mode === 'classify' && !canEdit())) return;
     closeMenu(false);
     closeFilterMenu(false);
     closeCtx();
@@ -1408,10 +1409,18 @@
 
   function setColorFilter(v) {
     closeColorMenu(true);
-    if (!root || !isAdminMode() || v === colorFilter) return;
+    if (!root || v === colorFilter) return;
     colorFilter = v;
     rebuildRows();
     applyEditable();
+  }
+
+  // 필터(본병/소분·색)가 켜져 있을 때 방금 바꾼 행이 더 이상 조건에 맞지 않으면 바로 표에서 뺀다 (색 창·메뉴도 함께 닫힘)
+  function reflectFilters(id) {
+    if (!root || !anyFilterOn() || shownIds().includes(id)) return false;
+    rebuildRows();
+    applyEditable();
+    return true;
   }
 
   // 색 하나를 눌렀을 때
@@ -1421,6 +1430,7 @@
     const cur = new Set(colorsOf(colorTarget));
     if (cur.has(k)) cur.delete(k); else cur.add(k);
     queueSave(colorTarget, 'colors', COLOR_KEYS.filter((x) => cur.has(x)));   // 항상 같은 순서로 저장
+    if (reflectFilters(colorTarget)) return;   // 필터에 더 이상 맞지 않으면 행이 사라지고 창도 닫힘
     renderColorMenu(k);
   }
 
@@ -1428,6 +1438,7 @@
     if (colorMode === 'filter') { setColorFilter(''); return; }
     if (colorMode !== 'classify' || !canEdit()) return;
     queueSave(colorTarget, 'colors', []);
+    if (reflectFilters(colorTarget)) return;
     renderColorMenu();
   }
 
@@ -2089,7 +2100,6 @@
       if (swatchTh) {
         // 제목 칸 어디를 눌러도 열린다 (폰에서 표가 작게 보여도 누르기 쉽게)
         swatchTh.addEventListener('click', () => {
-          if (!isAdminMode()) return;
           if (!cMenuEl.hidden && colorMode === 'filter') closeColorMenu(true); else openColorMenu('filter', swatchTh);
         });
       }
