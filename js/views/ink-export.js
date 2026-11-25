@@ -249,7 +249,9 @@
         if (c.k === 'name' && it.pearl) { ctx.fillStyle = '#e6e9f1'; ctx.fillRect(cx, y, c.w, h); }
         ctx.fillStyle = '#1f2430';
         ctx.font = `400 14px ${FONT}`;
-        cellLines[ri][c.k].forEach((ln, li) => ctx.fillText(ln, cx + 12, y + 20 + li * 20));
+        const lines = cellLines[ri][c.k];
+        const top = y + (h - lines.length * 20) / 2 + 10;   // 줄 수가 적은 칸은 행의 세로 가운데에 (웹 표와 같게)
+        lines.forEach((ln, li) => ctx.fillText(ln, cx + 12, top + li * 20));
         // 오른쪽 선
         ctx.fillStyle = '#d7dbe4';
         if (c !== TABLE_COLS[TABLE_COLS.length - 1]) ctx.fillRect(cx + c.w - 1, y, 1, h);
