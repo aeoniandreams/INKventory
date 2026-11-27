@@ -1,14 +1,14 @@
-// 표 목록 화면 (전체 화면 표, 관리자 모드 전용): WISH 와 NEW ARRIVALS 가 같은 코드를 쓴다 (createListView 에 설정만 다르게).
+// 표 목록 화면 (전체 화면 표, 관리자 모드 전용): WISH 와 ARRIVALS 가 같은 코드를 쓴다 (createListView 에 설정만 다르게).
 //   · WISH           : 사이드바·시작 화면의 WISH > 잉크 (#/wish-ink), 만년필 (#/wish-pen)
-//   · NEW ARRIVALS   : NEW ARRIVALS > 잉크 (#/arrivals-ink), 만년필 (#/arrivals-pen) — 얻은 잉크·만년필과 얻은 날짜
+//   · ARRIVALS   : ARRIVALS > 잉크 (#/arrivals-ink), 만년필 (#/arrivals-pen) — 얻은 잉크·만년필과 얻은 날짜
 // 위쪽의 [잉크] [만년필] 두 박스로 표를 바꿔 본다 (박스를 누르면 화면 주소가 바뀌어 상단 바 제목·사이드바 표시가 함께 바뀐다).
 // 데이터: 관리자 전용 문서 inventory/inkPrivate 의 필드 (읽기·쓰기 모두 관리자만)
 //   · WISH  wishInk: [{brand, name, gray, bold}], wishPens: [{name, gray, bold}]
-//   · NEW ARRIVALS  arrivalsInk: [{date, brand, name, place, gray, bold}], arrivalsPens: [{date, name, price, place, gray, bold}]  (구매처 = place, 구매 가격 = price)
+//   · ARRIVALS  arrivalsInk: [{date, brand, name, place, gray, bold}], arrivalsPens: [{date, name, price, place, gray, bold}]  (구매처 = place, 구매 가격 = price)
 //   예전에 공개 문서(inventory/inkOwned)에 저장돼 있던 위시는 관리자가 WISH 를 처음 열 때 관리자 전용 문서로 옮기고 공개 문서에서는 지운다.
 // 보유 잉크 표와 같은 방식으로 고친다.
 //   · 칸을 고치면 자동 저장, 행과 행 사이에 마우스를 두면 나오는 아이콘으로 행 추가, 우클릭(폰은 길게 누르기)으로 행 삭제
-//   · 표 제목 줄 오른쪽 끝의 [정렬] (WISH: 가나다순·회색 행은 맨 아래 / NEW ARRIVALS: 얻은 날짜순, 오래된 것이 위), 선택한 행 위에 뜨는 [회색] [굵게] 창 (NEW ARRIVALS 는 [굵게] 만)
+//   · 표 제목 줄 오른쪽 끝의 [정렬] (WISH: 가나다순·회색 행은 맨 아래 / ARRIVALS: 얻은 날짜순, 오래된 것이 위), 선택한 행 위에 뜨는 [회색] [굵게] 창 (ARRIVALS 는 [굵게] 만)
 //   · 표는 자기만의 스크롤 막대 없이 길게 펼쳐지고, 이 사이트 페이지의 스크롤 막대로 내려서 본다 (제목 줄은 상단 바 아래에 붙어 따라옴)
 //   · 처음 내용: 표가 모두 비어 있으면 아래에 [파일에서 불러오기] 가 나온다 (그 화면의 필드 이름으로 된 JSON 파일, 예: { wishInk: [...], wishPens: [...] }. 파일은 저장소에 올리지 않고 private/ 에 둔다)
 //   · 행 선택: 칸을 누르면 그 행이 선택된다. Shift 를 누르고 다른 칸을 누르면 그 사이 행이 모두 선택된다.
@@ -322,7 +322,7 @@ function createListView(cfg) {
     pop.setAttribute('role', 'toolbar');
     pop.setAttribute('aria-label', '선택한 행 표시');
     pop.hidden = true;
-    // 선택한 행에 적용할 표시: 기본은 [회색] [굵게], 설정(cfg.flags)으로 줄일 수 있다 (NEW ARRIVALS 는 굵게만)
+    // 선택한 행에 적용할 표시: 기본은 [회색] [굵게], 설정(cfg.flags)으로 줄일 수 있다 (ARRIVALS 는 굵게만)
     const flags = cfg.flags || ['gray', 'bold'];
     pop.innerHTML = (flags.includes('gray') ? `<button type="button" class="pop-btn gray-btn" data-flag="gray" aria-pressed="false" title="회색으로 (다시 누르면 해제)" aria-label="회색으로">${GRAY_ICON}</button>` : '')
       + (flags.includes('bold') ? `<button type="button" class="pop-btn" data-flag="bold" aria-pressed="false" title="굵게 (다시 누르면 해제)" aria-label="굵게">${BOLD_ICON}</button>` : '');
@@ -599,7 +599,7 @@ function createListView(cfg) {
     const wrap = container.querySelector('.table-wrap');
     const hint = container.querySelector('.zoom-hint');
     const active = () => window.matchMedia('(max-width: 800px)').matches;
-    // cfg.naturalWidth 가 있으면(NEW ARRIVALS): 표의 원래 너비(그 너비로 표 전체가 보임)를 기준으로 한다.
+    // cfg.naturalWidth 가 있으면(ARRIVALS): 표의 원래 너비(그 너비로 표 전체가 보임)를 기준으로 한다.
     //   · 시작 배율 = 그 너비가 화면 너비에 딱 맞는 배율 (표 전체가 한눈에 보이는 배율. 들어올 때마다 이 배율로 시작하고, 손가락으로 조절한 값은 기억하지 않는다)
     //   · 가장 작게 = 시작 배율, 가장 크게 = 200%. 키우면 옆으로 스크롤된다.
     // 없으면(WISH): 100% = 표가 화면 너비에 맞는 크기. 시작 배율은 가장 작은 60% (글씨가 작게 시작, 60%까지 줄여도 표가 화면 너비를 계속 채운다). 키우면 옆으로 스크롤.
@@ -613,7 +613,7 @@ function createListView(cfg) {
     const clampZ = (n) => Math.floor(Math.max(minZ(), Math.min(ZOOM_MAX, n)) * 1000) / 1000;
     let follow = !!natural;          // 손가락으로 조절하기 전에는 시작 배율에 계속 맞춤 (화면을 돌려도)
     zoom = natural ? fitZ() : ZOOM_MIN;     // 들어올 때마다 같은 배율로 시작 (이전에 조절한 값은 기억하지 않음). WISH 는 가장 작은 60% 글씨 크기에서 시작
-    // 확대 전 표 너비: (WISH) 줄일 때는 표 상자 너비 ÷ 배율 로 늘려서 화면 너비를 계속 채운다 / (NEW ARRIVALS) 늘 원래 너비
+    // 확대 전 표 너비: (WISH) 줄일 때는 표 상자 너비 ÷ 배율 로 늘려서 화면 너비를 계속 채운다 / (ARRIVALS) 늘 원래 너비
     const apply = (n) => {
       zoom = clampZ(n);
       const on = active();
@@ -633,32 +633,44 @@ function createListView(cfg) {
     const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
     let pinch = null;
     let hintTimer = null;
+    // 손가락을 움직이는 동안에는 표를 다시 배치하지 않고 transform(scale)으로 미리 키워 보여 준다 (보유 잉크·잉팔잉사와 같은 방식).
+    // 손가락을 떼면 그 배율을 실제로 적용하고(한 번만 다시 배치), 손가락 사이의 점이 제자리에 있도록 스크롤 위치를 맞춘다.
+    function endPinch() {
+      const p = pinch;
+      pinch = null;
+      if (!p) return;
+      wrap.style.transform = '';
+      wrap.style.transformOrigin = '';
+      if (p.nz === p.z) return;
+      const k = p.nz / p.z;
+      follow = false;
+      apply(p.nz);
+      wrap.scrollLeft = (p.sl + p.cx) * k - p.cx;
+      // 세로는 페이지가 스크롤되므로, 손가락 사이의 점이 같은 화면 높이에 있도록 페이지를 스크롤한다
+      window.scrollBy(0, wrap.getBoundingClientRect().top + p.cy * k - (p.top + p.cy));
+    }
     wrap.addEventListener('touchstart', (e) => {
+      endPinch();                                           // 손가락 수가 바뀌면(세 손가락 등) 하던 확대를 먼저 확정
       if (e.touches.length === 2 && active()) {
         const r = wrap.getBoundingClientRect();
-        pinch = { d: dist(e.touches), z: zoom, cx: (e.touches[0].clientX + e.touches[1].clientX) / 2 - r.left, cy: (e.touches[0].clientY + e.touches[1].clientY) / 2 - r.top, top: r.top, sl: wrap.scrollLeft };
-      } else {
-        pinch = null;
+        pinch = { d: dist(e.touches), z: zoom, nz: zoom, cx: (e.touches[0].clientX + e.touches[1].clientX) / 2 - r.left, cy: (e.touches[0].clientY + e.touches[1].clientY) / 2 - r.top, top: r.top, sl: wrap.scrollLeft };
       }
     }, { passive: true });
     wrap.addEventListener('touchmove', (e) => {
       if (!pinch || e.touches.length !== 2) return;
       e.preventDefault();                                   // 두 손가락일 때는 브라우저의 화면 확대 대신 표를 확대
       const nz = clampZ(pinch.z * (dist(e.touches) / pinch.d));
-      if (nz === zoom) return;
-      const k = nz / pinch.z;
-      follow = false;
-      apply(nz);
-      wrap.scrollLeft = (pinch.sl + pinch.cx) * k - pinch.cx;
-      // 세로는 페이지가 스크롤되므로, 손가락 사이의 점이 같은 화면 높이에 있도록 페이지를 스크롤한다
-      window.scrollBy(0, wrap.getBoundingClientRect().top + pinch.cy * k - (pinch.top + pinch.cy));
-      hint.textContent = Math.round(zoom * 100) + '%';
+      if (nz === pinch.nz) return;
+      pinch.nz = nz;
+      wrap.style.transformOrigin = `${pinch.cx}px ${pinch.cy}px`;
+      wrap.style.transform = `scale(${nz / pinch.z})`;
+      hint.textContent = Math.round(nz * 100) + '%';
       hint.classList.add('is-on');
       clearTimeout(hintTimer);
       hintTimer = setTimeout(() => hint.classList.remove('is-on'), 900);
     }, { passive: false });
     const end = (e) => {
-      if (e.touches.length < 2 && pinch) pinch = null;
+      if (e.touches.length < 2) endPinch();
     };
     wrap.addEventListener('touchend', end, { passive: true });
     wrap.addEventListener('touchcancel', end, { passive: true });
@@ -834,7 +846,7 @@ function createListView(cfg) {
   window.INKVENTORY_VIEWS['wish-ink'] = { mount: (c) => wish.mount(c, 'ink'), unmount: wish.unmount, onMode: wish.onMode };
   window.INKVENTORY_VIEWS['wish-pen'] = { mount: (c) => wish.mount(c, 'pen'), unmount: wish.unmount, onMode: wish.onMode };
 
-  // NEW ARRIVALS > 잉크 (#/arrivals-ink), 만년필 (#/arrivals-pen): 얻은 잉크·만년필과 얻은 날짜
+  // ARRIVALS > 잉크 (#/arrivals-ink), 만년필 (#/arrivals-pen): 얻은 잉크·만년필과 얻은 날짜
   const arrivals = createListView({
     route: 'arrivals', ariaLabel: '얻은 목록 표', migratePublic: false, importFile: true, sort: 'date', flags: ['bold'],
     wide: true, naturalWidth: 860, zoomNote: true,   // 데스크톱에서는 보유 잉크 표처럼 넓게, 폰에서는 표 전체가 보이는 배율로 시작, 표 위에 확대·축소 안내
