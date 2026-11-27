@@ -764,19 +764,36 @@
     let pinch = null;
     let hintTimer = null;
 
+    // 손가락을 움직이는 동안에는 표를 다시 배치하지 않고 transform(scale)으로 미리 키워 보여 준다 — 표가 커서 배율(CSS zoom)을 바꿀 때마다 전체를 다시 배치하면 버벅이기 때문.
+    // 손가락을 떼면 그 배율을 실제로 적용하고(한 번만 다시 배치), 손가락 사이의 점이 제자리에 있도록 스크롤 위치를 맞춘다.
+    function endPinch() {
+      const p = pinch;
+      pinch = null;
+      if (!p) return;
+      wrap.style.transform = '';
+      wrap.style.transformOrigin = '';
+      if (p.nz === p.z) return;
+      const k = p.nz / p.z;
+      follow = false;
+      apply(p.nz);
+      wrap.scrollLeft = (p.sl + p.cx) * k - p.cx;
+      // 세로는 페이지가 스크롤되므로, 손가락 사이의 점이 같은 화면 높이에 있도록 페이지를 스크롤한다
+      window.scrollBy(0, wrap.getBoundingClientRect().top + p.cy * k - (p.top + p.cy));
+    }
+
     wrap.addEventListener('touchstart', (e) => {
+      endPinch();                                           // 손가락 수가 바뀌면(세 손가락 등) 하던 확대를 먼저 확정
       if (e.touches.length === 2 && active()) {
         const r = wrap.getBoundingClientRect();
         pinch = {
           d: dist(e.touches),
           z,
+          nz: z,
           cx: (e.touches[0].clientX + e.touches[1].clientX) / 2 - r.left,
           cy: (e.touches[0].clientY + e.touches[1].clientY) / 2 - r.top,
           top: r.top,
           sl: wrap.scrollLeft,
         };
-      } else {
-        pinch = null;
       }
     }, { passive: true });
 
@@ -784,21 +801,18 @@
       if (!pinch || e.touches.length !== 2) return;
       e.preventDefault();                                   // 두 손가락일 때는 브라우저의 화면 확대 대신 표를 확대
       const nz = clampZ(pinch.z * (dist(e.touches) / pinch.d));
-      if (nz === z) return;
-      const k = nz / pinch.z;
-      follow = false;
-      apply(nz);
-      wrap.scrollLeft = (pinch.sl + pinch.cx) * k - pinch.cx;
-      // 세로는 페이지가 스크롤되므로, 손가락 사이의 점이 같은 화면 높이에 있도록 페이지를 스크롤한다
-      window.scrollBy(0, wrap.getBoundingClientRect().top + pinch.cy * k - (pinch.top + pinch.cy));
-      hint.textContent = Math.round(z * 100) + '%';
+      if (nz === pinch.nz) return;
+      pinch.nz = nz;
+      wrap.style.transformOrigin = `${pinch.cx}px ${pinch.cy}px`;
+      wrap.style.transform = `scale(${nz / pinch.z})`;
+      hint.textContent = Math.round(nz * 100) + '%';
       hint.classList.add('is-on');
       clearTimeout(hintTimer);
       hintTimer = setTimeout(() => hint.classList.remove('is-on'), 900);
     }, { passive: false });
 
     const end = (e) => {
-      if (e.touches.length < 2 && pinch) pinch = null;
+      if (e.touches.length < 2) endPinch();
     };
     wrap.addEventListener('touchend', end, { passive: true });
     wrap.addEventListener('touchcancel', end, { passive: true });

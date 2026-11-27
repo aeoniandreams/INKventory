@@ -602,7 +602,7 @@ function createListView(cfg) {
     // cfg.naturalWidth 가 있으면(NEW ARRIVALS): 표의 원래 너비(그 너비로 표 전체가 보임)를 기준으로 한다.
     //   · 시작 배율 = 그 너비가 화면 너비에 딱 맞는 배율 (표 전체가 한눈에 보이는 배율. 들어올 때마다 이 배율로 시작하고, 손가락으로 조절한 값은 기억하지 않는다)
     //   · 가장 작게 = 시작 배율, 가장 크게 = 200%. 키우면 옆으로 스크롤된다.
-    // 없으면(WISH): 100% = 표가 화면 너비에 맞는 크기(= 시작 배율), 60%까지 줄이면 화면 너비를 계속 채운다.
+    // 없으면(WISH): 100% = 표가 화면 너비에 맞는 크기. 시작 배율은 가장 작은 60% (글씨가 작게 시작, 60%까지 줄여도 표가 화면 너비를 계속 채운다). 키우면 옆으로 스크롤.
     const natural = cfg.naturalWidth || 0;
     const availW = () => {
       const cs = window.getComputedStyle(area);
@@ -612,7 +612,7 @@ function createListView(cfg) {
     const minZ = () => (natural ? fitZ() : ZOOM_MIN);
     const clampZ = (n) => Math.floor(Math.max(minZ(), Math.min(ZOOM_MAX, n)) * 1000) / 1000;
     let follow = !!natural;          // 손가락으로 조절하기 전에는 시작 배율에 계속 맞춤 (화면을 돌려도)
-    zoom = natural ? fitZ() : 1;     // 들어올 때마다 표 전체가 보이는 배율로 시작 (이전에 조절한 값은 기억하지 않음)
+    zoom = natural ? fitZ() : ZOOM_MIN;     // 들어올 때마다 같은 배율로 시작 (이전에 조절한 값은 기억하지 않음). WISH 는 가장 작은 60% 글씨 크기에서 시작
     // 확대 전 표 너비: (WISH) 줄일 때는 표 상자 너비 ÷ 배율 로 늘려서 화면 너비를 계속 채운다 / (NEW ARRIVALS) 늘 원래 너비
     const apply = (n) => {
       zoom = clampZ(n);
