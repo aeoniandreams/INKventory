@@ -721,6 +721,7 @@
   //  · 가장 작게 = 시작 배율: 지금 보이는 표 전체의 가로 너비 = 화면 가로 너비. (열이 더 많은 관리자 모드는 일반 모드보다 더 작은 배율에서 시작한다)
   //  · 가장 크게: 200%.  손가락으로 조절한 배율은 기억하지 않는다 (들어올 때마다 표 전체가 보이는 배율로 시작).
   const ZOOM_MAX = 2;
+  const SETTLE_MS = 150;   // 두 손가락이 이 시간(ms) 동안 멈추면 그 배율을 실제로 적용
   let zoomRefresh = null;   // 배치(일반/관리자)가 바뀌었을 때 배율 범위를 다시 계산
 
   // 이 기기의 세로 스크롤 막대 너비 (표와 같은 스타일의 상자로 재서, 표의 내용이 짧아 막대가 없을 때도 같은 값)
@@ -766,10 +767,9 @@
 
     // 손가락을 움직이는 동안에는 표를 다시 배치하지 않고 transform(scale)으로 미리 키워 보여 준다 — 표가 커서 배율(CSS zoom)을 바꿀 때마다 전체를 다시 배치하면 버벅이기 때문.
     // 손가락을 떼면 그 배율을 실제로 적용하고(한 번만 다시 배치), 손가락 사이의 점이 제자리에 있도록 스크롤 위치를 맞춘다.
-    function endPinch() {
-      const p = pinch;
-      pinch = null;
-      if (!p) return;
+    // keepOn: 손가락이 아직 닿아 있는 채로 확정(손가락이 멈췄을 때). 지금 손가락 위치를 새 기준으로 삼아 이어서 확대·축소할 수 있게 한다.
+    let settleTimer = null;
+    function commitPinch(p, keepOn) {
       wrap.style.transform = '';
       wrap.style.transformOrigin = '';
       if (p.nz === p.z) return;
@@ -779,6 +779,17 @@
       wrap.scrollLeft = (p.sl + p.cx) * k - p.cx;
       // 세로는 페이지가 스크롤되므로, 손가락 사이의 점이 같은 화면 높이에 있도록 페이지를 스크롤한다
       window.scrollBy(0, wrap.getBoundingClientRect().top + p.cy * k - (p.top + p.cy));
+      if (keepOn) {
+        const r = wrap.getBoundingClientRect();
+        p.z = z; p.nz = z; p.d = p.ld;
+        p.cx = p.lx - r.left; p.cy = p.ly - r.top; p.top = r.top; p.sl = wrap.scrollLeft;
+      }
+    }
+    function endPinch() {
+      clearTimeout(settleTimer);
+      const p = pinch;
+      pinch = null;
+      if (p) commitPinch(p, false);
     }
 
     wrap.addEventListener('touchstart', (e) => {
@@ -793,6 +804,9 @@
           cy: (e.touches[0].clientY + e.touches[1].clientY) / 2 - r.top,
           top: r.top,
           sl: wrap.scrollLeft,
+          ld: dist(e.touches),
+          lx: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+          ly: (e.touches[0].clientY + e.touches[1].clientY) / 2,
         };
       }
     }, { passive: true });
@@ -800,9 +814,14 @@
     wrap.addEventListener('touchmove', (e) => {
       if (!pinch || e.touches.length !== 2) return;
       e.preventDefault();                                   // 두 손가락일 때는 브라우저의 화면 확대 대신 표를 확대
-      const nz = clampZ(pinch.z * (dist(e.touches) / pinch.d));
+      pinch.ld = dist(e.touches);
+      pinch.lx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      pinch.ly = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      const nz = clampZ(pinch.z * (pinch.ld / pinch.d));
       if (nz === pinch.nz) return;
       pinch.nz = nz;
+      clearTimeout(settleTimer);
+      settleTimer = setTimeout(() => { if (pinch) commitPinch(pinch, true); }, SETTLE_MS);   // 손가락이 잠깐 멈추면 그 자리에서 실제 배율로 확정 (글씨가 선명해짐)
       wrap.style.transformOrigin = `${pinch.cx}px ${pinch.cy}px`;
       wrap.style.transform = `scale(${nz / pinch.z})`;
       hint.textContent = Math.round(nz * 100) + '%';
