@@ -756,13 +756,14 @@ html[data-layout="normal"] .ink-layout {
 .notice-body .gray, .notice-editor .gray, .notice-editor font { color: #8892ab; }
 .notice-body s, .notice-editor s, .notice-editor strike { text-decoration: line-through; }
 .notice-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px 18px; }
+/* 연필(알림글 수정) 버튼: 확인 버튼과 같은 줄의 왼쪽 끝. 전에는 오른쪽 위에 떠 있어서 탭과 글을 왼쪽으로 치우치게 했다. */
+.notice-actions { align-items: center; }
 .notice-edit-btn {
-  position: absolute; top: 10px; right: 10px; z-index: 2; width: 34px; height: 34px;
+  flex: none; margin-right: auto; width: 34px; height: 34px;
   display: grid; place-items: center; background: none; border: 0; border-radius: 8px; cursor: pointer; color: var(--muted);
 }
 .notice-edit-btn[hidden] { display: none; }
 .notice-edit-btn:hover { background: var(--accent-soft); color: var(--accent); }
-.notice-view:has(.notice-edit-btn:not([hidden])) .notice-body { padding-right: 52px; }   /* 연필 버튼과 글이 겹치지 않게 */
 /* 수정창: 위쪽 고정 바 */
 .notice-edit { overflow-y: auto; }
 .notice-bar {
@@ -790,12 +791,10 @@ html[data-layout="normal"] .ink-layout {
   .dialog__actions { margin-top: 5vw; }
   .notice-dialog { max-height: 88vh; }
   .notice-body { padding: 5.5vw 5.5vw 1vw; font-size: 13px; line-height: 1.65; }
-  .notice-view:has(.notice-edit-btn:not([hidden])) .notice-body { padding-right: 12vw; }
   .notice-actions { padding: 3.2vw 4.3vw 4.3vw; }
   .notice-bar { padding: 2.7vw 3.7vw; }
   .notice-editor { margin: 4.3vw 5.3vw 0; padding: 3.2vw 3.7vw; min-height: 32vh; }
   .notice-tabs { padding: 3.7vw 3.7vw 0; gap: 2.1vw; }
-  .notice-view:has(.notice-edit-btn:not([hidden])) .notice-tabs { padding-right: 12vw; }
   .notice-body { padding-top: 3.7vw; }
   .notice-exch { padding: 3.2vw 3.7vw 1vw; }
   .notice-dialog.is-exch { width: 92vw; }
@@ -811,7 +810,6 @@ html[data-layout="normal"] .ink-layout {
 
 /* 알림창 위쪽의 [안내] [교환] 두 박스 + 교환 표 */
 .notice-tabs { display: flex; gap: 8px; padding: 16px 16px 0; }
-.notice-view:has(.notice-edit-btn:not([hidden])) .notice-tabs { padding-right: 56px; }   /* 연필 버튼 자리 */
 .notice-tab {
   flex: 1 1 0; padding: 10px 0; font: inherit; font-size: 14px; font-weight: 600; color: var(--muted);
   background: var(--surface); border: 1px solid var(--line); border-radius: 10px; cursor: pointer;
@@ -848,9 +846,6 @@ html[data-layout] .wish-layout .grid { width: 100%; min-width: 0 !important; zoo
 .wish-layout .grid tbody tr.is-sel td { background-color: #e9ecf4; }
 .wish-layout .grid tbody tr.is-gray .cell { color: #8892ab; }
 .wish-layout .grid tbody tr.is-bold .cell, .wish-layout .grid tbody tr.is-bold .cell-wrap::after { font-weight: 700; }
-/* 표 제목 줄의 [정렬] 버튼: 잉크명 / 제품명 칸의 오른쪽 끝 */
-.wish-layout .th-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.wish-layout .th-sort { flex: none; height: 26px; }
 /* 선택한 행 위에 뜨는 [회색] [굵게] 창 (JS 가 위치를 정함) */
 .wish-pop {
   position: fixed; z-index: 40; display: flex; gap: 2px; padding: 3px;

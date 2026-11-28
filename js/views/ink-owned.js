@@ -176,7 +176,7 @@
     setStatus('saving');
     const batch = [...pending.entries()];
     try {
-      const { db, doc, setDoc, deleteField } = await INKFB.db();
+      const { db, doc, setDoc, deleteField } = await INKFB.withTimeout(INKFB.db());
       // 공개 문서와 관리자 전용 문서로 나눠서 저장
       const pub = {};
       const priv = {};
@@ -193,8 +193,8 @@
       const jobs = [];
       if (pub.order || pub.rows || pub.saleNotice !== undefined || pub.exchangeRows !== undefined) jobs.push(setDoc(doc(db, ...DOC_PATH), pub, { merge: true }));
       if (Object.keys(priv).length) jobs.push(setDoc(doc(db, ...PRIVATE_PATH), { rows: priv }, { merge: true }));
-      await Promise.all(jobs);
-      if (Object.keys(privDel).length) await setDoc(doc(db, ...PRIVATE_PATH), { rows: privDel }, { merge: true });
+      await INKFB.withTimeout(Promise.all(jobs));          // 네트워크가 멈춰도 "저장 중…" 에서 영영 기다리지 않게 (시간이 지나면 실패로 보고 다시 시도)
+      if (Object.keys(privDel).length) await INKFB.withTimeout(setDoc(doc(db, ...PRIVATE_PATH), { rows: privDel }, { merge: true }));
       batch.forEach(([k, e]) => { if (pending.get(k) === e) pending.delete(k); });
       saving = false;
       saveCache();   // 다음에 들어올 때 바로 보여 줄 최신 내용을 보관
@@ -213,7 +213,9 @@
   });
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden' && pending.size) flush();
+    else if (document.visibilityState === 'visible' && pending.size && !saving) flush();   // 폰에서 다른 앱에 갔다 오면 멈춰 있던 저장을 다시
   });
+  window.addEventListener('online', () => { if (pending.size && !saving) flush(); });        // 인터넷이 다시 연결되면 바로 저장
 
   // ── 불러오기 (빠르게) ────────────────────
   // 1) 읽기에는 무거운 Firebase SDK 를 쓰지 않고, 공개 읽기 주소(REST)로 한 번 요청한다.

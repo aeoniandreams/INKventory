@@ -1,6 +1,6 @@
 // 잉팔잉사 처음 접속 알림창. 위쪽의 [안내] [교환] 두 박스로 내용을 바꿔 본다: 안내 = 알림글, 교환 = 교환 희망 잉크 표(브랜드·잉크명·비고 세 열의 작은 표, 관리자는 그 자리에서 고침). ink-owned.js 가 INKNOTICE.open({ html, editable, onSave }) 로 연다.
 //   · 화면 가운데 알림창, 바깥은 어둡게(딤). 오른쪽 아래 "확인"을 눌러야 닫힌다.
-//   · 관리자 모드에서만 오른쪽 위 연필 버튼이 보이고, 누르면 수정창: 위쪽에 고정된 바(회색 글씨 / 굵게 / 취소선) + 글 입력칸.
+//   · 관리자 모드에서만 왼쪽 아래(확인 버튼과 같은 줄) 연필 버튼이 보이고, 누르면 수정창: 위쪽에 고정된 바(회색 글씨 / 굵게 / 취소선) + 글 입력칸.
 //   · 내용은 안전한 HTML 조각으로만 저장한다: <div> 한 줄씩, 그 안에 <b> <s> <span class="gray"> 만 허용 (sanitize). 보여 줄 때도 한 번 더 거른다.
 (() => {
   'use strict';
@@ -185,14 +185,16 @@
     dlg.setAttribute('aria-label', '잉팔잉사 안내');
     dlg.innerHTML = `
       <div class="notice-view">
-        <button class="notice-edit-btn" type="button" title="알림글 수정" aria-label="알림글 수정" hidden>${PENCIL}</button>
         <div class="notice-tabs" role="tablist" aria-label="안내 / 교환">
           <button class="notice-tab" type="button" role="tab" data-tab="info" aria-selected="true">안내</button>
           <button class="notice-tab" type="button" role="tab" data-tab="exch" aria-selected="false">교환</button>
         </div>
         <div class="notice-body" role="tabpanel"></div>
         <div class="notice-exch" role="tabpanel" hidden></div>
-        <div class="notice-actions"><button class="btn btn--primary" type="button" data-ok>확인</button></div>
+        <div class="notice-actions">
+          <button class="notice-edit-btn" type="button" title="알림글 수정" aria-label="알림글 수정" hidden>${PENCIL}</button>
+          <button class="btn btn--primary" type="button" data-ok>확인</button>
+        </div>
       </div>
       <div class="notice-edit" hidden>
         <div class="notice-bar" role="toolbar" aria-label="글자 서식">

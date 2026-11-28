@@ -44,12 +44,25 @@
     if (!dbP) {
       dbP = (async () => {
         const [a, m] = await Promise.all([app(), load('firebase-firestore')]);
-        return { db: m.getFirestore(a), ...m };
+        // 폰·와이파이·일부 통신망에서는 Firestore 의 기본 연결(WebChannel 스트림)이 멈춰서 저장이 끝나지 않는 일이 있다.
+        // 연결이 막히면 자동으로 롱폴링으로 바꾸도록 한다. (이미 만들어진 뒤라 설정이 안 먹으면 기본 설정 그대로)
+        let fs;
+        try { fs = m.initializeFirestore(a, { experimentalAutoDetectLongPolling: true }); } catch (e) { fs = m.getFirestore(a); }
+        return { db: fs, ...m };
       })();
       dbP.catch(() => { dbP = null; });
     }
     return dbP;
   }
 
-  window.INKFB = { auth, db };
+  // Firestore 의 쓰기(setDoc)는 서버가 받았다고 답해야 끝난다. 네트워크가 끊기거나 연결이 멈추면 성공도 실패도 하지 않고 계속 기다려서
+  // "저장 중…" 이 끝나지 않고 뒤의 저장도 모두 막힌다. 정해 둔 시간 안에 안 끝나면 실패({ code: 'timeout' })로 보고 다시 시도하게 한다.
+  function withTimeout(p, ms) {
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject({ code: 'timeout' }), ms || 20000);
+      Promise.resolve(p).then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); });
+    });
+  }
+
+  window.INKFB = { auth, db, withTimeout };
 })();

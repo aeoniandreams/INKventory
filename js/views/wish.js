@@ -7,8 +7,9 @@
 //   · ARRIVALS  arrivalsInk: [{date, brand, name, place, gray, bold}], arrivalsPens: [{date, name, price, place, gray, bold}]  (구매처 = place, 구매 가격 = price)
 //   예전에 공개 문서(inventory/inkOwned)에 저장돼 있던 위시는 관리자가 WISH 를 처음 열 때 관리자 전용 문서로 옮기고 공개 문서에서는 지운다.
 // 보유 잉크 표와 같은 방식으로 고친다.
-//   · 칸을 고치면 자동 저장, 행과 행 사이에 마우스를 두면 나오는 아이콘으로 행 추가, 우클릭(폰은 길게 누르기)으로 행 삭제
-//   · 표 제목 줄 오른쪽 끝의 [정렬] (WISH: 가나다순·회색 행은 맨 아래 / ARRIVALS: 얻은 날짜순, 오래된 것이 위), 선택한 행 위에 뜨는 [회색] [굵게] 창 (ARRIVALS 는 [굵게] 만)
+//   · 칸을 고치면 자동 저장, 행과 행 사이에 마우스를 두면 나오는 아이콘으로 행 추가(폰은 행을 길게 눌러 위·아래에 행 추가), 우클릭(폰은 길게 누르기)으로 행 삭제
+//   · 상단 바 오른쪽의 [정렬] (보유 잉크와 같은 자리. WISH: 가나다순·회색 행은 맨 아래 / ARRIVALS: 얻은 날짜순, 오래된 것이 위), 선택한 행 위에 뜨는 [회색] [굵게] 창 (ARRIVALS 는 [굵게] 만)
+//   · 칸을 누르면 테두리 꼭짓점에 채우기 핸들(작은 원)이 나타나고, 아래로 끌면 같은 내용이 채워진다 (보유 잉크와 같음)
 //   · 표는 자기만의 스크롤 막대 없이 길게 펼쳐지고, 이 사이트 페이지의 스크롤 막대로 내려서 본다 (제목 줄은 상단 바 아래에 붙어 따라옴)
 //   · 처음 내용: 표가 모두 비어 있으면 아래에 [파일에서 불러오기] 가 나온다 (그 화면의 필드 이름으로 된 JSON 파일, 예: { wishInk: [...], wishPens: [...] }. 파일은 저장소에 올리지 않고 private/ 에 둔다)
 //   · 행 선택: 칸을 누르면 그 행이 선택된다. Shift 를 누르고 다른 칸을 누르면 그 사이 행이 모두 선택된다.
@@ -175,8 +176,8 @@ function createListView(cfg) {
     setStatus('saving');
     chain = chain.then(async () => {
       try {
-        const { db, doc, setDoc } = await INKFB.db();
-        await setDoc(doc(db, ...DOC_PATH), { [t.field]: rows }, { merge: true });
+        const { db, doc, setDoc } = await INKFB.withTimeout(INKFB.db());
+        await INKFB.withTimeout(setDoc(doc(db, ...DOC_PATH), { [t.field]: rows }, { merge: true }));   // 네트워크가 멈추면 시간이 지나 실패로 보고 다시 시도 (뒤의 저장까지 막히지 않게)
         saving--;
         if (!saving && !dirty.ink && !dirty.pen) setStatus('saved');
       } catch (err) {
@@ -195,7 +196,8 @@ function createListView(cfg) {
   window.addEventListener('beforeunload', (e) => {
     if (dirty.ink || dirty.pen || saving) { flushAll(); e.preventDefault(); e.returnValue = ''; }
   });
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushAll(); });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' || (document.visibilityState === 'visible' && !saving)) flushAll(); });
+  window.addEventListener('online', () => { if (!saving) flushAll(); });      // 인터넷이 다시 연결되면 바로 저장
 
   // ── 표 그리기 ──
   function rowHtml(t, r, i, edit) {
@@ -235,19 +237,36 @@ function createListView(cfg) {
     const total = t.cols.reduce((n, c) => n + c.w, 0);
     const top = wrap.scrollTop;
     table.innerHTML = `<colgroup>${t.cols.map((c) => `<col style="width:${((c.w / total) * 100).toFixed(2)}%">`).join('')}</colgroup>`
-      + `<thead><tr>${t.cols.map((c, ci) => (edit && ci === t.cols.length - 1
-        ? `<th scope="col"><div class="th-row"><span>${esc(c.label)}</span><button class="sort-btn th-sort" type="button" title="${cfg.sortTitle}" aria-label="${cfg.sortTitle}">${SORT_ICON}<span class="lbl">정렬</span></button></div></th>`
-        : `<th scope="col">${esc(c.label)}</th>`)).join('')}</tr></thead>`
+      + `<thead><tr>${t.cols.map((c) => `<th scope="col">${esc(c.label)}</th>`).join('')}</tr></thead>`
       + `<tbody>${shown.map((i) => rowHtml(t, rows[i], i, edit)).join('')}</tbody>`;
     wrap.scrollTop = top;
     if (zoomRefresh) zoomRefresh();                  // 표 너비는 표가 보이는 지금의 상자 너비로 (스크롤 막대가 생겼는지에 따라 달라짐)
     paintSel();
   }
 
+  // [정렬] 버튼: 보유 잉크처럼 상단 바 오른쪽 ("저장됨" 문구 다음). 관리자 모드에서만 보인다.
+  let sortTopBtn = null;
+  function teardownSortTop() { if (sortTopBtn) sortTopBtn.remove(); sortTopBtn = null; }
+  function setupSortTop() {
+    teardownSortTop();
+    const bar = document.querySelector('.topbar');
+    if (!bar) return;
+    sortTopBtn = document.createElement('button');
+    sortTopBtn.className = 'sort-btn';
+    sortTopBtn.type = 'button';
+    sortTopBtn.hidden = !canEdit();
+    sortTopBtn.title = cfg.sortTitle;
+    sortTopBtn.setAttribute('aria-label', cfg.sortTitle);
+    sortTopBtn.innerHTML = SORT_ICON + '<span class="lbl">정렬</span>';
+    sortTopBtn.addEventListener('click', sortRows);
+    bar.appendChild(sortTopBtn);
+  }
+
   function applyEditable() {
     if (!root) return;
     const edit = canEdit();
     root.classList.toggle('is-editable', edit);
+    if (sortTopBtn) sortTopBtn.hidden = !edit;
     if (!edit) { selA = selB = null; closeCtx(); }
     render();
     showStatus();
@@ -266,9 +285,10 @@ function createListView(cfg) {
       tr.classList.toggle('is-sel', !!r && i >= r[0] && i <= r[1]);
     });
     syncToolButtons();
+    positionFill();
   }
   function setSel(a, b) { selA = a; selB = b; paintSel(); }
-  function clearSel() { selA = selB = null; paintSel(); }
+  function clearSel() { selA = selB = null; if (!fillDrag) fillSel = null; paintSel(); }
 
   function selectedRows() {
     const r = selRange();
@@ -289,7 +309,7 @@ function createListView(cfg) {
   // (위쪽에 자리가 없으면 선택한 행 아래). 표가 스크롤되거나 행 높이가 바뀌면 따라 움직이고, 선택한 행이 화면 밖이면 숨긴다.
   function schedulePop() {
     if (popRaf) return;
-    popRaf = setTimeout(() => { popRaf = 0; positionPop(); }, 0);
+    popRaf = setTimeout(() => { popRaf = 0; positionPop(); positionFill(); }, 0);
   }
   function positionPop() {
     if (!pop) return;
@@ -563,6 +583,133 @@ function createListView(cfg) {
     btn.addEventListener('click', () => { const b = Number(btn.dataset.before); hide(); insertRow(b); });
   }
 
+  // ── 칸 선택 + 채우기 핸들 (보유 잉크와 같은 방식) ──
+  // 칸에 커서가 있으면 그 칸 테두리 오른쪽 아래 꼭짓점에 작은 원이 나타난다 (칸에 내용이 있을 때만).
+  // 그 원을 누른 채 아래로 끌면, 지나간 칸에 그 칸과 같은 내용이 채워진다 (같은 열, 기존 내용은 덮어씀).
+  let fillSel = null;      // { c: 열 번호, r0: 원본 행, r1: 마지막 행 } (행 번호는 rows 번호 = tr 의 data-i)
+  let fillDrag = null;     // 끄는 중: { c, s, t, y }
+  let fillRaf = 0;
+  let fillBox = null;
+  let fillHandle = null;
+
+  // 폰에서는 표 전체를 CSS zoom 으로 키우고 줄인다. offsetTop/offsetHeight 는 확대 전 길이, getBoundingClientRect 는 화면에 보이는 길이라서 이 배율로 맞춘다. (확대하지 않을 때는 1)
+  function gridZoom() {
+    const t = root && root.querySelector('table.grid');
+    if (!t || !t.offsetWidth) return 1;
+    const z = t.getBoundingClientRect().width / t.offsetWidth;
+    return z > 0 ? z : 1;
+  }
+  const trAt = (i) => root && root.querySelector(`tbody tr[data-i="${i}"]`);
+
+  function positionFill() {
+    if (!fillBox) return;
+    const hide = () => { fillBox.hidden = true; fillHandle.hidden = true; };
+    if (!root || !fillSel || !canEdit()) { hide(); return; }
+    const a = trAt(fillSel.r0);
+    const b = trAt(fillSel.r1);
+    const ta = a && a.cells[fillSel.c];
+    const tb = b && b.cells[fillSel.c];
+    if (!ta || !tb) { hide(); return; }
+    const wrap = root.querySelector('.table-wrap');
+    const table = root.querySelector('table.grid');
+    const w = wrap.getBoundingClientRect();
+    const ra = ta.getBoundingClientRect();
+    const rb = tb.getBoundingClientRect();
+    const left = ra.left - w.left - wrap.clientLeft + wrap.scrollLeft;
+    const y = ra.top - w.top - wrap.clientTop + wrap.scrollTop;
+    const width = ra.width;
+    const height = rb.bottom - ra.top;
+    fillBox.style.cssText = `left:${left}px;top:${y}px;width:${width}px;height:${height}px`;
+    fillBox.hidden = false;
+    const key = tabNow().cols[fillSel.c].k;
+    const src = rowsOf()[fillSel.r0];
+    fillHandle.hidden = !(src && String(src[key] || '') !== '');                       // 원본 칸에 내용이 있을 때만
+    const zz = gridZoom();
+    fillHandle.style.left = Math.min(left + width, table.offsetWidth * zz - 5) + 'px';    // 표 가장자리 밖으로 삐져나가 스크롤이 생기지 않게
+    fillHandle.style.top = Math.min(y + height, table.offsetHeight * zz - 5) + 'px';
+  }
+
+  // 표 위쪽 기준 높이(rel)에 해당하는 행(tbody.rows 의 번호). 행마다 높이가 달라도 된다.
+  function rowIndexAtRel(rel) {
+    const rows = root.querySelector('tbody').rows;
+    const z = gridZoom();
+    let lo = 0;
+    let hi = rows.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (rows[mid].offsetTop * z <= rel) lo = mid; else hi = mid - 1;
+    }
+    return lo;
+  }
+
+  function applyFill(c, s, t) {
+    const tab = tabNow();
+    const key = tab.cols[c].k;
+    const rows = rowsOf();
+    const val = rows[s] ? String(rows[s][key] || '') : '';
+    if (val === '') return;
+    let changed = false;
+    for (let i = s + 1; i <= t; i++) {
+      const r = rows[i];
+      if (!r || r[key] === val) continue;
+      r[key] = val;
+      const ta = root.querySelector(`tbody tr[data-i="${i}"] textarea[data-k="${key}"]`);
+      if (ta) { ta.value = val; fit(ta); }
+      changed = true;
+    }
+    if (changed) { schedule(tab); schedulePop(); }
+  }
+
+  function setupFill(container) {
+    const wrap = container.querySelector('.table-wrap');
+    fillBox = container.querySelector('.sel-box');
+    fillHandle = container.querySelector('.fill-handle');
+    fillSel = null;
+    fillDrag = null;
+
+    function updateTarget() {
+      const tbody = wrap.querySelector('tbody');
+      if (!tbody || !tbody.rows.length) return;
+      const rel = fillDrag.y - wrap.getBoundingClientRect().top - wrap.clientTop + wrap.scrollTop;   // 표 위쪽 기준
+      const tr = tbody.rows[rowIndexAtRel(rel)];
+      const t = Math.max(fillDrag.s, Math.min(rowsOf().length - 1, Number(tr.dataset.i)));
+      if (t !== fillDrag.t) { fillDrag.t = t; fillSel = { c: fillDrag.c, r0: fillDrag.s, r1: t }; positionFill(); }
+    }
+    function autoScroll() {
+      if (!fillDrag) return;
+      const edge = 40;
+      const vb = window.innerHeight;
+      if (fillDrag.y > vb - edge) {
+        window.scrollBy(0, Math.min(28, (fillDrag.y - (vb - edge)) / 2 + 4));            // 화면 아래쪽 가장자리에서는 페이지가 따라 내려감
+        updateTarget();
+        positionFill();
+      }
+      fillRaf = requestAnimationFrame(autoScroll);
+    }
+    function endDrag(commit) {
+      if (!fillDrag) return;
+      const d = fillDrag;
+      fillDrag = null;
+      cancelAnimationFrame(fillRaf);
+      root.classList.remove('is-filling');
+      if (commit && d.t > d.s) applyFill(d.c, d.s, d.t);
+      positionFill();
+    }
+    fillHandle.addEventListener('pointerdown', (e) => {
+      if (!fillSel || !canEdit() || e.button > 0) return;
+      e.preventDefault();
+      try { fillHandle.setPointerCapture(e.pointerId); } catch (err) { /* 포인터를 못 잡아도 동작은 계속 */ }
+      fillDrag = { c: fillSel.c, s: fillSel.r0, t: fillSel.r1, y: e.clientY };
+      root.classList.add('is-filling');
+      closeCtx();
+      fillRaf = requestAnimationFrame(autoScroll);
+    });
+    fillHandle.addEventListener('pointermove', (e) => { if (!fillDrag) return; fillDrag.y = e.clientY; updateTarget(); });
+    fillHandle.addEventListener('pointerup', () => endDrag(true));
+    fillHandle.addEventListener('pointercancel', () => endDrag(false));
+    fillHandle.addEventListener('lostpointercapture', () => endDrag(false));
+  }
+
   // ── 폰(800px 이하)용 확대·축소: 두 손가락으로 벌리거나 오므리기 ──
   // 표 전체를 CSS zoom(--tz)으로 키우고 줄인다. 처음(100%)은 표가 화면 너비에 딱 맞는 크기.
   // 줄이면(60%까지) 표가 계속 화면 너비를 채워서 열이 넓어지고 글자는 작아진다. 키우면(200%까지) 옆으로 스크롤된다.
@@ -676,6 +823,7 @@ function createListView(cfg) {
       pinch = null;
       if (pw) pw.end();
       pw = undefined;
+      schedulePop();                                        // 확대·축소 중에 숨겼던 행이 돌아왔으니 선택 상자·핸들·선택 창 위치를 다시 맞춘다
     }
 
     wrap.addEventListener('touchstart', (e) => {
@@ -740,6 +888,8 @@ function createListView(cfg) {
           <div class="exch-empty" hidden></div>
           <div class="table-wrap" tabindex="0" role="region" aria-label="${cfg.ariaLabel}">
             <table class="grid"></table>
+            <div class="sel-box" hidden></div>
+            <button class="fill-handle" type="button" tabindex="-1" aria-label="아래로 끌어서 채우기" hidden></button>
           </div>
           <div class="wish-import" hidden>
             <button class="btn" type="button">파일에서 불러오기</button>
@@ -748,6 +898,8 @@ function createListView(cfg) {
         </div>
       </div>`;
     setupPop();
+    setupSortTop();
+    setupFill(container);
     setupRowAdd(container);
     setupZoom(container);
     setupImport(container);
@@ -764,12 +916,9 @@ function createListView(cfg) {
       if (!tr || !canEdit()) return;
       const i = Number(tr.dataset.i);
       const td = e.target.closest('td');
-      if (td) selCol = td.cellIndex;
+      if (td) { selCol = td.cellIndex; if (!fillDrag) fillSel = { c: td.cellIndex, r0: i, r1: i }; }
       if (shiftHold && selA != null) setSel(selA, i); else setSel(i, i);
     });
-    // 헤더의 [정렬] 버튼 (잉크명 / 제품명 칸 오른쪽)
-    wrap.addEventListener('mousedown', (e) => { if (e.target.closest('.th-sort')) e.preventDefault(); });
-    wrap.addEventListener('click', (e) => { if (e.target.closest('.th-sort')) sortRows(); });
     wrap.addEventListener('pointerdown', (e) => {
       const tr = e.target.closest('tbody tr');
       if (!tr || !canEdit()) return;
@@ -851,6 +1000,7 @@ function createListView(cfg) {
     cancelLongPress();
     closeCtx();
     teardownPop();
+    teardownSortTop();
     zoomRefresh = null;
     cleanups.forEach((fn) => fn());
     cleanups = [];
