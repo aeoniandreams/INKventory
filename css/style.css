@@ -838,7 +838,6 @@ html[data-layout="normal"] .ink-layout {
 .main--table.is-wish { --main-pl: var(--edge); padding-right: var(--edge); }
 .wish-layout { max-width: 640px; margin: 0 auto; }
 html[data-layout] .wish-layout .table-area { padding-left: 0; display: block; }
-html[data-layout] .is-editable .wish-layout .table-area { padding-left: 28px; }   /* 행 추가 아이콘 자리 (관리자 모드) */
 html[data-layout] .wish-layout .table-wrap { width: 100%; max-width: 100%; }
 html[data-layout] .wish-layout .grid { width: 100%; min-width: 0 !important; zoom: 1; }
 .wish-tabs { display: flex; gap: 8px; margin: 0 0 12px; }
@@ -867,8 +866,10 @@ html[data-layout] .wish-layout .grid { width: 100%; min-width: 0 !important; zoo
 .pop-btn[aria-pressed="true"] { background: #dfe7f7; }
 .pop-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
-/* 관리자 모드의 왼쪽 여백(행 추가 아이콘 자리)을 줄인다: 아이콘 자리를 21px 로 하고, 그만큼을 화면 가장자리 여백 쪽으로 8px 당겨 쓴다. (일반 모드에는 이 여백이 없다) */
-html[data-layout] .is-editable .wish-layout .table-area { padding-left: 21px; margin-left: -8px; }
+/* 데스크톱: 왼쪽 여백(행 추가 아이콘 자리)을 21px 로 하고, 그만큼을 화면 가장자리 여백 쪽으로 8px 당겨 쓴다.
+   WISH / ARRIVALS 는 관리자 전용이므로 .is-editable 이 붙기를 기다리지 않고 처음부터 이 여백으로 그린다
+   (전에는 .is-editable 이 붙을 때 여백이 갑자기 바뀌어서, 들어갈 때 표와 잉크·만년필 버튼 폭이 순간 달라졌다). */
+html[data-layout] .wish-layout .table-area { padding-left: 21px; margin-left: -8px; }
 .wish-layout .row-add { left: 0; }
 /* 폰(800px 이하): 두 손가락 확대·축소. 표 너비(--wish-gw)와 배율(--tz)은 JS (setupZoom) 가 정한다 */
 @media (max-width: 800px) {
@@ -985,10 +986,12 @@ html[data-layout] .is-editable .wish-layout .table-area { padding-left: 21px; ma
 
 /* 폰 + 관리자 모드: 표가 화면 가운데에 오게 한다.
    행 추가 아이콘 자리(왼쪽 21px)만 있고 오른쪽은 없어서 표가 오른쪽으로 쏠려 보였다 (왼쪽 바깥 25px / 오른쪽 12px).
-   → 오른쪽에도 같은 21px 을 두고(양쪽 모두 화면 가장자리 쪽으로 8px 당겨 씀) 좌우 바깥 여백을 25px 로 같게 한다.
-   표 너비·확대 배율은 JS 가 양쪽 여백을 모두 빼고 계산한다. (WISH / ARRIVALS / 보유 잉크. 잉팔잉사는 아이콘이 없어서 원래 가운데) */
+   → (보유 잉크) 오른쪽에도 같은 21px 을 두고(양쪽 모두 화면 가장자리 쪽으로 8px 당겨 씀) 좌우 바깥 여백을 25px 로 같게 한다.
+   → (WISH / ARRIVALS) 폰에서는 아이콘 자리를 아예 두지 않고 좌우 바깥 여백을 12px 로 한다 (표와 잉크·만년필 버튼이 넓게 보이도록). 행 추가 아이콘은 표 왼쪽 가장자리에 걸치게 둔다.
+   표 너비·확대 배율은 JS 가 양쪽 여백을 모두 빼고 계산한다. (잉팔잉사는 아이콘이 없어서 원래 가운데) */
 @media (max-width: 800px) {
-  html[data-layout] .is-editable .wish-layout .table-area { padding-left: 21px; padding-right: 21px; margin-left: -8px; margin-right: -8px; }
+  html[data-layout] .wish-layout .table-area { padding-left: 0; padding-right: 0; margin-left: 0; margin-right: 0; }
+  .wish-layout .row-add { left: -12px; }
   html[data-layout="admin"] .main--table:not(.is-trade):not(.is-wish) .table-area { padding-left: 21px; padding-right: 21px; margin-left: -8px; margin-right: -8px; }
   html[data-layout="admin"] .main--table:not(.is-trade):not(.is-wish) .row-add { left: 0; }
 }
