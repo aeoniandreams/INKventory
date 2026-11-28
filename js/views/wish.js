@@ -448,7 +448,15 @@ function createListView(cfg) {
     schedule(t, 0);
   }
 
-  // 우클릭(폰은 길게 누르기) 메뉴: 행 삭제
+  // 우클릭(폰은 길게 누르기) 메뉴: 행 삭제. 폰(800px 이하)에서는 행 추가 아이콘이 없으므로 위에·아래에 행 추가도 이 메뉴에서 한다.
+  const isPhone = () => window.matchMedia('(max-width: 800px)').matches;
+  function runCtx(act) {
+    const i = ctxRow;
+    closeCtx();
+    if (act === 'above') insertRow(i);
+    else if (act === 'below') insertRow(i + 1);
+    else deleteRow(i);
+  }
   function ensureCtx() {
     if (ctxEl) return ctxEl;
     ctxEl = document.createElement('ul');
@@ -456,11 +464,17 @@ function createListView(cfg) {
     ctxEl.setAttribute('role', 'menu');
     ctxEl.setAttribute('aria-label', '행');
     ctxEl.hidden = true;
-    ctxEl.innerHTML = '<li role="menuitem" tabindex="-1" data-act="row" class="menu-danger">행 삭제</li>';
+    ctxEl.innerHTML = '<li role="menuitem" tabindex="-1" data-act="above">위에 행 추가</li><li role="menuitem" tabindex="-1" data-act="below">아래에 행 추가</li>' +
+      '<li class="menu-sep" role="separator" aria-hidden="true" data-sep></li><li role="menuitem" tabindex="-1" data-act="row" class="menu-danger">행 삭제</li>';
     document.body.appendChild(ctxEl);
-    ctxEl.addEventListener('click', (e) => { if (e.target.closest('[role="menuitem"]')) { const i = ctxRow; closeCtx(); deleteRow(i); } });
+    const visibleItems = () => [...ctxEl.querySelectorAll('[role="menuitem"]')].filter((li) => li.style.display !== 'none');
+    ctxEl.addEventListener('click', (e) => { const li = e.target.closest('[role="menuitem"]'); if (li) runCtx(li.dataset.act); });
     ctxEl.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); const i = ctxRow; closeCtx(); deleteRow(i); }
+      const items = visibleItems();
+      const n = items.indexOf(document.activeElement);
+      if (e.key === 'ArrowDown' && items.length) { e.preventDefault(); items[(n + 1) % items.length].focus(); }
+      else if (e.key === 'ArrowUp' && items.length) { e.preventDefault(); items[(n - 1 + items.length) % items.length].focus(); }
+      else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (n >= 0) runCtx(items[n].dataset.act); }
       else if (e.key === 'Escape' || e.key === 'Tab') { e.preventDefault(); closeCtx(); }
     });
     return ctxEl;
@@ -468,10 +482,16 @@ function createListView(cfg) {
   function openCtx(x, y, i) {
     const el = ensureCtx();
     ctxRow = i;
+    const phone = isPhone();
+    const above = el.querySelector('[data-act="above"]');
+    const below = el.querySelector('[data-act="below"]');
+    above.style.display = phone && i >= 1 ? '' : 'none';           // 맨 윗줄(제목 줄 바로 아래) 위에는 추가하지 않는다 (전의 행 추가 아이콘과 같음)
+    below.style.display = phone ? '' : 'none';
+    el.querySelector('[data-sep]').style.display = phone ? '' : 'none';
     el.hidden = false;
     el.style.left = Math.max(8, Math.min(x, window.innerWidth - el.offsetWidth - 8)) + 'px';
     el.style.top = Math.max(8, Math.min(y, window.innerHeight - el.offsetHeight - 8)) + 'px';
-    el.querySelector('[role="menuitem"]').focus();
+    [...el.querySelectorAll('[role="menuitem"]')].find((li) => li.style.display !== 'none').focus();
   }
   function closeCtx() { if (ctxEl) ctxEl.hidden = true; ctxRow = -1; }
   document.addEventListener('pointerdown', (e) => { if (ctxEl && !ctxEl.hidden && !ctxEl.contains(e.target)) closeCtx(); });
@@ -517,6 +537,7 @@ function createListView(cfg) {
     }
 
     function update(e) {
+      if (isPhone()) { hide(); return; }            // 폰에서는 이 아이콘을 쓰지 않고, 행을 길게 눌러 뜨는 메뉴로 추가한다
       if (!canEdit() || e.target.closest('.row-add')) return;
       const n = boundaryAt(e.clientY);
       if (n === null) { hide(); return; }
