@@ -1637,7 +1637,8 @@
     ctxEl.hidden = true;
     ctxEl.innerHTML = '<li role="menuitem" tabindex="-1" data-act="add">막대 추가</li><li role="menuitem" tabindex="-1" data-act="del">이 막대 삭제</li>' +
       '<li class="menu-sep" role="separator" aria-hidden="true" data-sep></li><li role="menuitem" tabindex="-1" data-act="color">색 분류 선택</li>' +
-      '<li class="menu-sep" role="separator" aria-hidden="true" data-sep2></li><li role="menuitem" tabindex="-1" data-act="row" class="menu-danger">행 삭제</li>';
+      '<li class="menu-sep" role="separator" aria-hidden="true" data-sep2></li><li role="menuitem" tabindex="-1" data-act="above">위에 행 추가</li><li role="menuitem" tabindex="-1" data-act="below">아래에 행 추가</li>' +
+      '<li class="menu-sep" role="separator" aria-hidden="true" data-sep3></li><li role="menuitem" tabindex="-1" data-act="row" class="menu-danger">행 삭제</li>';
     document.body.appendChild(ctxEl);
     ctxEl.addEventListener('click', (e) => {
       const li = e.target.closest('[role="menuitem"]');
@@ -1654,6 +1655,8 @@
     return ctxEl;
   }
 
+  const isPhone = () => window.matchMedia('(max-width: 800px)').matches;
+
   function openCtx(x, y, tr, bi, onSwatch) {
     const el = ensureCtx();
     closeColorMenu(false);
@@ -1668,12 +1671,20 @@
     [colorItem, el.querySelector('[data-sep2]')].forEach((li) => { li.style.display = onSwatch ? '' : 'none'; });   // 발색 칸에서 열었을 때만
     add.setAttribute('aria-disabled', String(levels.length >= MAX_BARS));
     del.setAttribute('aria-disabled', String(levels.length <= 1));
+    // 폰(800px 이하)에는 행 추가 아이콘이 없어서 위·아래에 행 추가도 이 메뉴에서 한다 (필터가 켜져 있으면 행 추가는 쓰지 않음)
+    const canAdd = isPhone() && !isTrade() && !anyFilterOn();
+    const above = el.querySelector('[data-act="above"]');
+    const below = el.querySelector('[data-act="below"]');
+    above.style.display = canAdd && order.indexOf(tr.dataset.id) >= 1 ? '' : 'none';   // 맨 윗줄 위에는 추가하지 않는다 (전의 행 추가 아이콘과 같음)
+    below.style.display = canAdd ? '' : 'none';
+    el.querySelector('[data-sep3]').style.display = canAdd ? '' : 'none';
     el.hidden = false;
     const w = el.offsetWidth;
     const h = el.offsetHeight;
     el.style.left = Math.max(8, Math.min(x, window.innerWidth - w - 8)) + 'px';
     el.style.top = Math.max(8, Math.min(y, window.innerHeight - h - 8)) + 'px';
-    (onBar ? (add.getAttribute('aria-disabled') === 'true' ? del : add) : onSwatch ? colorItem : rowItem).focus();
+    const first = onBar ? (add.getAttribute('aria-disabled') === 'true' ? del : add) : onSwatch ? colorItem : [...el.querySelectorAll('[role="menuitem"]')].find((li) => li.style.display !== 'none');
+    (first || rowItem).focus();
   }
 
   function closeCtx() {
@@ -1686,6 +1697,11 @@
     closeCtx();
     if (!t || !root || !canEdit()) return;
     if (act === 'row') { deleteRow(t.id); return; }
+    if (act === 'above' || act === 'below') {
+      const i = order.indexOf(t.id);
+      if (i >= 0) insertRow(act === 'above' ? i : i + 1);
+      return;
+    }
     if (act === 'color') {
       const row = [...tbodyEl().rows].find((r) => r.dataset.id === t.id);
       const cell = row && row.querySelector('td.c-swatch');
@@ -1802,11 +1818,13 @@
       return;
     }
     const id = newId();
+    const atEnd = b === order.length;
     order.splice(b, 0, id);
     queueOrder();
 
     const tbody = tbodyEl();
-    tbody.rows[b].insertAdjacentHTML('beforebegin', rowHtml(id, b + 1));
+    if (atEnd) tbody.insertAdjacentHTML('beforeend', rowHtml(id, b + 1));        // 맨 아래 행 아래 (폰의 "아래에 행 추가")
+    else tbody.rows[b].insertAdjacentHTML('beforebegin', rowHtml(id, b + 1));
     const tr = tbody.rows[b];
     tr.classList.add('row-new');
     relabel(b + 1);
@@ -1908,6 +1926,7 @@
     }
 
     function update(e) {
+      if (isPhone()) { hide(); return; }                 // 폰에서는 이 아이콘을 쓰지 않고, 행을 길게 눌러 뜨는 메뉴로 추가한다
       if (isTrade() || drag || !canEdit() || e.target.closest('.row-add')) return; // 버튼 위에 있으면 그대로 유지
       if (anyFilterOn()) { hide(); return; }   // 필터(본병/소분·색)가 켜져 있으면 행 추가는 쓰지 않음
       const b = boundaryAt(e.clientY);
@@ -2157,12 +2176,15 @@
       if (td) selectCell(td);
       openCtx(x, y, tr, line ? lines.indexOf(line) : -1, !!e.target.closest('td.c-swatch'));
     });
-    // 터치(폰): 막대를 길게 누르면 같은 메뉴. (iOS 는 contextmenu 이벤트가 없어서 직접 감시)
+    // 길게 눌러 메뉴를 연 직후에 따라오는 클릭은 모두 무시한다 (본병/소분 드롭다운·펄 버튼·잔량·사진이 같이 열리지 않게)
+    tbody.addEventListener('click', (e) => { if (suppressClick) { suppressClick = false; e.stopPropagation(); e.preventDefault(); } }, true);
+    // 터치(폰): 칸을 길게 누르면 같은 메뉴. (iOS 는 contextmenu 이벤트가 없어서 직접 감시)
     tbody.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'mouse' || !canEdit()) return;
       const line = e.target.closest('.bar-line');
       const sw = !line && !isTrade() ? e.target.closest('td.c-swatch') : null;   // 발색 칸을 길게 눌러도 같은 메뉴 (색 분류 선택)
-      if (!line && !sw) return;
+      const cellTd = !isTrade() ? e.target.closest('td') : null;                 // 어느 칸이든 길게 누르면 행 메뉴 (WISH / ARRIVALS 와 같음)
+      if (!line && !sw && !cellTd) return;
       cancelLongPress();
       longPress = {
         x: e.clientX,
@@ -2171,9 +2193,10 @@
           longPress = null;
           suppressClick = true;
           setTimeout(() => { suppressClick = false; }, 800);
-          const tr = (line || sw).closest('tr');
-          selectCell((line || sw).closest('td'));
-          openCtx(e.clientX, e.clientY, tr, line ? [...tr.querySelectorAll('.bar-line')].indexOf(line) : -1, !line);
+          const td = (line || sw || cellTd).closest('td');
+          const tr = td.closest('tr');
+          selectCell(td);
+          openCtx(e.clientX, e.clientY, tr, line ? [...tr.querySelectorAll('.bar-line')].indexOf(line) : -1, !!sw);
         }, 550),
       };
     });
